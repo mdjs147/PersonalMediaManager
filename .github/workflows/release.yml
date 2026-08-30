@@ -1,20 +1,21 @@
-# PersonalMediaManager 发版自动化 + main 开发构建（CLAUDE.md §9.3.2 / §9.4.2）
+# PersonalMediaManager 自动发版 + main 开发构建（CLAUDE.md §9.3.2 / §9.4.2）
 #
 # 本 workflow 仅负责发版与 main 开发构建；公开 PR 验证由同目录 pr-ci.yml 负责（红线 §9.4.2）。
 # 本文件触发器锁死 push tag (v*) 与 push branch (main) 两条；不要在这里混入 PR 触发器。
 #
 # 产物去向二分：
-#   · tag push (vX.Y.Z) → 创建 / 复用 GitHub Release + 上传单文件 exe（正式发版，客户端「检查更新」端点读这里）
-#   · main push         → 仅 actions/upload-artifact 保留 7 天（开发构建，仅 Actions Run 页可下载）
+#   · tag push (vX.Y.Z) → 创建 / 复用 GitHub Release + 上传单文件 exe（保留手工标签发版能力）
+#   · main push，且 PmmProductVersion 对应 tag 尚不存在 → 自动创建 tag + GitHub Release + 上传 exe
+#   · main push，且该产品版本已经发过 → 仅 actions/upload-artifact 保留 7 天（开发构建）
 #
 # 工作流：
-#   1. 解析 ref 类型（tag / branch）与版本号
-#   2. 仅 tag push：校验 tag (vX.Y.Z) 与 Directory.Build.props:PmmProductVersion 完全一致（防版本漂移）
+#   1. 解析 ref 类型（tag / branch）与版本号；main 根据产品版本 tag 是否存在决定正式发版或开发构建
+#   2. 正式发版：校验 tag (vX.Y.Z) 与 Directory.Build.props:PmmProductVersion 完全一致（防版本漂移）
 #   3. 装 .NET 10 + Node 22
 #   4. 前端 npm ci（vite build 由 .esproj 随 dotnet publish 自动触发）
 #   5. dotnet publish Launcher 单文件 self-contained win-x64（前端 + appsettings 嵌入，产物仅一个 exe）
 #   6. 校验 publish 输出确为单一 exe + 重命名为带版本号文件名（不再打 zip）
-#   7. tag push 走 gh release create + upload；main push 走 upload-artifact
+#   7. 正式发版走 gh release create + upload；已发版本的 main push 走 upload-artifact
 #
 # 单元测试 / 红线扫描由 GitHub pr-ci.yml 与内网 Azure Pipelines 双路把关；本 workflow 仅打包。
 name: release
@@ -60,25 +61,56 @@ jobs:
             }
             $version = $tag.TrimStart('v')
             $isRelease = 'true'
+            $releaseMode = 'tag'
           } else {
-            # main push：版本号取自 Directory.Build.props 的 PmmProductVersion，加 -dev.<short-sha> 后缀做开发标识
+            # main push：产品版本还没有 tag 时自动正式发版；已有 tag 时只产开发构建。
             $props = Get-Content -Raw Directory.Build.props
             if ($props -notmatch '<PmmProductVersion>([^<]+)</PmmProductVersion>') {
               Write-Error "Directory.Build.props 缺 PmmProductVersion 标签"
               exit 1
             }
             $baseVer = $Matches[1].Trim()
-            $shortSha = "${{ github.sha }}".Substring(0, 7)
-            $version = "$baseVer-dev.$shortSha"
-            $tag = ""
-            $isRelease = 'false'
-          }
-          "tag=$tag"             | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-          "version=$version"     | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-          "isRelease=$isRelease" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-          Write-Host "ref=$ref tag=$tag version=$version isRelease=$isRelease"
+            if ($baseVer -notmatch '^\d+\.\d+\.\d+$') {
+              Write-Error "PmmProductVersion 形态不合法（要求 X.Y.Z）：$baseVer"
+              exit 1
+            }
 
-      - name: 3. 校验 PmmProductVersion 与 tag 一致（仅 tag push）
+            $tag = "v$baseVer"
+            $tagRef = "refs/tags/$tag"
+            git show-ref --verify --quiet $tagRef
+            $tagLookupExitCode = $LASTEXITCODE
+
+            if ($tagLookupExitCode -eq 1) {
+              # 首次合入这个产品版本：本次 main 构建直接创建 tag + Release。
+              $version = $baseVer
+              $isRelease = 'true'
+              $releaseMode = 'auto'
+            } elseif ($tagLookupExitCode -eq 0) {
+              $tagCommit = (git rev-list -n 1 $tag).Trim()
+              if ($tagCommit -eq "${{ github.sha }}") {
+                # 同一发版提交的 Actions 重跑：继续走正式发版并 --clobber，保证失败后可恢复。
+                $version = $baseVer
+                $isRelease = 'true'
+                $releaseMode = 'retry'
+              } else {
+                $shortSha = "${{ github.sha }}".Substring(0, 7)
+                $version = "$baseVer-dev.$shortSha"
+                $tag = ""
+                $isRelease = 'false'
+                $releaseMode = 'development'
+              }
+            } else {
+              Write-Error "检查产品版本 tag 失败：$tagRef"
+              exit 1
+            }
+          }
+          "tag=$tag"                 | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "version=$version"         | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "isRelease=$isRelease"     | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "releaseMode=$releaseMode" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Host "ref=$ref tag=$tag version=$version isRelease=$isRelease releaseMode=$releaseMode"
+
+      - name: 3. 校验 PmmProductVersion 与 tag 一致（正式发版）
         if: steps.ver.outputs.isRelease == 'true'
         shell: pwsh
         run: |
@@ -148,7 +180,7 @@ jobs:
           Write-Host "已生成 $exeName ($([math]::Round($size / 1MB, 2)) MB)"
           "exeName=$exeName" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
-      - name: 11. 创建或更新 GitHub Release 并上传 exe（仅 tag push）
+      - name: 11. 创建或更新 GitHub Release 并上传 exe（正式发版）
         if: steps.ver.outputs.isRelease == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -156,12 +188,16 @@ jobs:
         run: |
           $tag = "${{ steps.ver.outputs.tag }}"
           $exeName = "${{ steps.pack.outputs.exeName }}"
+          $target = "${{ github.sha }}"
 
-          # gh release view 失败码 != 0 表示 release 不存在 → 创建；否则跳过创建直接上传
-          gh release view $tag 2>$null
+          # main 首次出现新的 PmmProductVersion 时，gh 会在 target 提交自动创建同名 tag。
+          # tag 已存在的手工发版或同提交重跑则复用 Release，并用 --clobber 恢复可能失败的资产上传。
+          gh release view $tag --repo "${{ github.repository }}" 2>$null
           if ($LASTEXITCODE -ne 0) {
             Write-Host "Release $tag 不存在，创建新 Release"
             gh release create $tag `
+              --repo "${{ github.repository }}" `
+              --target $target `
               --title $tag `
               --generate-notes
             if ($LASTEXITCODE -ne 0) { Write-Error "gh release create 失败"; exit 1 }
@@ -169,8 +205,8 @@ jobs:
             Write-Host "Release $tag 已存在，跳过创建"
           }
 
-          # --clobber 让重推 tag 的场景能覆盖旧 asset（如果同名 exe 已存在）
-          gh release upload $tag $exeName --clobber
+          # --clobber 让同一发版提交重跑时覆盖旧 asset，修复中途失败的工作流。
+          gh release upload $tag $exeName --clobber --repo "${{ github.repository }}"
           if ($LASTEXITCODE -ne 0) { Write-Error "gh release upload 失败"; exit 1 }
           Write-Host "已上传 $exeName 到 Release $tag"
 
