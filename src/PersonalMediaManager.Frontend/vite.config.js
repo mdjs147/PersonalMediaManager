@@ -122,14 +122,25 @@ export default defineConfig({
     emptyOutDir: true,
     sourcemap: false,
     chunkSizeWarningLimit: 1500,
-    rollupOptions: {
+    rolldownOptions: {
       output: {
         // 把第三方大库拆成独立 chunk，避免一个 1.3MB 主 bundle；
         // 用户切页时主 bundle 走浏览器缓存，仅按需加载未访问过的 vendor chunk
-        manualChunks: {
-          'vendor-vue': ['vue', 'vue-router', 'pinia'],
-          'vendor-element-plus': ['element-plus', '@element-plus/icons-vue'],
-          'vendor-signalr': ['@microsoft/signalr'],
+        codeSplitting: {
+          groups: [
+            {
+              name: 'vendor-vue',
+              test: /[\\/]node_modules[\\/](?:vue|vue-router|pinia)[\\/]/,
+            },
+            {
+              name: 'vendor-element-plus',
+              test: /[\\/]node_modules[\\/](?:element-plus|@element-plus[\\/]icons-vue)[\\/]/,
+            },
+            {
+              name: 'vendor-signalr',
+              test: /[\\/]node_modules[\\/]@microsoft[\\/]signalr[\\/]/,
+            },
+          ],
         },
       },
     },
