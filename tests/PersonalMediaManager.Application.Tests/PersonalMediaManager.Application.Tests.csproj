@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Application 单元测试：Mock 契约 + In-Memory 仓储，覆盖业务分支 -->
+
+  <PropertyGroup>
+    <RootNamespace>PersonalMediaManager.Application.Tests</RootNamespace>
+    <AssemblyName>PersonalMediaManager.Application.Tests</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\PersonalMediaManager.Application\PersonalMediaManager.Application.csproj" />
+    <ProjectReference Include="..\..\src\PersonalMediaManager.Domain\PersonalMediaManager.Domain.csproj" />
+    <ProjectReference Include="..\..\src\PersonalMediaManager.Infrastructure.Platform\PersonalMediaManager.Infrastructure.Platform.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="FluentAssertions" Version="7.2.0" />
+    <PackageReference Include="NSubstitute" Version="5.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <Using Include="FluentAssertions" />
+  </ItemGroup>
+
+</Project>

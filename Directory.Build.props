@@ -1,0 +1,114 @@
+<Project>
+
+  <!--
+    PersonalMediaManager 解决方案全局 MSBuild 属性
+    所有 src/* 与 tests/* 项目自动继承本文件
+  -->
+
+  <PropertyGroup>
+    <!-- 统一目标框架（Launcher 及其测试工程在自身 csproj 覆盖为 net10.0-windows） -->
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>14</LangVersion>
+
+    <!-- 严格模式：开启可空、警告即错误 -->
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <WarningsAsErrors />
+    <!-- IDE0055 在 .editorconfig 已降为 suggestion；此处保留豁免列表防回归 -->
+    <WarningsNotAsErrors>IDE0055</WarningsNotAsErrors>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+
+    <!-- 输出确定性，便于跨平台一致 hash -->
+    <Deterministic>true</Deterministic>
+    <DebugType>portable</DebugType>
+
+    <!-- 中文注释/字符串源码统一 UTF-8 -->
+    <NeutralLanguage>zh-Hans</NeutralLanguage>
+
+    <!-- 公司元数据（产物 metadata） -->
+    <Company>PersonalMediaManager</Company>
+    <Product>PersonalMediaManager</Product>
+    <Authors>PersonalMediaManager Team</Authors>
+    <Copyright>© 2026 PersonalMediaManager</Copyright>
+
+    <!--
+      版本号（CLAUDE.md §五/§十二 全栈贯穿）
+
+      四个版本号 三套刻度：
+        · PmmProductVersion = 主版本号（对外展示）            — 仅发版升，与 git tag 1:1
+        · VersionPrefix     = 后端版本号（.NET 程序集 SemVer） — 后端代码合 main 时升
+        · PmmDbVersion      = 数据库目标 schema 版本号         — 新增 EF migration 时升
+        · FrontendVersion   = 前端版本号（src/PersonalMediaManager.Frontend/package.json:version）
+                              由 Directory.Build.targets 构建期读 package.json 注入 assembly metadata
+      （前端版本号不在本文件维护；前端开发者用 npm version patch 升 package.json，注意带 no-git-tag-version 选项避免自动 tag）
+
+      为何加 Pmm 前缀：`ProductVersion` / `DbVersionPrefix` 等不带前缀的属性名与
+      Microsoft.NET.Sdk 内部属性冲突（实测会破坏 TargetFramework 推断 → NETSDK1013），
+      用 Pmm 前缀做隔离。
+
+      SemVer（0.x 阶段简化语义）：
+        · MAJOR：1.0 之前不动；1.0 之后保留给真正破坏性变更
+        · MINOR：新增功能 / 新 API / 新增 migration（db）
+        · PATCH：bug 修复 / 文案 / 内部重构
+        · 1.0 前用 0.x（接口不稳定阶段，PMM 当前所处）
+
+      VersionPrefix 自动字段（由 Directory.Build.targets StampGitVersion 注入）：
+        · FileVersion           = $(VersionPrefix).{git commit 数}  — 4 段，给运维定位回滚用
+        · InformationalVersion  = $(VersionPrefix)+{short sha}[.dirty]  — 后端版本号 + commit
+        · AssemblyVersion        保留 SDK 默认（$(VersionPrefix).0），跨 commit 不抖动 ABI
+
+      PmmProductVersion / PmmDbVersion / FrontendVersion / BuildTimeUtc 通过
+      AssemblyMetadataAttribute 烤进 entry assembly（详见 Directory.Build.targets InjectVersionMetadata target），
+      运行时由 SystemService 反射读出供 /system/version 与 /system/info 返回。
+
+      关闭 SDK 默认的 SourceRevisionId 自动追加，避免与 StampGitVersion 产出的 +sha 重复
+    -->
+    <!-- 2026-06-11 版本号重置：开发期历史演进随仓库迁移整合为 0.1.0 基线（四套版本号自最初版重新开始），整合记录见 CHANGELOG.md -->
+    <!-- 2026-06-12 字幕下载功能：后端/数据库/前端升 0.2.0（新 migration AddSubtitleTables）；产品版本号仅发版升，保持不动 -->
+    <!-- 2026-06-13 空目录清理：后端/数据库升 0.3.0（新 migration CleanEmptyDirIgnoreExtsSeed + File.CleanEmptyDir 接线消费）；前端无改动、产品版本号不动 -->
+    <!-- 2026-06-13 AI 供应商超时设置：前端补超时输入框 + 放宽解析/对话链路总超时与测试连接硬钳，让 Ollama 冷启动可配大超时；后端升 0.3.1、前端升 0.2.2；无 migration（TimeoutSeconds 列早已存在）、产品版本号不动 -->
+    <!-- 2026-06-18 Anthropic 协议错误体诊断：HTTP 200 错误体/空 content 改抛真实错误文案（兼容中转代理 {"error":{...}}）+ 把响应原文塞 Exception.Data 落 Audit_AiCall.ResponseText/测试连接展示；后端升 0.3.2；无 migration、前端/产品版本号不动 -->
+    <!-- 2026-06-18 BaseUrl 智能去重：JoinUrl 按路径段重叠去重（容忍多填 /v1 / 整条端点 / 大小写 / 尾斜杠 + 保留中转前缀）；前端 AI 提供商页补每协议 BaseUrl 说明 + 实际请求 URL 实时预览；后端升 0.3.3、前端升 0.2.3；无 migration、产品版本号不动 -->
+    <!-- 2026-06-18 BaseUrl 版本槽合并：JoinUrl 增「两端均版本号段但不同→保用户显式版本」（第三方常要求带 /v1，且支持 /v2 /openai/v1 等不强塞 v1）；前端预览同步复刻 + 文案强调原样保留；后端升 0.3.4、前端升 0.2.4；无 migration、产品版本号不动 -->
+    <!-- 2026-06-18 AI 提供商快速预设：前端 AI 提供商新增页加 10 个常用厂商一键预设（OpenRouter/DeepSeek/硅基流动/百炼/智谱GLM/Kimi/OpenAI/Claude/Gemini/Ollama，点选自动填协议+地址+模型）+ 刷新 Anthropic 默认模型占位；纯前端升 0.2.5；后端/数据库/产品版本号不动 -->
+    <!-- 2026-06-18 Anthropic 测试连接假阴性：连通性探测 MaxTokens 由 1 提到 16（Claude 在 max_tokens=1 时会在产出内容块前撞上限，回 content:[]+stop_reason=max_tokens，被协议层误判「AI 响应缺少 content」，端点其实已鉴权/路由/跑通模型）；后端升 0.3.5；无 migration、前端/产品版本号不动 -->
+    <!-- 2026-06-18 强制匹配标识（pmm.txt / TMDB URL）：文件夹放 pmm.txt 贴 TMDB 网址即强制锚定指定条目，跳过规则与 AI 自主判断；支持剧集组（episode_group）把重制版编组内集号翻译成正典季集（高达 SEED HD Remaster 等）；新增 ITmdbClient.GetEpisodeGroupAsync + IForcedMatchMarkerStore；后端升 0.3.6；前端加「强制匹配」来源标签 + 历史过滤项升 0.2.6；无 migration（剧集组复用搜索缓存表）、产品版本号不动 -->
+    <!-- 2026-06-18 强制匹配说明页：识别归类下新增「强制匹配」页（设置/forced-match），展示 pmm.txt 支持的网址形态 + 高级 key=value + 一键下载样例 pmm.txt + 归档落点样例 + Plex 兼容说明；纯静态前端，前端升 0.2.7 -->
+    <!-- 2026-06-19 处理历史页批量操作：多选(逐行 + 全选当前页) + 批量重新处理 / 批量删除（复用 useMediaRecordActions 既有 batchReprocess/batchDelete，打 /history/reprocess|delete）+ Admin 权限门禁（批量栏/复选框/逐行写操作仅 Admin，后端全局 FallbackPolicy 同样强制 Admin）；选择仅当前页（翻页/筛选/操作后清空），后端单批上限 500；纯前端升 0.2.8 -->
+    <!-- 2026-06-19 修复强制匹配剧集组双集末集未翻译：末集随起始集按编组映射翻译，仅同季且正典跨度==编组内跨度才保留连续区间，乱序/跨季/越界退化单集；后端升 0.3.7 -->
+    <!-- 2026-06-19 监控目录自动监控开关：WatchFolder 增 AutoScan（默认 true，新 migration AddWatchFolderAutoScan）——开启走原有自动机制（实时监听 + 周期 FullScan + 网络盘可达性探测），关闭则全部停掉、目录仅在手动点击扫描时处理；手动「立即扫描全部/单目录」不受开关限制。后端/数据库升 0.4.0（新 migration）、前端升 0.3.0；产品版本号不动 -->
+    <!-- 2026-06-19 安全修复 SQLite 高危漏洞（CVE-2025-6965 / GHSA-2m69-gcr7-jv3q，SQLite < 3.50.2 聚合项内存破损 CVSS 9.8）：在 Persistence/Platform 及其测试顶层 pin SQLitePCLRaw.lib.e_sqlite3 3.50.3，覆盖 EF Sqlite / Microsoft.Data.Sqlite 推移引入的脆弱 2.1.11（仅换已修复原生库，托管 core 2.1.11 经 C ABI 不变）；后端升 0.4.1；无 migration、前端/产品版本号不动 -->
+    <!-- 2026-06-19 强制匹配增文件名/文件夹名 {tmdb-NNN} 标记识别：文件名或文件夹名带 Plex 官方匹配标记即仅锚定 TMDB id，类型/季/集仍由规则引擎正常识别（类型猜反自动翻 tv↔movie 兜底）；与 pmm.txt 共存，优先级 pmm.txt>.url>文件名标记>文件夹名标记。后端升 0.4.3、前端升 0.3.2；无 migration、产品版本号不动 -->
+    <!-- 2026-06-19 弹窗遮罩去模糊（性能修复）：移除 .el-overlay 全屏 backdrop-filter:blur(2px)——它与顶栏毛玻璃二重叠加，弹窗开关/输入时逐帧重算整屏致严重卡顿（AI 提供商等字段多的弹窗最明显）；半透明暗幕保留模态层级。全站 el-dialog/el-message-box/el-drawer 共用此类，一处即全部生效。纯前端升 0.3.3；后端/数据库/产品版本号不动 -->
+    <!-- 2026-06-19 不兼容音频(av3a Audio Vivid)处理：归档前 ffprobe 探测音轨 codec，含 av3a 等不兼容轨则 History 打标；开启自动重混且存在兼容音轨时用 ffmpeg 流复制丢轨(就近目标盘输出，省一次大文件跨卷重写)。新增 IMediaAudioProbe/IAudioRemuxer 契约(Platform 调外部 ffprobe/ffmpeg，exe 路径由编排层传入、本层不读 DB)、Media_Item 增 AudioCodecs/HasIncompatibleAudio 两列(migration AddAudioProbeFields)、4 个 Audio_* 设置；顺带补登记 version-map 遗漏的 0.4.0→AddWatchFolderAutoScan 行。后端升 0.5.0、数据库升 0.5.0、前端升 0.3.4(接弹窗遮罩 0.3.3 之后)；产品版本号不动 -->
+    <!-- 2026-06-19 存量库批量重扫音频打标：媒体库页加「扫描不兼容音轨」按钮 → POST /library/rescan-audio，对未探测过(AudioCodecs==null)的已完成记录逐条 ffprobe 探 TargetPath、回写不兼容音轨标记(仅打标不重混)；新增 MediaItem.RefreshAudioProbe(不守护终态，因 Completed 是终态)、ILibraryService.RescanAudioAsync、AudioRescanResult，抽 AudioProbeSupport 共享 ffprobe 路径/codec 解析供归档探测与存量重扫共用。后端升 0.5.1、前端升 0.3.5；无 migration、数据库/产品版本号不动 -->
+    <!-- 2026-06-19 设置页 ffmpeg 下载跳转：常规设置「音频」分组 Audio_FfmpegPath 项旁加「下载 ffmpeg ↗」外链(官方 ffmpeg.org/download.html，新标签打开 + rel=noopener)，引导用户自备 ffmpeg；General.vue 加 SETTING_HELP_LINKS 针对特定 key 的帮助链接映射。纯前端升 0.3.6；后端/数据库/产品版本号不动 -->
+    <!-- 2026-06-19 仪表盘加扫描入口：仪表盘页眉加「立即扫描全部 / 强制全扫」按钮 + 「监控目录健康度」各目录卡加「扫描此目录」按钮，把手动扫描从设置/监控目录页搬到更常用的仪表盘；三动作（全量/强制/单目录）抽 useScanActions composable 与监控目录页共用，仪表盘扫完回调 reloadAll 刷新队列数字。纯前端升 0.3.9（接 0.3.8 之后）；后端/数据库/产品版本号不动 -->
+    <!-- 2026-06-19 归档命名模板自定义：开放 3 个文件名主体模板（电影 / 剧集根 / 单集）+ 季标题后缀开关，{tmdb-NNN} 锚点 / Season NN 季目录 / SxxEyy 集号 / (year) 年份 / 伴随文件名等刮削必需结构全部锁死不进模板；占位符白名单 {title}{originaltitle}{year}{tmdbid}{edition}{episode}{seasonyear} 各值过 Sanitize；新增 NamingTemplateOptions/Renderer（Application 纯渲染）+ ArchiveNamingTemplateReader（Persistence 读 DB 降级容错）+ 模板穿过 BuildRelativeTargetPath 单咽喉保证「预览=实际落点」+ 4 个 Archive_* 设置 + migration AddArchiveNamingTemplates + 专属页/校验/ProtectedKeys + 预览端点。默认模板 == 改造前硬编码（逐字节回归守住），存量不重整、升级零行为变化。后端升 0.6.0、数据库升 0.6.0（新 migration）、前端升（package.json 单独维护）；产品版本号不动 -->
+    <!-- 2026-06-20 ffmpeg 路径自检按钮：常规设置「音频」分组 Audio_FfmpegPath 旁加「测试可用性」按钮 → POST /settings/general/test-ffmpeg，解析路径(目录或 exe)→各跑 ffprobe/ffmpeg -version 验证可启动并取版本首行，工具未配置/缺失/不可执行统一返 200+success=false 携原因(不抛 1000)。新增 IFfmpegToolTester 契约(Platform 跑 -version，仍不读 DB/只按给定 exe 执行)+ FfmpegToolTester + GeneralSettingsService.TestFfmpegAsync(复用 AudioProbeSupport.ResolveFfmpegTools 避免逻辑漂移)。后端升 0.6.1、前端升 0.4.2；无 migration、数据库/产品版本号不动 -->
+    <!-- 2026-06-20 初始化引导向导：旧 /setup 仅建管理员，升级为 6 步首次配置向导（欢迎→账号→TMDB→监控目录→归档设置(分类落点统一根目录填充+文件操作方式 Move/Copy/Link+同名冲突策略)→AI 可选→完成），TMDB 测试失败内联代理补救，必需项可逐项「暂时跳过」+ Dashboard「配置完成度」卡片兜底提醒；新增 GET /setup/checklist 配置就绪度端点；SetupGuard 移到鉴权之后并放行「已认证 Admin」（白名单加 setup/checklist 与 auth/login），让向导建账号登录后即可调 settings/* 完成配置、complete 留到最后一步。复用现有各设置端点（零新增写逻辑）。后端升 0.7.0、前端升 0.5.0；无 migration、数据库/产品版本号不动 -->
+    <!-- 2026-06-20 默认分类精简：DataSeeder 种子分类由 电影/美剧/国产剧/动漫/纪录片(5) 改为 电影/电视剧/动漫(3)——删纪录片、真人剧不分地域合并为「电视剧」；匹配规则相应改 3 条（动漫 tv+动画→20 / 电视剧 tv 兜底→50 / 电影兜底→90）；同步守护测试 DataSeederTests + 数据库设计/需求文档/README/向导规范。仅影响全新库（分类表为空才种子），存量库不变。后端升 0.7.1；无 migration、前端/数据库/产品版本号不动 -->
+    <!-- 2026-06-20 统计分析页：新增「媒体库洞察」页(概览组)+ GET /statistics/overview 只读匿名端点一次聚合——库构成(电影/剧集数·年代·评分·类型·国家·分类)+ 近12月入库趋势 + 存储占用Top。作品级维度走「库内已完成」MediaWork、文件级走 Completed MediaItem，沿用 LibraryService 内存聚合范式 + genre 连接表 DB 聚合；前端全手写 SVG(折线/柱/横条/donut)不引图表库。新增 StatisticsController/IStatisticsService/StatisticsService/StatisticsDtos + Statistics.vue + api/路由/菜单/chart 图标；StatisticsServiceTests 9 例覆盖空库/汇总/各维度/EF翻译。纯只读，无 migration。后端升 0.8.0、前端升 0.6.0；数据库/产品版本号不动 -->
+    <!-- 2026-06-20 统计分析页加时间范围切换：GET /statistics/overview 加 range(30d/90d/1y/all，缺省 all) 查询参数，按归档时间 ArchivedAt 统一过滤整页（库构成各维度 + 趋势随窗口走）；趋势粒度自适应——30d/90d 按天、1y/all 按月（all 从最早归档月起，上限 36 桶）。DTO MonthlyTrend→Trend（Bucket 键 yyyy-MM 或 yyyy-MM-dd）+ 回显 range/trendGranularity；前端页眉加段切换器、趋势标签按粒度稀疏、按天用小点不挂计数。StatisticsServiceTests 替原单趋势例为 all 从最早 / 1y 窗口排除 / 30d 按天+时间窗过滤共 3 例。后端升 0.8.1、前端升 0.6.1；无 migration、数据库/产品版本号不动 -->
+    <!-- 2026-06-21 剧集组字幕脱钩修复：episode_group 翻译重排集号后，归档阶段非同名字幕 / 字幕子目录字幕用正典集号去匹配磁盘上的「编组内原始集号」必落空，被遗留源目录（同名字幕走 stem 前缀不受影响）。ParsedInfo 新增 Original{Season,Episode,EpisodeEnd}（翻译前的源文件名命名空间季集，仅剧集组路径非空）随 JSON 列透传；ArchiveService 字幕归属匹配改用 Original*（普通路径全为 null → 回退正典，行为不变），落地重命名仍用正典 SxxEyy。补 ArchiveService 端到端集成测试（非同名 sidecar + 字幕子目录 + 邻集护栏）+ ProcessFileService 透传断言。无 migration。后端升 0.8.2；前端 / 数据库 / 产品版本号不动 -->
+    <!-- 2026-06-21 Subtitle_Download 表悬空治理：在线下载字幕落地到归档位旁并记入 Subtitle_Download，原本只 Add 无 Remove（仅 CASCADE 随 MediaItem 删）；撤销归档（MOVE_BACK 字幕移回源位 / DELETE_COPY 字幕随副本删）与退回重改解除归档后，记录 FileName/TargetPath 必然悬空（且 TargetPath 全局无读者、FileName 仅历史展示）。HistoryService.UndoArchive / ReopenForReview 在状态变更同一 SaveChanges 事务内清理该媒体的下载记录（按 MediaItemId 限定），补上 Remove 出口；同步订正实体生命周期注释。HistoryServiceTests +3（撤销 MOVE_BACK 清理+隔离 / Copy DELETE_COPY 清理 / 退回重改清理）。无 migration。后端升 0.8.3；前端 / 数据库 / 产品版本号不动 -->
+    <!-- 2026-06-27 处理历史页批量退回/撤销（匹配纠错·阶段一）：历史页批量栏新增「批量退回重改 / 批量撤销归档」两按钮，补后端 POST /history/batch-reopen|batch-undo-archive（复用单条 ReopenForReview/UndoArchive 逐条执行，各自独立 DbContext 串行守 EF 并发红线，部分失败计入 failed、外层仍 code=0）+ IHistoryService/HistoryService 批量方法 + 前端 api/composable/History.vue 入口；正面解决「自动匹配错了只能删库重下」无法快速回退的痛点。Host.Tests +5 端点烟雾（401 / 部分失败 / 空请求守门）。后端升 0.8.4、前端升 0.6.2；无 migration、数据库 / 产品版本号不动 -->
+    <!-- 2026-06-27 匹配纠错·阶段二三：① 归档前拦截开关（System_Setting Archive_HoldBeforeArchive：开启则高置信命中也先进 AwaitingReview 待人工确认再归档，确认走现成 ReviewService.Confirm；新增 ReviewReason.HoldBeforeArchive；ProcessFileService 分类命中后归档前拦截 + 内联读开关；GeneralSettingsService.KnownSettings 注册免 migration、前端零改自动出现在常规设置归档分组）。② 孤儿文件找回（LibraryService.ScanOrphans 遍历各分类 TargetRoot 列「磁盘有/DB 无记录」媒体文件 + ClaimOrphans 经 IFileIntakeService 重投管线；ArchiveService 识别「源已在规范目标位」直接登记 Completed 不搬动，支撑孤儿原地认领；LibraryController orphans/scan|claim；前端 OrphanRecoveryDialog + 媒体库页入口）。③ 删除护栏（已归档记录删除前强警示「文件会成孤儿、无法一键移回」）。Persistence.Tests +5（拦截 2 / 已就位 1 / 孤儿扫描认领 2）。后端升 0.8.5、前端升 0.6.3；无 migration、数据库 / 产品版本号不动 -->
+    <!-- 2026-07-03 减少 AI 参与度 + AI 参与度统计：① 规则引擎目录上下文增强——标题有效性按 token 判定（技术残渣「2026 60fps WEB 1」不再当标题）、边界在串首时标题回落父目录层、新增「压制代号-集号」整串兜底（DACZLNF-09 集号提取 + 标题取父目录）、噪声词表补 fps / 裸 WEB / DL / 声道；② tv 仅缺季（集号在）置信度 0.50→0.70 走 TMDB 直查（单季自动补季 / 多季转审核，不再为季号烧 AI）；③ 本地备选标题重搜（AI 前置拦截）：RuleParseResult 新增 AlternativeTitles（混排拆分 CJK/拉丁段 + 其余路径层标题，CJK 优先），ProcessFileService 在触发 AI 前逐个重搜 TMDB，命中即免 AI（ParseSource 保持 Rule）；④ Media_Item 新增 AiInvolved 持久列（发起 AI 升级链即置位，migration AddMediaItemAiInvolved 含历史回填）作为「AI 参与度」统计口径；⑤ 统计页新增「AI 参与率」KPI 与「识别方式构成」板块（ParseSource 五类构成 + AI 参与率 + 人工审核介入率，与整页同时间窗）；⑥ Host 显式引 Microsoft.OpenApi 2.9.0 覆盖传递依赖 2.0.0（NU1903 高危 GHSA-v5pm-xwqc-g5wc）。RuleEngine 测试 +9、Statistics 测试 +2。后端升 0.8.6、数据库升 0.7.0、前端升 0.6.4；产品版本号不动 -->
+    <!-- 2026-07-04 AI 提供商套餐限额与超限自动禁用：Parse_AiProvider 新增 6 列（QuotaCallLimit/QuotaTokenLimit/QuotaExpiresAt 配置 + QuotaUsedCalls/QuotaUsedTokens 独立累计 + QuotaExceededAt 配额禁用标记，migration AddAiProviderQuota）；新增 IAiProviderQuotaTracker（解析链 AiCallOrchestrator + 对话链 AiChatClient 每次写审计后计量，成功失败都计，超限幂等置位 + ai.provider_quota_exceeded 告警）；Resolver 剔除配额禁用/套餐到期行（与 Enabled/DisabledUntil 三态分离，手动 /enable 不绕过）；Update 保存前重评估（放宽自动清/收紧置位）+ 新端点 POST settings/ai-providers/reset-quota 清零用量开始新周期。后端升 0.9.0、数据库升 0.8.0、前端（另行维护）；产品版本号不动 -->
+    <!-- 2026-07-04 TMDB 多查询对比替代 AI（减少 AI 参与度·二期）：① 候选过多免 AI 裁决——首查候选 >N 先四维打分，榜首 ≥0.7 且领先次名 ≥0.15 直接采纳（ProcessFileService/DryRunService 同口径 CrossCheckDominant*）；② 备选标题交叉投票——打分含糊时备选重搜结果与首查候选求交集计票，唯一最高票且得分 ≥0.5 免 AI 采纳（多次 TMDB 查询对比消歧）；③ 高置信全零跳 AI——主标题+全部备选（各带语言×年份 4 层回退）零结果且规则置信度达标、无混排 → 判定 TMDB 未收录，跳过 AI 转 AwaitingReview(TmdbZeroResult)；④ TmdbZeroResultRetryJob（6h 周期）+ TmdbZeroResultRetrySweeper 把 AiInvolved=false 的零结果记录按「距上次动作 ≥20h、入库 ≤窗口天数（Parse_ZeroResultRetryWindowDays 默认 14）」每日自动重投（AwaitingReview→Queued 新增合法转移），TMDB 收录后自动归档、循环内永不烧 AI，开关 Parse_ZeroResultAutoRetry（KnownSettings 免 migration）；⑤ 人工确认沉淀——ReviewService Confirm/BindTmdb TV 绑定后主动 Set FolderSeriesCache（Confidence=1.0），同目录后续文件免搜索免 AI 免人工；⑥ 兄弟目录同剧复用——TryResolveSeriesFromDbAsync 精确目录未命中时按「同父目录 + 目录名剥集号段归一化相同」还原已归档兄弟目录 series 身份（覆盖追更下载「每集一个目录」模式）；⑦ ReviewItemResponse 新增 AiInvolved 字段，审核页零结果组显示「候补自动重试中」标签。Persistence 测试 +17（拦截 6 / Sweeper 8 / Review 沉淀 2 / 兄弟目录 1）、Domain 状态机表同步、Quartz 注册测试升 6 Job。后端升 0.9.1、前端升 0.7.1；无 migration、数据库 / 产品版本号不动 -->
+    <!-- 2026-07-23 AI 年份幻觉字面溯源守护：AI 会给「文件名/路径都没写年份」的作品用世界知识凭空补发行年，多版本作品（重制/多次剧场版）倾向锚定最早/最知名版本（如《攻壳机动队》2026 版文件被填 1995），该幻觉 year 会作为 TMDB 检索参数搜到错版本、污染候选年份维度打分（默认权重 0.3）、优先落进 ParsedInfo.Year。① SystemPrompt 收紧 year：只从文件名/路径明确写出的 4 位年份数字提取、缺则必须 null、严禁凭作品名推断（title 仍可基于线索翻译转写，year 属事实字段只能照抄）；② 新增 AiPromptHelpers.GroundYear，在 AiProtocolParser 反解后做字面溯源——year 未以「前后非数字」独立形态出现在 FileName/RelativeSegments/ParentFolderName 任一处即判幻觉置 null，下游年份维度记中性、检索不带年、回退 TMDB 候选年靠标题/热度/语言消歧；③ 仅守 year（season/episode 有单季自动补季等默认、title 允许最佳猜测，均不适用该校验）。External 测试 +9。后端升 0.9.2；无 migration、数据库/前端/产品版本号不动 -->
+    <!-- 2026-08-29 托盘右键新增「扫描硬盘」：复用 TriggerAllAsync(false) 异步扫描全部已启用监控目录；后端升 0.10.0，无 migration，数据库/前端/产品版本号不动 -->
+    <!-- 2026-08-30 扫描待确认网页提醒 + 单任务取消：MainLayout 订阅现有 /hubs/tasks 的 AwaitingReview 状态事件，统一覆盖手动全扫、周期/实时自动扫描与单目录扫描；右下角提醒可点击前往待确认队列，设置→常规新增 Notification_ReviewRequiredEnabled 开关（默认开，KnownSettings 免 migration）；处理详情对排队及归档前处理状态提供取消，排队项以 Cancelled 终态跳过，活动项以独立 linked token 安全停止，Archiving 为保证磁盘一致性不允许取消。后端升 0.11.0、前端升 0.8.0；无 migration，数据库/产品版本号不动 -->
+    <PmmProductVersion>0.2.0</PmmProductVersion>
+    <VersionPrefix>0.11.0</VersionPrefix>
+    <PmmDbVersion>0.10.0</PmmDbVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+
+    <!-- 抑制本项目无意义的告警：xunit 测试方法可能没有参数等 -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,143 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Host：ASP.NET Core 宿主装配（类库，非 Exe）。
+    通过 Microsoft.NET.Sdk + FrameworkReference 引入 ASP.NET Core 框架；不暴露 Program.cs，由 Launcher 调用 PmmHost.CreateApp 工厂启动 Kestrel。
+    引用范围：Application + 3 个 Infrastructure；CLAUDE.md §十二 强制禁止直接引 Domain
+  -->
+
+  <PropertyGroup>
+    <RootNamespace>PersonalMediaManager.Host</RootNamespace>
+    <AssemblyName>PersonalMediaManager.Host</AssemblyName>
+    <!-- 静态资源（wwwroot）将由前端 build 注入；类库需开启 ASP.NET 静态文件支持 -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- 关闭 VS Fast Up-to-Date Check：vite 每次 build 会改 hash 文件名，VS 设计时评估的 Content glob 快照会指向已删除的旧 hash 文件，触发 MSB3030「无法复制文件」。
+         代价：VS 增量构建略慢（每次走真 MSBuild）；收益：彻底消除 Vite hash 与 VS 快照不同步导致的复制失败。 -->
+    <DisableFastUpToDateCheck>true</DisableFastUpToDateCheck>
+
+    <!-- 启用嵌入文件清单：把 wwwroot 前端产物 + appsettings.json 作为 EmbeddedResource 编译进 Host.dll，
+         生成 Microsoft.Extensions.FileProviders.Embedded.Manifest.xml；运行时由 ManifestEmbeddedFileProvider
+         按原始相对路径读取（单文件发布后随 exe 内置，无需再外置 wwwroot/ 与 appsettings.json 散文件 → 产物收敛为单一 exe）。 -->
+    <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <!-- appsettings.json：出厂默认 bootstrap 配置（端口/Update/日志级别），嵌入 Host.dll（单文件后随 exe）。
+       运行时 PmmHost 用 ManifestEmbeddedFileProvider 读 → AddJsonStream 接入配置最低优先级（被 local.json 覆盖）。
+       从默认 None glob 移除避免与 EmbeddedResource 重复纳入；稳定文件名（非 vite hash），可静态 evaluation 嵌入。 -->
+  <ItemGroup>
+    <None Remove="appsettings.json" />
+    <EmbeddedResource Include="appsettings.json" />
+  </ItemGroup>
+
+  <!--
+    前端 SPA（wwwroot）与构建集成：
+    · 前端构建由 PersonalMediaManager.Frontend.esproj（Microsoft.VisualStudio.JavaScript.SDK）接管，
+      经下方 ProjectReference 建立构建顺序：Release 构建时 .esproj 跑 npm run build:host，
+      vite 产物直接写入本项目 wwwroot/（Debug 不跑，开发走 vite dev server 5173）。
+    · 方案A 根治 MSB3030：wwwroot 不再以 <Content Include="wwwroot\**"> 静态 glob 纳入项目。
+      vite 每次 build 改 hash 文件名，VS 设计时（evaluation）会把静态 glob 快照成指向旧 hash 的部署清单，
+      build 时旧文件已被删 → 复制阶段报 MSB3030「无法复制文件」。
+      改由 Launcher.csproj 在 execution 阶段（AfterTargets=Build/Publish）动态枚举 wwwroot 复制到产物目录，
+      execution 阶段求值不参与 evaluation 快照，从根上消除 MSB3030。
+      Host 作为类库不单独运行，自身 bin 无需 wwwroot；最终运行/发布目录的 wwwroot 由 Launcher 注入。
+  -->
+  <!-- 前端工程（.esproj）：建立 Host→Frontend 依赖关系（VS 解决方案展示用）。
+       ReferenceOutputAssembly=false（无程序集可引）+ SkipGetTargetFrameworkProperties=true
+       （.esproj 无 TargetFramework，跳过 TF 协商，否则 C# 引 JS 项目会因读不到 TF 报错）。
+       BuildReference=false：不靠 ProjectReference 隐式触发前端构建——dotnet build *solution* 不会调
+       .esproj 的 Build（只跑 restore 图），而项目级又会触发，两种入口行为不一致；统一改由下方
+       _PmmBuildFrontend 显式 <MSBuild> 触发，避免项目级重复构建。 -->
+  <ItemGroup>
+    <ProjectReference Include="..\PersonalMediaManager.Frontend\PersonalMediaManager.Frontend.esproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <SkipGetTargetFrameworkProperties>true</SkipGetTargetFrameworkProperties>
+      <Private>false</Private>
+      <ExcludeAssets>all</ExcludeAssets>
+      <BuildReference>false</BuildReference>
+    </ProjectReference>
+  </ItemGroup>
+
+  <!--
+    显式触发前端构建：统一 solution / 项目两种 build 入口的行为。
+    实测：dotnet build PersonalMediaManager.slnx 只对 .esproj 跑 restore 图、不调它的 Build target；
+    项目级 dotnet build Host.csproj 经 ProjectReference 又会触发 —— 行为不一致。
+    故在此显式 <MSBuild> 调 .esproj 的 Build。Debug/Release 均触发，但用 Inputs/Outputs 做增量：
+    仅当前端源码（src / public / index.html / package.json / vite.config.js）比 wwwroot/index.html 新时才重跑 build:host。
+    收益：F5 启动 Launcher 即拿到最新前端；未改前端时增量短路、几乎零耗时（不启动 vite）。
+    前端 HMR / 源码调试另走 vite dev server(5173)，与本构建解耦，不在此处。
+    增量 Inputs 必须排除 vite 生成物 auto-imports.d.ts / components.d.ts —— 它们随每次构建刷新时间戳，
+    不排除会导致「刚构建完又判定源码更新」从而每次必重建。
+    时序：BeforeTargets=_CalculateEmbeddedFilesManifestInputs;BeforeCompile —— 前端产物须在「嵌入清单收集 + Host 编译」之前就绪。
+    _CalculateEmbeddedFilesManifestInputs 是 Microsoft.Extensions.FileProviders.Embedded 包在 PrepareResourceNames 阶段
+    收集 @(EmbeddedResource) 写进 manifest 的入口 target；锚点必须卡它之前。实测挂成 GenerateEmbeddedFilesManifest（无此 target 名）
+    或 BeforeCompile（晚于收集）都会让 wwwroot 漏进 manifest —— 只有 appsettings 进、91 个前端文件全缺。
+    紧接由下方 _PmmCollectFrontendEmbed 把 wwwroot 动态加为 EmbeddedResource 一并编译进 Host.dll。
+  -->
+  <ItemGroup>
+    <_PmmFrontendInputs Include="..\PersonalMediaManager.Frontend\src\**\*"
+        Exclude="..\PersonalMediaManager.Frontend\src\auto-imports.d.ts;..\PersonalMediaManager.Frontend\src\components.d.ts" />
+    <_PmmFrontendInputs Include="..\PersonalMediaManager.Frontend\public\**\*" />
+    <_PmmFrontendInputs Include="..\PersonalMediaManager.Frontend\index.html" />
+    <_PmmFrontendInputs Include="..\PersonalMediaManager.Frontend\package.json" />
+    <_PmmFrontendInputs Include="..\PersonalMediaManager.Frontend\vite.config.js" />
+  </ItemGroup>
+  <Target Name="_PmmBuildFrontend" BeforeTargets="_CalculateEmbeddedFilesManifestInputs;BeforeCompile"
+          Inputs="@(_PmmFrontendInputs)"
+          Outputs="$(MSBuildThisFileDirectory)wwwroot\index.html">
+    <Message Text="[PMM] 前端源码有变更，重建 wwwroot（npm run build:host）..." Importance="high" />
+    <MSBuild Projects="..\PersonalMediaManager.Frontend\PersonalMediaManager.Frontend.esproj"
+             Targets="Build"
+             Properties="Configuration=$(Configuration)" />
+  </Target>
+
+  <!--
+    收集前端产物为 EmbeddedResource（execution 阶段动态加，避开 vite hash 文件名被 evaluation 快照导致的 MSB3030 老问题）。
+    时序锚点：在 wwwroot 产出之后（AfterTargets=_PmmBuildFrontend）、manifest 收集入口 _CalculateEmbeddedFilesManifestInputs 之前。
+    先从默认 None / Content glob 移除 wwwroot 同名文件，避免「同一文件多 item type」重复纳入告警。
+    Include 用相对路径 wwwroot\**\* → manifest 相对路径 = wwwroot/xxx，运行时 ManifestEmbeddedFileProvider(asm,"wwwroot") 暴露为 /xxx。
+  -->
+  <Target Name="_PmmCollectFrontendEmbed"
+          AfterTargets="_PmmBuildFrontend"
+          BeforeTargets="_CalculateEmbeddedFilesManifestInputs">
+    <ItemGroup>
+      <None Remove="wwwroot\**\*" />
+      <Content Remove="wwwroot\**\*" />
+      <EmbeddedResource Include="wwwroot\**\*" />
+    </ItemGroup>
+  </Target>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PersonalMediaManager.Application\PersonalMediaManager.Application.csproj" />
+    <ProjectReference Include="..\PersonalMediaManager.Infrastructure.Persistence\PersonalMediaManager.Infrastructure.Persistence.csproj" />
+    <ProjectReference Include="..\PersonalMediaManager.Infrastructure.External\PersonalMediaManager.Infrastructure.External.csproj" />
+    <ProjectReference Include="..\PersonalMediaManager.Infrastructure.Platform\PersonalMediaManager.Infrastructure.Platform.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PersonalMediaManager.Host.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.8" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.8">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.8" />
+    <!-- 显式顶层引用覆盖 AspNetCore.OpenApi 的传递依赖 Microsoft.OpenApi 2.0.0（NU1903 高危漏洞 GHSA-v5pm-xwqc-g5wc） -->
+    <PackageReference Include="Microsoft.OpenApi" Version="2.9.0" />
+    <PackageReference Include="Scalar.AspNetCore" Version="2.10.0" />
+    <!-- 前端 wwwroot + appsettings.json 嵌入 Host.dll 后的运行时读取 provider（ManifestEmbeddedFileProvider）。
+         该类型不在 ASP.NET Core 共享框架内，需显式引包；版本对齐 .NET 10（与其余 10.0.8 一致）。 -->
+    <PackageReference Include="Microsoft.Extensions.FileProviders.Embedded" Version="10.0.8" />
+  </ItemGroup>
+
+</Project>

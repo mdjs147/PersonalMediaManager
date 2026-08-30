@@ -1,0 +1,83 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Launcher：解决方案唯一可执行（产物名 PersonalMediaManager.exe）
+    单 TFM（CLAUDE.md §十二 锁定）：net10.0-windows，仅支持 Windows（macOS 支持已于 2026-06-11 移除）
+      · 托盘走 System.Windows.Forms.NotifyIcon（.NET SDK 内置，零外部依赖）
+
+    红线（CLAUDE.md §八）：禁止引入 Eto.Forms / Avalonia / Microsoft.WindowsAppSDK / Microsoft.Maui.*
+      WinForms 不属于上述「跨平台 UI 框架」—— 它是 .NET 提供的 Windows 原生框架，且通过 UseWindowsForms=true 直接走 SDK，无 NuGet 包风险。
+      原始 dev plan §E1.1 写的 `H.NotifyIcon.WinForms` 包 NuGet 不存在（H.NotifyIcon 仅有 base/Wpf/WinUI/Uno/Maui 变体），改用内置 WinForms NotifyIcon 等效满足「Windows 原生托盘」的设计意图。
+  -->
+
+  <PropertyGroup>
+    <!-- 覆盖 Directory.Build.props 继承的 net10.0：Launcher 用 WinForms，需要 Windows 专属 TFM -->
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <!-- WinExe：windows subsystem 链接，双击 exe 不弹控制台窗口（WinForms 标准）。
+         若用 Exe（console subsystem）则 PE Header 子系统标识为控制台 → 系统启动时会先开一个 conhost 黑窗，UI 才显示，与"桌面常驻 + 内嵌 Web 服务"形态不符。
+         Serilog Console sink 在 WinExe 下静默无效（Console.Out 指向 NullStream，不抛错），File sink 不受影响 —— 不影响诊断能力。 -->
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>PersonalMediaManager.Launcher</RootNamespace>
+    <AssemblyName>PersonalMediaManager</AssemblyName>
+    <!-- 关闭 VS Fast Up-to-Date Check：Launcher 通过 ProjectReference 传递 Host 的 wwwroot Content，
+         Host 端 vite hash 变化同样会让 Launcher 的 VS 快照失效，触发 MSB3030。与 Host 保持一致。 -->
+    <DisableFastUpToDateCheck>true</DisableFastUpToDateCheck>
+  </PropertyGroup>
+
+  <!-- 恒生效属性：启用 WinForms 以使用 System.Windows.Forms.NotifyIcon 系统托盘
+       DebugType=embedded：覆盖 Directory.Build.props 的 portable，让 PDB 嵌入 exe，单文件部署不带外挂 .pdb 也能给出堆栈
+       RuntimeIdentifiers（复数）：限定可发布 RID 列表；单数 RuntimeIdentifier 会污染 Debug 输出路径触发 NETSDK1047 -->
+  <PropertyGroup>
+    <UseWindowsForms>true</UseWindowsForms>
+    <DefineConstants>$(DefineConstants);PMM_WINDOWS</DefineConstants>
+    <DebugType>embedded</DebugType>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+  </PropertyGroup>
+
+  <!--
+    应用清单（app.manifest）：全配置引用（Debug + Release 一致）。
+    · 执行级别 asInvoker：普通权限运行、跟随启动者令牌 → 共享会话网络盘映射（归档到 Y:/Z: 等网络盘不被 UAC 提权隔离）。
+    · supportedOS：声明 Win10/11，让系统按真实版本处理 DPI / 主题等 API。
+    历史：曾在 Release 引用 requireAdministrator 版 manifest（为「数据贴 exe」强写 Program Files）；
+          因提权会把网络盘隔离掉已摘除，数据落点改由 AppPaths 写探针决定（可写则贴 exe，否则回退 %LocalAppData%）。
+    配套：开机自启回退 HKCU\Run（普通权限登录即启，见 WindowsAutoStart）。
+  -->
+  <PropertyGroup>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <!--
+    单文件发布属性：仅在 publish 阶段（RuntimeIdentifier 非空时）生效
+    规范来源：docs/需求规范-启动方式与托盘常驻.md §8
+    关键决策：
+      · 关 EnableCompressionInSingleFile → 提升首启 1-2 秒；PMM 常驻进程产物体积不敏感、启动速度更敏感
+      · 关 IncludeAllContentForSelfExtract → wwwroot 走外部 BaseDirectory\wwwroot 便于前端独立热更新（嵌入到临时解压目录会挡热更新）
+      · SelfContained=true 必须在 RuntimeIdentifier 已设时才生效，否则 dotnet build 触发 NETSDK1031
+    用法：
+      · dotnet build           → 本组属性不生效（RuntimeIdentifier 为空），普通 framework-dependent build
+      · dotnet publish -c Release -r win-x64 → 本组属性生效，产出单文件 self-contained exe
+  -->
+  <PropertyGroup Condition=" '$(RuntimeIdentifier)' != '' ">
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>false</EnableCompressionInSingleFile>
+    <IncludeAllContentForSelfExtract>false</IncludeAllContentForSelfExtract>
+    <!-- 单 exe 收敛：阻止引用项目（Host 的 GenerateDocumentationFile 产物等）的 .xml / .pdb related file 随 publish 复制。
+         这些仅供 IntelliSense，发布产物不需要；不排除会在 exe 旁多出 PersonalMediaManager.Host.xml 破坏「单一文件」。
+         值取不存在的扩展名「none」= 任何 related file 都不匹配 → 一律不复制。 -->
+    <AllowedReferenceRelatedFileExtensions>none</AllowedReferenceRelatedFileExtensions>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PersonalMediaManager.Host\PersonalMediaManager.Host.csproj" />
+  </ItemGroup>
+
+  <!--
+    前端 wwwroot 与 appsettings.json 已改为嵌入 Host 程序集（Host.csproj GenerateEmbeddedFilesManifest + 动态 EmbeddedResource）：
+    单文件发布后随 exe 内置，运行时由 ManifestEmbeddedFileProvider 读取，无需再外置 wwwroot/ 与 appsettings.json 散文件。
+    原 _PmmCopyFrontendToOutput / _PmmCopyFrontendToPublish 复制 Target 及 None appsettings.json 已随之移除 —— 发布产物收敛为单一 exe。
+    （上方 DisableFastUpToDateCheck 保留：Host 仍动态嵌入 vite hash 产物，Launcher 经 ProjectReference 间接受影响，关闭快照检查防陈旧。）
+  -->
+
+</Project>

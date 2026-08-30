@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Domain 层：充血聚合 / 贫血实体 / 值对象 / 枚举 / 领域异常
+    强制：零外部依赖（连 EF Core / ASP.NET Core 都不引）；详见 CLAUDE.md §十二
+  -->
+
+  <PropertyGroup>
+    <RootNamespace>PersonalMediaManager.Domain</RootNamespace>
+    <AssemblyName>PersonalMediaManager.Domain</AssemblyName>
+  </PropertyGroup>
+
+  <!--
+    Entity.Id setter 为 protected internal：允许 Persistence 程序集（HasData 种子 / 测试夹具）显式赋 Id。
+    严格 DDD 仍鼓励通过工厂方法构造；本通道仅服务持久化层底层场景。
+  -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="PersonalMediaManager.Infrastructure.Persistence" />
+    <InternalsVisibleTo Include="PersonalMediaManager.Domain.Tests" />
+    <InternalsVisibleTo Include="PersonalMediaManager.Application.Tests" />
+    <InternalsVisibleTo Include="PersonalMediaManager.Infrastructure.Persistence.Tests" />
+    <InternalsVisibleTo Include="PersonalMediaManager.Host.Tests" />
+  </ItemGroup>
+
+</Project>

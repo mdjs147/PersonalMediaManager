@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Infrastructure.Platform：FileMover / FileSystemWatcher / DataProtection 包装 / Quartz Job / 跨平台路径
+    引用范围：Application；禁止与 Persistence / External 互引
+  -->
+
+  <PropertyGroup>
+    <RootNamespace>PersonalMediaManager.Infrastructure.Platform</RootNamespace>
+    <AssemblyName>PersonalMediaManager.Infrastructure.Platform</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PersonalMediaManager.Application\PersonalMediaManager.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PersonalMediaManager.Application.Tests" />
+    <InternalsVisibleTo Include="PersonalMediaManager.Infrastructure.Persistence.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Quartz" Version="3.15.0" />
+    <PackageReference Include="Quartz.Extensions.DependencyInjection" Version="3.15.0" />
+    <PackageReference Include="Quartz.Extensions.Hosting" Version="3.15.0" />
+    <PackageReference Include="Microsoft.AspNetCore.DataProtection" Version="10.0.8" />
+    <PackageReference Include="Microsoft.AspNetCore.DataProtection.Extensions" Version="10.0.8" />
+    <!-- 安全修复(NU1903)：DataProtection 传递引入的 System.Security.Cryptography.Xml 10.0.8 有高危漏洞，显式 pin 到已修复的 10.0.10 覆盖传递版本（下游经 ProjectReference 继承） -->
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.10" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.16.0" />
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.8" />
+    <!-- E.2 System 模块：导出走 SQLite VACUUM INTO，需要直接调 Microsoft.Data.Sqlite 创建临时副本连接 -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.8" />
+    <!-- 安全修复：覆盖 Microsoft.Data.Sqlite 推移引入的脆弱原生库 SQLitePCLRaw.lib.e_sqlite3 2.1.11
+         （CVE-2025-6965 / GHSA-2m69-gcr7-jv3q，SQLite < 3.50.2 内存破损，CVSS 9.8；详细说明见 Persistence.csproj 同款引用）。 -->
+    <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.50.3" />
+  </ItemGroup>
+
+</Project>

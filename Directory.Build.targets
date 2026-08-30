@@ -1,0 +1,142 @@
+<Project>
+
+  <!--
+    版本号自动注入（与 Directory.Build.props 协作）
+
+    两个 Target 协作：
+      1. StampGitVersion       — 读 git 注入 FileVersion / InformationalVersion（保留原行为）
+      2. InjectVersionMetadata — 把 ProductVersion / DbVersionPrefix / FrontendVersion / BuildTimeUtc
+                                 通过 AssemblyMetadataAttribute 烤进每个 assembly
+
+    时机：BeforeTargets="GetAssemblyVersion"（SDK 内置 target，负责把 Version/VersionPrefix → AssemblyVersion/FileVersion/InformationalVersion）
+    幂等：纯读 git 与 package.json，不修改任何文件；git / 文件不可用时 fallback 为合理默认值
+
+    StampGitVersion 产出：
+      · FileVersion           = $(VersionPrefix).{commit count}
+      · InformationalVersion  = $(VersionPrefix)+{short sha}[.dirty]
+      · AssemblyVersion        留给 SDK 自动派生（$(VersionPrefix).0）
+
+    InjectVersionMetadata 产出（运行时由 Assembly.GetCustomAttributes<AssemblyMetadataAttribute>() 读出）：
+      · ProductVersion  = $(PmmProductVersion)                                  — 主版本号（对外展示）
+      · DbVersion       = $(PmmDbVersion)                                 — 数据库目标 schema 版本号
+      · FrontendVersion = 读 src/PersonalMediaManager.Frontend/package.json:version — 前端版本号
+      · BuildTimeUtc    = 构建瞬时 UTC ISO 8601                              — 构建时间
+
+    注意：
+      1. 每个项目都会跑两次 Target；git 命令毫秒级，可接受
+      2. <Exec> 使用 ContinueOnError 让无 git 环境也能构建（仅产出 VersionPrefix 基础版本）
+      3. ConsoleToMSBuild 输出可能末尾带换行，统一 Trim 处理
+  -->
+
+  <Target Name="StampGitVersion"
+          BeforeTargets="GetAssemblyVersion"
+          Condition=" '$(StampGitVersionDisabled)' != 'true' ">
+
+    <!-- 提交总数（rev-list 计数 HEAD 全量提交） -->
+    <Exec Command="git rev-list --count HEAD"
+          ConsoleToMSBuild="true"
+          IgnoreExitCode="true"
+          StandardOutputImportance="low"
+          StandardErrorImportance="low"
+          ContinueOnError="WarnAndContinue">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_PmmGitCommitCount" />
+      <Output TaskParameter="ExitCode" PropertyName="_PmmGitCountExit" />
+    </Exec>
+
+    <!-- 短 sha（rev-parse 取 HEAD 前 8 位 hex） -->
+    <Exec Command="git rev-parse --short=8 HEAD"
+          ConsoleToMSBuild="true"
+          IgnoreExitCode="true"
+          StandardOutputImportance="low"
+          StandardErrorImportance="low"
+          ContinueOnError="WarnAndContinue">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_PmmGitShortSha" />
+      <Output TaskParameter="ExitCode" PropertyName="_PmmGitShaExit" />
+    </Exec>
+
+    <!-- dirty 检测：diff-index 静默对比工作区与 HEAD，ExitCode 0 干净 / 1 有未提交改动 -->
+    <Exec Command="git diff-index --quiet HEAD --"
+          IgnoreExitCode="true"
+          StandardOutputImportance="low"
+          StandardErrorImportance="low"
+          ContinueOnError="WarnAndContinue">
+      <Output TaskParameter="ExitCode" PropertyName="_PmmGitDirtyExit" />
+    </Exec>
+
+    <PropertyGroup>
+      <!-- Fallback：git 不可用或在解决方案外构建时 -->
+      <_PmmGitCommitCount Condition=" '$(_PmmGitCommitCount)' == '' Or '$(_PmmGitCountExit)' != '0' ">0</_PmmGitCommitCount>
+      <_PmmGitShortSha Condition=" '$(_PmmGitShortSha)' == '' Or '$(_PmmGitShaExit)' != '0' ">unknown</_PmmGitShortSha>
+      <_PmmGitDirtySuffix Condition=" '$(_PmmGitDirtyExit)' == '1' ">.dirty</_PmmGitDirtySuffix>
+      <_PmmGitDirtySuffix Condition=" '$(_PmmGitDirtyExit)' != '1' "></_PmmGitDirtySuffix>
+
+      <!-- 注入到 SDK 标准属性 -->
+      <FileVersion>$(VersionPrefix).$(_PmmGitCommitCount)</FileVersion>
+      <InformationalVersion>$(VersionPrefix)+$(_PmmGitShortSha)$(_PmmGitDirtySuffix)</InformationalVersion>
+    </PropertyGroup>
+
+    <Message Text="[StampGitVersion] $(MSBuildProjectName) → FileVersion=$(FileVersion) InformationalVersion=$(InformationalVersion)"
+             Importance="low" />
+  </Target>
+
+  <!--
+    InjectVersionMetadata：把 4 个非 SemVer 字段通过 AssemblyMetadataAttribute 注入
+    BeforeTargets="GetAssemblyAttributes"（SDK 内置 target，负责把 AssemblyAttribute item 编译为 [assembly:...] 源）
+    AssemblyAttribute 是 SDK 约定的 ItemGroup 项，每项会被翻译成一个 [assembly: Xxx(...)] 标签
+  -->
+  <Target Name="InjectVersionMetadata"
+          BeforeTargets="GetAssemblyAttributes"
+          Condition=" '$(InjectVersionMetadataDisabled)' != 'true' ">
+
+    <PropertyGroup>
+      <_PmmFrontendPackageJsonPath>$(MSBuildThisFileDirectory)src\PersonalMediaManager.Frontend\package.json</_PmmFrontendPackageJsonPath>
+    </PropertyGroup>
+
+    <!-- 读 package.json 全部行，拼成单 property 给 Regex 解析；文件不存在时跳过 -->
+    <ReadLinesFromFile File="$(_PmmFrontendPackageJsonPath)"
+                       Condition="Exists('$(_PmmFrontendPackageJsonPath)')">
+      <Output TaskParameter="Lines" ItemName="_PmmPackageJsonLines" />
+    </ReadLinesFromFile>
+
+    <PropertyGroup>
+      <_PmmPackageJsonText>@(_PmmPackageJsonLines, '%0A')</_PmmPackageJsonText>
+      <!-- 正则提取 "version": "x.y.z"；MSBuild 内 &quot; 即字面双引号 -->
+      <_PmmFrontendVersion>$([System.Text.RegularExpressions.Regex]::Match($(_PmmPackageJsonText), '&quot;version&quot;\s*:\s*&quot;([^&quot;]+)&quot;').Groups.get_Item(1).Value)</_PmmFrontendVersion>
+      <_PmmFrontendVersion Condition=" '$(_PmmFrontendVersion)' == '' ">unknown</_PmmFrontendVersion>
+
+      <!-- 构建时间 UTC ISO 8601 -->
+      <_PmmBuildTimeUtc>$([System.DateTime]::UtcNow.ToString('o'))</_PmmBuildTimeUtc>
+    </PropertyGroup>
+
+    <!--
+      四个 AssemblyMetadataAttribute 注入：
+        ProductVersion / DbVersion / FrontendVersion / BuildTimeUtc
+      运行时读取范式：
+        Assembly.GetExecutingAssembly()
+          .GetCustomAttributes<AssemblyMetadataAttribute>()
+          .First(a => a.Key == "ProductVersion").Value
+    -->
+    <ItemGroup>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>ProductVersion</_Parameter1>
+        <_Parameter2>$(PmmProductVersion)</_Parameter2>
+      </AssemblyAttribute>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>DbVersion</_Parameter1>
+        <_Parameter2>$(PmmDbVersion)</_Parameter2>
+      </AssemblyAttribute>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>FrontendVersion</_Parameter1>
+        <_Parameter2>$(_PmmFrontendVersion)</_Parameter2>
+      </AssemblyAttribute>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>BuildTimeUtc</_Parameter1>
+        <_Parameter2>$(_PmmBuildTimeUtc)</_Parameter2>
+      </AssemblyAttribute>
+    </ItemGroup>
+
+    <Message Text="[InjectVersionMetadata] $(MSBuildProjectName) → Product=$(PmmProductVersion) Db=$(PmmDbVersion) Frontend=$(_PmmFrontendVersion) BuildTimeUtc=$(_PmmBuildTimeUtc)"
+             Importance="low" />
+  </Target>
+
+</Project>

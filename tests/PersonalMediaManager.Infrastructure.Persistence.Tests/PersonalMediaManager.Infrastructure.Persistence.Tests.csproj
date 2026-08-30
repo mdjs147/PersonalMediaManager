@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Persistence 集成测试：SQLite in-memory + EF Migration + 拦截器 + 索引生效 -->
+
+  <PropertyGroup>
+    <RootNamespace>PersonalMediaManager.Infrastructure.Persistence.Tests</RootNamespace>
+    <AssemblyName>PersonalMediaManager.Infrastructure.Persistence.Tests</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\PersonalMediaManager.Infrastructure.Persistence\PersonalMediaManager.Infrastructure.Persistence.csproj" />
+    <ProjectReference Include="..\..\src\PersonalMediaManager.Infrastructure.Platform\PersonalMediaManager.Infrastructure.Platform.csproj" />
+    <ProjectReference Include="..\..\src\PersonalMediaManager.Application\PersonalMediaManager.Application.csproj" />
+    <ProjectReference Include="..\..\src\PersonalMediaManager.Domain\PersonalMediaManager.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="FluentAssertions" Version="7.2.0" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.8" />
+    <!-- 安全修复：覆盖脆弱原生库 SQLitePCLRaw.lib.e_sqlite3 2.1.11（CVE-2025-6965 / GHSA-2m69-gcr7-jv3q；详见 Persistence.csproj） -->
+    <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.50.3" />
+    <PackageReference Include="NSubstitute" Version="5.3.0" />
+    <!-- 仅测试用：Windows 上以 ACL Deny 模拟「不可读子目录」验证健壮枚举（Unix 走 File.SetUnixFileMode 无需此包） -->
+    <PackageReference Include="System.IO.FileSystem.AccessControl" Version="5.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <Using Include="FluentAssertions" />
+  </ItemGroup>
+
+</Project>

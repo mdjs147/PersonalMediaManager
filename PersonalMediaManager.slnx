@@ -1,0 +1,23 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/PersonalMediaManager.Application/PersonalMediaManager.Application.csproj" />
+    <Project Path="src/PersonalMediaManager.Domain/PersonalMediaManager.Domain.csproj" />
+    <Project Path="src/PersonalMediaManager.Frontend/PersonalMediaManager.Frontend.esproj">
+      <Build />
+      <Deploy />
+    </Project>
+    <Project Path="src/PersonalMediaManager.Host/PersonalMediaManager.Host.csproj" />
+    <Project Path="src/PersonalMediaManager.Infrastructure.External/PersonalMediaManager.Infrastructure.External.csproj" />
+    <Project Path="src/PersonalMediaManager.Infrastructure.Persistence/PersonalMediaManager.Infrastructure.Persistence.csproj" />
+    <Project Path="src/PersonalMediaManager.Infrastructure.Platform/PersonalMediaManager.Infrastructure.Platform.csproj" />
+    <Project Path="src/PersonalMediaManager.Launcher/PersonalMediaManager.Launcher.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/PersonalMediaManager.Application.Tests/PersonalMediaManager.Application.Tests.csproj" />
+    <Project Path="tests/PersonalMediaManager.Domain.Tests/PersonalMediaManager.Domain.Tests.csproj" />
+    <Project Path="tests/PersonalMediaManager.Host.Tests/PersonalMediaManager.Host.Tests.csproj" />
+    <Project Path="tests/PersonalMediaManager.Infrastructure.External.Tests/PersonalMediaManager.Infrastructure.External.Tests.csproj" />
+    <Project Path="tests/PersonalMediaManager.Infrastructure.Persistence.Tests/PersonalMediaManager.Infrastructure.Persistence.Tests.csproj" />
+    <Project Path="tests/PersonalMediaManager.Launcher.Tests/PersonalMediaManager.Launcher.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,15 @@
+<Project>
+
+  <!--
+    切断对仓库根 Directory.Build.props 的继承（MSBuild 自项目目录向上查找，遇到本文件即停）。
+
+    本目录是前端 JavaScript 工程（PersonalMediaManager.Frontend.esproj，
+    Microsoft.VisualStudio.JavaScript.SDK），不应继承根的 .NET 专属属性
+    （TargetFramework=net10.0 / Nullable / TreatWarningsAsErrors / LangVersion 等）；
+    尤其 TargetFramework 会让 JS 项目被误判为 .NET 目标，污染 restore/build。
+
+    前端版本号注入由 vite.config.js 在构建期直接 readFileSync 根 Directory.Build.props
+    完成（不依赖 MSBuild 属性继承），故切断继承不影响前端版本号注入。
+  -->
+
+</Project>

@@ -1,0 +1,84 @@
+# PersonalMediaManager public pull-request verification.
+# Keep this workflow read-only: pull requests may contain untrusted code.
+name: PR CI
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Build, test and policy checks
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: src/PersonalMediaManager.Frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: src/PersonalMediaManager.Frontend
+        run: npm ci
+
+      - name: Run repository policy checks
+        shell: pwsh
+        run: |
+          & .\scripts\check-refs.ps1
+          & .\scripts\check-xml-doc.ps1
+          & .\scripts\check-redlines.ps1
+
+      - name: Restore
+        run: dotnet restore PersonalMediaManager.slnx
+
+      - name: Build
+        run: dotnet build PersonalMediaManager.slnx -c Release --no-restore
+
+      - name: Test
+        shell: pwsh
+        run: |
+          # Fixed wall-clock performance baselines run only on the controlled Azure self-hosted agent.
+          dotnet test PersonalMediaManager.slnx `
+            -m:1 `
+            -c Release `
+            --no-build `
+            --no-restore `
+            --filter "Category!=Performance" `
+            --logger trx `
+            --collect:"XPlat Code Coverage" `
+            --results-directory artifacts/test-results
+
+      - name: Check OpenAPI schema drift
+        shell: pwsh
+        run: .\scripts\check-schema-drift.ps1
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-ci-test-results
+          path: artifacts/test-results/**
+          retention-days: 7
+          if-no-files-found: warn

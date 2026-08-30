@@ -1,0 +1,227 @@
+/* ============================================================================
+   Element Plus 主题变量覆盖
+   把 EP 的 primary / 文字 / 边框 / 背景 / 状态色映射到设计令牌，
+   让 EP 控件（按钮、表格、表单、分页、对话框）在暗金主题下自然融入。
+   ============================================================================ */
+
+/* 用 html:root 提升特异度，盖过 unplugin-vue-components 按需注入的 EP 基础变量 */
+html:root,
+html[data-theme='dark'],
+html[data-theme='light'] {
+  /* 主色（按 EP 命名梯度，全部锚到 --accent，避免 EP 派生色显灰） */
+  --el-color-primary: var(--accent);
+  --el-color-primary-light-3: color-mix(in oklab, var(--accent) 75%, transparent);
+  --el-color-primary-light-5: color-mix(in oklab, var(--accent) 55%, transparent);
+  --el-color-primary-light-7: color-mix(in oklab, var(--accent) 35%, transparent);
+  --el-color-primary-light-8: var(--accent-soft-2);
+  --el-color-primary-light-9: var(--accent-soft);
+  --el-color-primary-dark-2: var(--accent-hover);
+
+  /* 状态色 */
+  --el-color-success: var(--success);
+  --el-color-success-light-9: var(--success-soft);
+  --el-color-warning: var(--warning);
+  --el-color-warning-light-9: var(--warning-soft);
+  --el-color-danger: var(--danger);
+  --el-color-danger-light-9: var(--danger-soft);
+  --el-color-error: var(--danger);
+  --el-color-error-light-9: var(--danger-soft);
+  --el-color-info: var(--info);
+  --el-color-info-light-9: var(--info-soft);
+
+  /* 背景层 */
+  --el-bg-color: var(--surface);
+  --el-bg-color-page: var(--bg);
+  --el-bg-color-overlay: var(--bg-elev);
+  --el-fill-color-blank: var(--surface);
+  --el-fill-color: var(--surface-2);
+  --el-fill-color-light: var(--surface-2);
+  --el-fill-color-lighter: var(--surface);
+  --el-fill-color-extra-light: var(--surface);
+  --el-fill-color-dark: var(--surface-3);
+  --el-fill-color-darker: var(--surface-3);
+
+  /* 文字 */
+  --el-text-color-primary: var(--text);
+  --el-text-color-regular: var(--text);
+  --el-text-color-secondary: var(--text-mute);
+  --el-text-color-placeholder: var(--text-dim);
+  --el-text-color-disabled: var(--text-faint);
+
+  /* 边框 */
+  --el-border-color: var(--border);
+  --el-border-color-light: var(--border-soft);
+  --el-border-color-lighter: var(--border-soft);
+  --el-border-color-extra-light: var(--border-soft);
+  --el-border-color-dark: var(--border-strong);
+  --el-border-color-darker: var(--border-strong);
+  --el-border-color-hover: var(--border-strong);
+
+  --el-border-radius-base: var(--r-2);
+  --el-border-radius-small: var(--r-1);
+  --el-border-radius-round: 999px;
+
+  /* 阴影 */
+  --el-box-shadow: var(--shadow-2);
+  --el-box-shadow-light: var(--shadow-1);
+  --el-box-shadow-dark: var(--shadow-3);
+
+  /* 遮罩 */
+  --el-mask-color: rgba(0, 0, 0, 0.55);
+  --el-mask-color-extra-light: rgba(0, 0, 0, 0.3);
+
+  /* 禁用 */
+  --el-disabled-bg-color: var(--surface-2);
+  --el-disabled-text-color: var(--text-faint);
+  --el-disabled-border-color: var(--border-soft);
+}
+
+/* ----- 控件细节微调（仅必要项） ----------------------------------------- */
+
+/* 主按钮颜色：保证文字对比度 */
+.el-button--primary {
+  --el-button-text-color: var(--on-accent);
+  --el-button-bg-color: var(--accent);
+  --el-button-border-color: var(--accent);
+  --el-button-hover-text-color: var(--on-accent);
+  --el-button-hover-bg-color: var(--accent-hover);
+  --el-button-hover-border-color: var(--accent-hover);
+  --el-button-active-bg-color: var(--accent-hover);
+  --el-button-active-border-color: var(--accent-hover);
+}
+
+/* 默认按钮：贴合设计稿次级按钮 */
+.el-button {
+  --el-button-bg-color: var(--surface-2);
+  --el-button-border-color: var(--border);
+  --el-button-text-color: var(--text);
+  --el-button-hover-bg-color: var(--surface-hover);
+  --el-button-hover-border-color: var(--border-strong);
+  --el-button-hover-text-color: var(--text);
+}
+
+/* 表格：暗色背景 + 悬浮高亮 */
+.el-table {
+  --el-table-bg-color: transparent;
+  --el-table-tr-bg-color: transparent;
+  --el-table-header-bg-color: var(--surface);
+  --el-table-row-hover-bg-color: var(--surface-2);
+  --el-table-current-row-bg-color: var(--accent-soft);
+  --el-table-border-color: var(--border-soft);
+  --el-table-border: 1px solid var(--border-soft);
+  --el-table-text-color: var(--text);
+  --el-table-header-text-color: var(--text-dim);
+
+  th.el-table__cell {
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+}
+
+/* 卡片 */
+.el-card {
+  --el-card-bg-color: var(--surface);
+  --el-card-border-color: var(--border);
+  --el-card-border-radius: var(--r-3);
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+/* 输入框 / 选择器 */
+.el-input,
+.el-textarea {
+  --el-input-bg-color: var(--surface);
+  --el-input-border-color: var(--border);
+  --el-input-hover-border-color: var(--border-strong);
+  --el-input-focus-border-color: var(--accent);
+  --el-input-text-color: var(--text);
+  --el-input-placeholder-color: var(--text-dim);
+}
+
+/* 下拉菜单 / 弹层 */
+.el-popper,
+.el-dropdown-menu,
+.el-select-dropdown {
+  background: var(--bg-elev) !important;
+  border-color: var(--border) !important;
+}
+.el-dropdown-menu__item:hover,
+.el-select-dropdown__item.hover,
+.el-select-dropdown__item:hover {
+  background: var(--surface-hover) !important;
+  color: var(--text) !important;
+}
+
+/* 对话框 */
+.el-dialog {
+  --el-dialog-bg-color: var(--bg-elev);
+  --el-dialog-border-radius: var(--r-4);
+  border: 1px solid var(--border);
+}
+/* 遮罩（el-dialog / el-message-box / el-drawer 全部共用此类，改一处即全站弹窗生效） */
+.el-overlay {
+  background: rgba(0, 0, 0, 0.55);
+  /* 不加 backdrop-filter：全屏背景模糊 + 与顶栏毛玻璃二重叠加，会在弹窗开关/输入时逐帧重算整屏，造成严重卡顿；半透明暗幕已足够表达模态层级 */
+}
+
+/* 分页 */
+.el-pagination {
+  --el-pagination-bg-color: transparent;
+  --el-pagination-button-color: var(--text-mute);
+  --el-pagination-hover-color: var(--accent);
+  --el-pagination-button-disabled-bg-color: transparent;
+}
+
+/* 标签 */
+.el-tag {
+  --el-tag-bg-color: var(--surface-2);
+  --el-tag-border-color: var(--border-soft);
+  --el-tag-text-color: var(--text-mute);
+}
+
+/* 统计数字 — 采用设计稿字体与节奏 */
+.el-statistic {
+  --el-statistic-title-font-size: 11px;
+  --el-statistic-title-color: var(--text-dim);
+  --el-statistic-content-font-size: 28px;
+  --el-statistic-content-color: var(--text);
+
+  .el-statistic__head {
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 600;
+  }
+  .el-statistic__content {
+    font-family: 'Outfit', 'Manrope', sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* 表单 label */
+.el-form-item__label {
+  color: var(--text);
+  font-weight: 600;
+  font-size: 12.5px;
+}
+
+/* 空态 */
+.el-empty__description {
+  color: var(--text-mute);
+}
+
+/* 浏览器自动填充：压制 Chromium/Edge 注入的浅色背景与文字 */
+/* 用 box-shadow inset 伪装背景色（浏览器禁止直接改 autofill 的 background-color）； */
+/* var(--surface) 会跟随 data-theme 切换，无需重复声明浅/深主题 */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px var(--surface) inset !important;
+  -webkit-text-fill-color: var(--text) !important;
+  caret-color: var(--text);
+  transition: background-color 5000s ease-in-out 0s;
+}

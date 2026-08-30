@@ -1,0 +1,117 @@
+# Main PR pipeline — runs build + test + redline-scan on every PR / main commit.
+#
+# Per CLAUDE.md SecIX/9.3 / SecIX/9.4:
+#   - Azure DevOps Server self-hosted agents only (pmm-win; macOS support removed 2026-06-11)
+#   - PublishTestResults@2 (trx) + PublishCodeCoverageResults@2 (cobertura)
+#     (If Server is < 2022, downgrade @2 -> @1)
+
+trigger:
+  branches:
+    include:
+      - main
+      - feature/*
+      - release/*
+
+pr:
+  branches:
+    include:
+      - main
+
+variables:
+  buildConfiguration: 'Release'
+
+stages:
+  - stage: BuildAndTest
+    displayName: 'Build + Test (Windows)'
+    jobs:
+      - job: WindowsAgent
+        displayName: 'Windows (pmm-win)'
+        pool:
+          name: Default
+          demands:
+            - Agent.Name -equals pmm-win
+        steps:
+          - task: UseDotNet@2
+            inputs:
+              packageType: 'sdk'
+              version: '10.0.x'
+
+          # 前端工程 PersonalMediaManager.Frontend.esproj 已并入解决方案：
+          # dotnet restore/build slnx 会触发 .esproj 的 npm install 与（Release 时）vite 构建，需在 restore 前装好 Node。
+          - task: NodeTool@0
+            inputs:
+              versionSpec: '22.x'
+            displayName: 'Install Node 22'
+
+          - script: dotnet restore PersonalMediaManager.slnx
+            displayName: 'Restore'
+
+          - script: dotnet build PersonalMediaManager.slnx -c $(buildConfiguration) --no-restore
+            displayName: 'Build'
+
+          - powershell: |
+              dotnet test PersonalMediaManager.slnx --no-build -c $(buildConfiguration) `
+                --logger "trx;LogFileName=test-results.trx" `
+                --collect:"XPlat Code Coverage" `
+                --results-directory $(Agent.TempDirectory)/TestResults
+            displayName: 'Test'
+
+          - task: PublishTestResults@2
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: 'VSTest'
+              testResultsFiles: '**/*.trx'
+              searchFolder: '$(Agent.TempDirectory)/TestResults'
+
+          - task: PublishCodeCoverageResults@2
+            condition: succeededOrFailed()
+            inputs:
+              summaryFileLocation: '$(Agent.TempDirectory)/TestResults/**/coverage.cobertura.xml'
+
+  - stage: RedlineScan
+    displayName: 'Redline scan (refs / xml-doc / launcher-redlines)'
+    dependsOn: BuildAndTest
+    condition: succeeded()
+    jobs:
+      - job: Redlines
+        pool:
+          name: Default
+          demands:
+            - Agent.Name -equals pmm-win
+        steps:
+          - powershell: |
+              & powershell -NoProfile -File scripts/check-refs.ps1
+            displayName: 'Check project references (CLAUDE.md SecXII)'
+
+          - powershell: |
+              & powershell -NoProfile -File scripts/check-xml-doc.ps1
+            displayName: 'Check Controller XML doc comments (CLAUDE.md SecV)'
+
+          - powershell: |
+              & powershell -NoProfile -File scripts/check-redlines.ps1
+            displayName: 'Check Launcher forbidden UI frameworks (CLAUDE.md SecVIII)'
+
+  - stage: SchemaDrift
+    displayName: 'OpenAPI schema drift (Frontend src/api/schema.d.ts)'
+    dependsOn: BuildAndTest
+    condition: succeeded()
+    jobs:
+      - job: SchemaDrift
+        pool:
+          name: Default
+          demands:
+            - Agent.Name -equals pmm-win
+        steps:
+          - task: UseDotNet@2
+            inputs:
+              packageType: 'sdk'
+              version: '10.0.x'
+
+          - task: NodeTool@0
+            inputs:
+              versionSpec: '20.x'
+            displayName: 'Install Node 20'
+
+          - powershell: |
+              & powershell -NoProfile -File scripts/check-schema-drift.ps1
+            displayName: 'Dump OpenAPI + gen:api + git diff (P3 #12/#13)'

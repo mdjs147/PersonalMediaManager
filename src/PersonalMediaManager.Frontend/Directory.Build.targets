@@ -1,0 +1,12 @@
+<Project>
+
+  <!--
+    切断对仓库根 Directory.Build.targets 的继承。
+
+    根 targets 的 StampGitVersion / InjectVersionMetadata 是 .NET assembly 专属
+    （hook 在 SDK 内置 GetAssemblyVersion / GetAssemblyAttributes 上）；.esproj 无 assembly、
+    无这两个 target，继承过来虽因 BeforeTargets 指向不存在的 target 被静默忽略，
+    但显式切断更干净，避免未来 JavaScript SDK 升级引入意外 hook 时产生干扰。
+  -->
+
+</Project>

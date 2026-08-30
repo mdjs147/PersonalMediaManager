@@ -1,0 +1,6 @@
+node_modules
+dist
+.DS_Store
+*.local
+src/auto-imports.d.ts
+src/components.d.ts

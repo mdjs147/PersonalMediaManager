@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://personalmediamanager/db/version-map.schema.json",
+  "title": "PMM DB 版本映射表 schema",
+  "description": "约束 db/version-map.json 结构：db 语义化版本号 ↔ EF MigrationId。每条 migrationId 必须是 14 位时间戳前缀 + 下划线 + 名称；db 必须是 X.Y.Z 三段语义化版本。",
+  "type": "object",
+  "required": ["description", "versions"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "指向本 schema 的相对路径，供 IDE 实时校验。"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "rules": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "versions": {
+      "type": "array",
+      "minItems": 1,
+      "description": "按 EF migrationId 时间戳前缀升序排列。",
+      "items": {
+        "type": "object",
+        "required": ["db", "migrationId"],
+        "additionalProperties": false,
+        "properties": {
+          "db": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+$",
+            "description": "数据库 schema 语义化版本号，三段 X.Y.Z。"
+          },
+          "migrationId": {
+            "type": "string",
+            "pattern": "^\\d{14}_[A-Za-z0-9]+$",
+            "description": "EF migration 标识：14 位时间戳（yyyyMMddHHmmss）+ 下划线 + PascalCase 名称。"
+          },
+          "note": {
+            "type": "string",
+            "description": "可选：该版本/锚点的说明，含覆盖范围、提交号、倒挂等考据。"
+          }
+        }
+      }
+    }
+  }
+}

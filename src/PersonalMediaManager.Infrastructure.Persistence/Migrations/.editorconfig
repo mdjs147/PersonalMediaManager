@@ -1,0 +1,8 @@
+# EF Core 工具生成的 Migration 文件不接受手工风格定制；本目录局部豁免全局规则
+[*.cs]
+csharp_style_namespace_declarations = block_scoped:silent
+dotnet_diagnostic.IDE0161.severity = none
+# Migrations 内部命名（mb / table / column）与全局规范不一致，整体降 suggestion 不入 error
+dotnet_diagnostic.IDE0008.severity = suggestion
+dotnet_diagnostic.IDE0055.severity = suggestion
+dotnet_diagnostic.CS1591.severity = none

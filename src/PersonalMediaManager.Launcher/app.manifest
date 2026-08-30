@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+  <assemblyIdentity version="1.0.0.0" name="PersonalMediaManager.app" />
+
+  <!--
+    执行级别：asInvoker（普通权限，跟随启动者令牌）。
+    为何不提权：requireAdministrator 会让进程跑在 UAC「完整令牌」的独立登录会话(LUID)，
+          看不到普通会话映射的网络盘（Y: / Z: 等）→ 归档到网络盘时 CreateDirectory 抛 DirectoryNotFound。
+          「归档目标盘可达」优先级高于「数据贴 exe」的便携性，故摘除提权。
+    数据落点：普通权限下，exe 目录可写则数据贴 exe（便携）；装在 Program Files 等只读位置时
+          AppPaths 写探针失败 → 自动回退 %LocalAppData%\PersonalMediaManager（标准 Windows 应用模型：
+          程序文件只读 + 用户数据可写）。安装那一刻往 Program Files 写文件的提权，由安装器 / Explorer
+          复制一次性承担，运行时不需要。
+    自启：asInvoker 程序可经 HKCU\Run 在登录时以普通权限静默启动（见 WindowsAutoStart）。
+    生效范围：net10.0-windows 全配置引用（Debug + Release 一致，asInvoker 本就是默认级别）。
+  -->
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <requestedPrivileges>
+        <requestedExecutionLevel level="asInvoker" uiAccess="false" />
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+
+  <!-- 兼容性：声明支持的 Windows 版本（Win10/11），让系统按真实版本而非 Win8.1 兼容档处理 API（DPI/主题等） -->
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <!-- Windows 10 / Windows 11 -->
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}" />
+    </application>
+  </compatibility>
+</assembly>

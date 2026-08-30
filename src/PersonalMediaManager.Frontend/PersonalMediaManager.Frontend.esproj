@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.VisualStudio.JavaScript.SDK/1.0.4902498">
+
+  <!--
+    前端 Vue + Vite 工程的 MSBuild 包装（VS「Vue 应用」.esproj 模板风格）。
+    目的：让前端作为解决方案一等公民（VS 资源管理器可见 / 可 F5 起 vite / IntelliSense），
+    并由 dotnet build 深度集成自动产出 wwwroot（CLAUDE.md §十二 之外的并列前端工程，不计入 7 个 .NET 项目矩阵）。
+
+    构建产物落点：BuildCommand/ProductionBuildCommand 跑 `npm run build:host`
+    （= vite build + scripts/copy-to-host-wwwroot.js），直接写入 ../PersonalMediaManager.Host/wwwroot/，
+    再由 Host.csproj 的复制 Target 同步到输出目录（方案A：wwwroot 不走 <Content> 静态 glob，根治 MSB3030）。
+  -->
+
+  <PropertyGroup>
+    <!-- F5 单独启动前端：起 vite dev server (5173)，配合 vite proxy 转发 /api 到后端 7288 -->
+    <StartupCommand>npm run dev</StartupCommand>
+    <!-- Debug / Release 均跑 build:host：产物直接落 Host/wwwroot（PMM 不区分 dev/prod 构建命令） -->
+    <BuildCommand>npm run build:host</BuildCommand>
+    <ProductionBuildCommand>npm run build:host</ProductionBuildCommand>
+    <!-- 产物目录供 SDK 识别；实际同步到 wwwroot 由 build:host 脚本完成 -->
+    <BuildOutputFolder>$(MSBuildProjectDirectory)\dist</BuildOutputFolder>
+    <!--
+      Debug/Release 均允许跑前端 build（产出 wwwroot）：是否真正重建由 Host.csproj 的 _PmmBuildFrontend
+      增量 Target（Inputs/Outputs）把关 —— 未改前端则根本不调本项目 Build，改了才跑 build:host。
+      收益：F5 启动 Launcher 即拿到最新前端；前端 HMR / 源码调试另走 vite dev server(5173)，与构建解耦。
+      ShouldRunNpmInstall 默认 true：按 package.json 时间戳增量确保 node_modules 就绪。
+    -->
+    <!-- ShouldRunBuildScript 不再按配置关闭（默认 true）：构建与否交给 Host 的增量 Target 把关 -->
+    <!-- 关闭 npm audit：安全审计不应阻断 .NET 构建（漏洞库/网络波动会让 CI 误失败），审计单独走 -->
+    <ShouldRunNpmAudit>false</ShouldRunNpmAudit>
+  </PropertyGroup>
+
+</Project>

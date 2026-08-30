@@ -1,0 +1,64 @@
+{
+  "$schema": "./version-map.schema.json",
+  "description": "数据库 schema 语义化版本号到 EF MigrationId 的映射表。运行时 VersionInfoProvider 把 __EFMigrationsHistory 的最大 MigrationId 反查为 dbVersion.applied（floor 反查：取 migrationId ≤ 库内最大值的最大锚点），并与 PmmDbVersion (target) 对比识别 needsMigration。",
+  "rules": [
+    "新增 migration 且伴随 PmmDbVersion 升号时，必须同步在此追加一行（锚点 = 该版本窗口的代表 migrationId）；漏加会让前后端展示的 dbVersion 停在旧值、且当 target 落到未登记版本时 needsMigration 被强制为 false。",
+    "一个 db 版本可覆盖多个 migration：锚点取窗口内能让 floor 反查正确归并的 migrationId，故无需为同窗口的每个 migration 单列行（0.1.0 基线窗口当前仅含合并后的单一 20260611125131_Init）。",
+    "数组按 EF migrationId 时间戳前缀升序排列；floor 反查内部按 migrationId 字典序，不受数组物理顺序影响。",
+    "0.x 阶段：MINOR 随新功能/新表递增；PATCH 用于同主题的多次种子补充。1.0 之后 MAJOR 留给真正破坏性 schema 变更（表重命名 / 列类型更换）。",
+    "本文件由 Infrastructure.Persistence 项目作为 EmbeddedResource 打包（资源名 PersonalMediaManager.Infrastructure.Persistence.version-map.json）；运行时反射读取，路径解耦避免依赖部署目录文件。",
+    "2026-06-11 版本号重置：开发期的历史版本窗口随仓库迁移整合为单行 0.1.0 基线，全栈版本号自最初版重新开始；过往演进整合记录见根目录 CHANGELOG.md。同日历史 29 个 migration 合并重建为单一 20260611125131_Init（含全部表结构、HasData 种子与 23 条 Parse_Rule 默认规则种子移植），旧迁移链上的库不再支持原地升级。"
+  ],
+  "versions": [
+    {
+      "db": "0.1.0",
+      "migrationId": "20260611125131_Init",
+      "note": "v0.1.0 基线：单一合并迁移 20260611125131_Init（历史 29 个 migration 于 2026-06-11 合并重建，含全部表结构、HasData 种子与 23 条 Parse_Rule 默认规则种子）。晚于本锚点的新 migration 须按首条规则新开版本行。"
+    },
+    {
+      "db": "0.2.0",
+      "migrationId": "20260612134642_AddSubtitleTables",
+      "note": "db 0.2.0 字幕下载：新增 Subtitle_Setting（Assrt 字幕源单例配置，含 HasData 种子 Id=1）与 Subtitle_Download（成功下载记录，FK→Media_Item CASCADE）两表。"
+    },
+    {
+      "db": "0.3.0",
+      "migrationId": "20260613021723_CleanEmptyDirIgnoreExtsSeed",
+      "note": "db 0.3.0 空目录清理：System_Setting 追加种子 File.CleanEmptyDirIgnoreExts（默认 .torrent），配合既有 File.CleanEmptyDir 总开关接线消费——归档后回收源端空 / 仅含可忽略残留的目录。无表结构变更，纯 InsertData。"
+    },
+    {
+      "db": "0.4.0",
+      "migrationId": "20260618162607_AddWatchFolderAutoScan",
+      "note": "db 0.4.0 监控目录自动监控开关：Watch_Folder 增 AutoScan 列（bool，默认 true），开则实时监听 + 周期扫描。补登记此前遗漏的 version-map 行（与 PmmDbVersion 0.4.0 对齐）。"
+    },
+    {
+      "db": "0.5.0",
+      "migrationId": "20260619101832_AddAudioProbeFields",
+      "note": "db 0.5.0 不兼容音频处理：Media_Item 增 AudioCodecs / HasIncompatibleAudio 两列（av3a 等不兼容音轨探测打标）；System_Setting 追加 4 个 Audio_* 种子（检查开关 / ffmpeg 路径 / 不兼容 codec 清单 / 自动重混开关）。"
+    },
+    {
+      "db": "0.6.0",
+      "migrationId": "20260619153435_AddArchiveNamingTemplates",
+      "note": "db 0.6.0 归档命名模板自定义：System_Setting 追加 4 个 Archive_* 种子（电影 / 剧集根 / 单集 3 个文件名主体模板 + 季标题后缀开关）；默认值 == 改造前硬编码命名（{title} ({year}) / SxxEyy / {tmdb-NNN} 后缀均由系统锁定），升级零行为变化。纯 InsertData，无表结构变更。"
+    },
+    {
+      "db": "0.7.0",
+      "migrationId": "20260703124601_AddMediaItemAiInvolved",
+      "note": "db 0.7.0 AI 参与度统计：Media_Item 增 AiInvolved 列（bool，默认 false；AI 升级链真正发起调用即置位，与记录同生命周期不清零，统计口径不受 Audit_AiCall 保留期清理影响）。迁移含历史数据回填（ParseSource='Ai' 或 Audit_AiCall 有 MediaItemId 关联记录的置 1，幂等）。"
+    },
+    {
+      "db": "0.8.0",
+      "migrationId": "20260704011754_AddAiProviderQuota",
+      "note": "db 0.8.0 AI 提供商套餐限额：Parse_AiProvider 增 6 列——QuotaCallLimit / QuotaTokenLimit / QuotaExpiresAt（套餐配置，可空 = 不限）+ QuotaUsedCalls / QuotaUsedTokens（独立累计计数器，默认 0，不依赖 Audit_AiCall 聚合）+ QuotaExceededAt（用量超限自动禁用时刻，与 Enabled / DisabledUntil 三态分离）。纯加列，无种子变更。"
+    },
+    {
+      "db": "0.9.0",
+      "migrationId": "20260722113704_AddAiProviderPeriodQuota",
+      "note": "db 0.9.0 AI 提供商周期滚动配额：Parse_AiProvider 增 7 列——QuotaPeriod（粒度 None/Daily/Weekly/Monthly，默认 None）+ QuotaPeriodTimeZone（时区 id，可空）+ QuotaPeriodCallLimit / QuotaPeriodTokenLimit（周期上限，可空=不限）+ QuotaPeriodUsedCalls / QuotaPeriodUsedTokens（周期已用，默认 0，跨窗口由 RecordUsage 惰性归零）+ QuotaPeriodResetAt（周期重置时刻，可空）。到自然边界自动重置计数并恢复 provider，与终身配额正交。纯加列。"
+    },
+    {
+      "db": "0.10.0",
+      "migrationId": "20260722141057_AddAiProviderRpmLimit",
+      "note": "db 0.10.0 AI 提供商 RPM 限流：Parse_AiProvider 增 RpmLimit 列（每分钟请求上限，可空=不限流）；达标时升级链「跳过」本 provider 到下一级（内存滑动 60 秒窗口实时判定，不写 DB 标记，窗口滑出自动恢复）。纯加列。"
+    }
+  ]
+}

@@ -1,0 +1,184 @@
+# PersonalMediaManager 发版自动化 + main 开发构建（CLAUDE.md §9.3.2 / §9.4.2）
+#
+# 本 workflow 仅负责发版与 main 开发构建；公开 PR 验证由同目录 pr-ci.yml 负责（红线 §9.4.2）。
+# 本文件触发器锁死 push tag (v*) 与 push branch (main) 两条；不要在这里混入 PR 触发器。
+#
+# 产物去向二分：
+#   · tag push (vX.Y.Z) → 创建 / 复用 GitHub Release + 上传单文件 exe（正式发版，客户端「检查更新」端点读这里）
+#   · main push         → 仅 actions/upload-artifact 保留 7 天（开发构建，仅 Actions Run 页可下载）
+#
+# 工作流：
+#   1. 解析 ref 类型（tag / branch）与版本号
+#   2. 仅 tag push：校验 tag (vX.Y.Z) 与 Directory.Build.props:PmmProductVersion 完全一致（防版本漂移）
+#   3. 装 .NET 10 + Node 22
+#   4. 前端 npm ci（vite build 由 .esproj 随 dotnet publish 自动触发）
+#   5. dotnet publish Launcher 单文件 self-contained win-x64（前端 + appsettings 嵌入，产物仅一个 exe）
+#   6. 校验 publish 输出确为单一 exe + 重命名为带版本号文件名（不再打 zip）
+#   7. tag push 走 gh release create + upload；main push 走 upload-artifact
+#
+# 单元测试 / 红线扫描由 GitHub pr-ci.yml 与内网 Azure Pipelines 双路把关；本 workflow 仅打包。
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+    branches:
+      - main
+
+permissions:
+  # 创建 / 编辑 Release + 上传 assets 必需；其它权限保持默认最小（read）
+  contents: write
+
+# 同 ref 重新推送时，旧 run 直接取消防资产重复上传冲突
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-windows:
+    name: Windows x64 打包
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: 1. Checkout 源码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # StampGitVersion 要数 commit count + 取 short sha
+
+      - name: 2. 解析 ref 与版本号
+        id: ver
+        shell: pwsh
+        run: |
+          $ref = "${{ github.ref }}"
+          if ($ref -like 'refs/tags/*') {
+            $tag = "${{ github.ref_name }}"
+            if ($tag -notmatch '^v\d+\.\d+\.\d+$') {
+              Write-Error "tag 形态不合法（要求 vX.Y.Z）：$tag"
+              exit 1
+            }
+            $version = $tag.TrimStart('v')
+            $isRelease = 'true'
+          } else {
+            # main push：版本号取自 Directory.Build.props 的 PmmProductVersion，加 -dev.<short-sha> 后缀做开发标识
+            $props = Get-Content -Raw Directory.Build.props
+            if ($props -notmatch '<PmmProductVersion>([^<]+)</PmmProductVersion>') {
+              Write-Error "Directory.Build.props 缺 PmmProductVersion 标签"
+              exit 1
+            }
+            $baseVer = $Matches[1].Trim()
+            $shortSha = "${{ github.sha }}".Substring(0, 7)
+            $version = "$baseVer-dev.$shortSha"
+            $tag = ""
+            $isRelease = 'false'
+          }
+          "tag=$tag"             | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "version=$version"     | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "isRelease=$isRelease" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Host "ref=$ref tag=$tag version=$version isRelease=$isRelease"
+
+      - name: 3. 校验 PmmProductVersion 与 tag 一致（仅 tag push）
+        if: steps.ver.outputs.isRelease == 'true'
+        shell: pwsh
+        run: |
+          $expected = "${{ steps.ver.outputs.version }}"
+          $props = Get-Content -Raw Directory.Build.props
+          if ($props -notmatch '<PmmProductVersion>([^<]+)</PmmProductVersion>') {
+            Write-Error "Directory.Build.props 缺 PmmProductVersion 标签"
+            exit 1
+          }
+          $actual = $Matches[1].Trim()
+          if ($actual -ne $expected) {
+            Write-Error "tag v$expected 与 PmmProductVersion=$actual 不一致；请先升 PmmProductVersion 再打 tag"
+            exit 1
+          }
+          Write-Host "OK：PmmProductVersion=$actual 与 tag 一致"
+
+      - name: 4. 装 .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: 5. 装 Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: src/PersonalMediaManager.Frontend/package-lock.json
+
+      - name: 6. 前端依赖安装（npm ci）
+        working-directory: src/PersonalMediaManager.Frontend
+        run: npm ci
+
+      # 原步骤 7/8（npm run build + 拷贝 dist 到 wwwroot）已并入 .NET 构建链并删除：
+      # 前端工程 PersonalMediaManager.Frontend.esproj 已进解决方案，下方 dotnet publish（Release）会经
+      # Host 的 _PmmBuildFrontend 自动跑 npm run build:host 产出 wwwroot，再由 _PmmCollectFrontendEmbed
+      # 把 wwwroot 作为 EmbeddedResource 编进 Host.dll（产物单一 exe，无外置 wwwroot/拷贝步骤）。
+
+      - name: 9. dotnet restore + publish Launcher（单文件 self-contained win-x64；前端随 publish 自动构建）
+        shell: pwsh
+        run: |
+          dotnet restore PersonalMediaManager.slnx
+          dotnet publish src/PersonalMediaManager.Launcher/PersonalMediaManager.Launcher.csproj `
+            -c Release `
+            -r win-x64 `
+            -f net10.0-windows `
+            --self-contained true `
+            /p:PublishSingleFile=true `
+            /p:IncludeNativeLibrariesForSelfExtract=true `
+            /p:DebugType=embedded `
+            -o publish/win-x64
+
+      - name: 10. 产物校验 + 重命名（单文件 exe，不打 zip）
+        id: pack
+        shell: pwsh
+        run: |
+          # 守门：发布产物已收敛为单一 exe（前端 wwwroot + appsettings 嵌入程序集、pdb 走 DebugType=embedded）。
+          # publish 目录出现多余文件 = 单文件收敛被破坏（如 wwwroot 外溢 / xml 文档外漏），直接 fail 防带病发版。
+          $items = Get-ChildItem publish/win-x64
+          if ($items.Count -ne 1 -or $items[0].Name -ne 'PersonalMediaManager.exe') {
+            Write-Error ("publish 输出不是单一 PersonalMediaManager.exe，单文件收敛被破坏：`n" + (($items | ForEach-Object Name) -join "`n"))
+            exit 1
+          }
+          $version = "${{ steps.ver.outputs.version }}"
+          $exeName = "PersonalMediaManager-$version-win-x64.exe"
+          Move-Item publish/win-x64/PersonalMediaManager.exe $exeName
+          $size = (Get-Item $exeName).Length
+          Write-Host "已生成 $exeName ($([math]::Round($size / 1MB, 2)) MB)"
+          "exeName=$exeName" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: 11. 创建或更新 GitHub Release 并上传 exe（仅 tag push）
+        if: steps.ver.outputs.isRelease == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.ver.outputs.tag }}"
+          $exeName = "${{ steps.pack.outputs.exeName }}"
+
+          # gh release view 失败码 != 0 表示 release 不存在 → 创建；否则跳过创建直接上传
+          gh release view $tag 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Release $tag 不存在，创建新 Release"
+            gh release create $tag `
+              --title $tag `
+              --generate-notes
+            if ($LASTEXITCODE -ne 0) { Write-Error "gh release create 失败"; exit 1 }
+          } else {
+            Write-Host "Release $tag 已存在，跳过创建"
+          }
+
+          # --clobber 让重推 tag 的场景能覆盖旧 asset（如果同名 exe 已存在）
+          gh release upload $tag $exeName --clobber
+          if ($LASTEXITCODE -ne 0) { Write-Error "gh release upload 失败"; exit 1 }
+          Write-Host "已上传 $exeName 到 Release $tag"
+
+      - name: 12. 上传 Artifact（仅 main push 开发构建）
+        if: steps.ver.outputs.isRelease == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.pack.outputs.exeName }}
+          path: ${{ steps.pack.outputs.exeName }}
+          retention-days: 7
+          if-no-files-found: error
