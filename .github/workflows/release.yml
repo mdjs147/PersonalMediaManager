@@ -109,6 +109,8 @@ jobs:
           "isRelease=$isRelease"     | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           "releaseMode=$releaseMode" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           Write-Host "ref=$ref tag=$tag version=$version isRelease=$isRelease releaseMode=$releaseMode"
+          # tag 不存在时 git show-ref 的预期退出码为 1；显式归零，避免 pwsh 把成功决策误判成步骤失败。
+          exit 0
 
       - name: 3. 校验 PmmProductVersion 与 tag 一致（正式发版）
         if: steps.ver.outputs.isRelease == 'true'
