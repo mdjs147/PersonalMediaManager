@@ -48,4 +48,12 @@ public sealed record RuleParseResult(
     bool HasSpecialChars,
     long? MatchedRuleId,
     string? SeasonTitle = null,
-    IReadOnlyList<string>? AlternativeTitles = null);
+    IReadOnlyList<string>? AlternativeTitles = null,
+    IReadOnlyList<RuleFieldEvidence>? FieldEvidence = null,
+    IReadOnlyList<string>? Conflicts = null,
+    IReadOnlyList<string>? RejectedFields = null,
+    bool ForceType = false,
+    bool HasIdentityEvidence = true);
+
+/// <summary>规则字段的可复核局部证据（不含绝对路径）</summary>
+public sealed record RuleFieldEvidence(string Field, int Value, string Source, string Token);

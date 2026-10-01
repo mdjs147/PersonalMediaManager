@@ -69,7 +69,11 @@ internal static class BuiltinRulesCatalog
     /// 同时季号天然限定 1-2 位（与 SxxExx / SeasonOnlyLatin 同口径，不产出归档层无法接受的 3 位季号）。
     /// </remarks>
     public const string SeasonWordLatinPattern =
-        @"(?<![A-Za-z])Season[\s\._\-]*(?<season>\d{1,2})(?!\d)";
+        @"(?<![A-Za-z])(?<!\d(?:st|nd|rd|th)[\s._-]+)Season[\s\._\-]*(?<season>\d{1,2})(?!\d)";
+
+    /// <summary>英文序数季号（2nd Season / 4th Season），不把标题尾数字当季</summary>
+    public const string SeasonOrdinalLatinPattern =
+        @"(?<![A-Za-z0-9])(?:(?<season>11|12|13)th|(?<season>[2-9]?1)st|(?<season>[2-9]?2)nd|(?<season>[2-9]?3)rd|(?<season>[1-9]?[4-9]|[1-9]0)th)[\s._-]+Season(?![A-Za-z])";
 
     /// <summary>罗马数字季号（标题尾部 II-X，主要用于动漫如「刀剑神域II」「进击的巨人 III」）</summary>
     /// <remarks>
@@ -154,6 +158,7 @@ internal static class BuiltinRulesCatalog
     public static readonly Regex BracketEpisode = new(BracketEpisodePattern, NoIgnoreCase, Timeout);
     public static readonly Regex ReleaseTagEpisode = new(ReleaseTagEpisodePattern, BaseOptions, Timeout);
     public static readonly Regex SeasonOnlyLatin = new(SeasonOnlyLatinPattern, BaseOptions, Timeout);
+    public static readonly Regex SeasonOrdinalLatin = new(SeasonOrdinalLatinPattern, BaseOptions, Timeout);
     public static readonly Regex SeasonWordLatin = new(SeasonWordLatinPattern, BaseOptions, Timeout);
     // NoIgnoreCase：罗马数字季号一律大写匹配，避免小写编码 token（x264 的 x → X、hevc 的 v → V）被误当季号
     public static readonly Regex SeasonRoman = new(SeasonRomanPattern, NoIgnoreCase, Timeout);
@@ -224,6 +229,14 @@ internal static class BuiltinRulesCatalog
             Pattern: SeasonOnlyLatinPattern,
             Order: 55,
             Samples: new[] { "Born.with.Luck.S01.2026.2160p", "Some.Show.S05.Complete.WEB-DL" }),
+
+        new(
+            Key: "SeasonOrdinalLatin",
+            Name: "英文序数季号（2nd Season）",
+            Description: "识别完整英文序数加 Season 的季号标记；不从作品名尾部裸数字推断季号。",
+            Pattern: SeasonOrdinalLatinPattern,
+            Order: 55,
+            Samples: new[] { "Example Arc 2nd Season 第10话.mkv", "Example Arc 4th Season" }),
 
         new(
             Key: "SeasonRoman",

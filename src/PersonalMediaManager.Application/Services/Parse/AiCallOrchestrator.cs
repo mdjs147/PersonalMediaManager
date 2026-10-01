@@ -20,8 +20,8 @@ namespace PersonalMediaManager.Application.Services.Parse;
 ///     · 逻辑错误（AiProviderLogicalException）：直接升级（errorType=Http4xx/Http5xx/Logical）
 ///     · 结果不满意（!result.IsAcceptable(threshold)）：无条件升级（errorType=LowConfidence）
 /// - 成功且结果可接受：写 Audit(success=true) + RecordSuccess + 返回
-/// - 健康追踪（D3.4）：仅「接口故障」（Transient/RateLimit/Http*/Logical）失败后调 EvaluateAsync；
-///   LowConfidence 不触发（provider 本身健康，只是结果不够好，不应被自动熔断禁用）
+/// - 健康追踪（D3.4）：仅「接口故障」（Transient/RateLimit/Http*/Timeout/ModelRuntime）失败后调 EvaluateAsync；
+///   LowConfidence / Logical / UnknownEvidence 不触发（provider 本身健康，只是结果不够好，不应被自动熔断禁用）
 /// - 套餐配额计量：每处 Audit 写入后并列调 <see cref="IAiProviderQuotaTracker.RecordUsageAsync"/>，
 ///   成功失败都计（失败请求也可能计费，保守保护钱包）、token 与审计行同值；成功路径 HealthTracker 不评估但配额必计量
 /// - Resolver 返回空：ProvidersAttempted=0，Success=false，FailureSummary="未配置可用 AI 提供商"
@@ -64,6 +64,8 @@ internal sealed class AiCallOrchestrator : IAiCallOrchestrator
     internal const string ErrorLowConfidence = "LowConfidence";
     internal const string ErrorConfigError = "ConfigError";
     internal const string ErrorTimeout = "Timeout";
+    internal const string ErrorModelRuntime = "ModelRuntime";
+    internal const string ErrorUnknownEvidence = "UnknownEvidence";
 
     private readonly IAiProviderResolver _resolver;
     private readonly IAiParser _parser;
@@ -206,8 +208,9 @@ internal sealed class AiCallOrchestrator : IAiCallOrchestrator
             if (success && result is not null && !result.IsAcceptable(res.ConfidenceThreshold))
             {
                 success = false;
-                errorType = ErrorLowConfidence;
-                errorDetail = $"置信度 {result.Confidence:F2} < 阈值 {res.ConfidenceThreshold:F2}，升级到更高级 AI";
+                errorType = result.Abstained ? ErrorUnknownEvidence : ErrorLowConfidence;
+                errorDetail = result.Abstained ? "作品证据不足，模型放弃识别"
+                    : $"置信度 {result.Confidence:F2} < 阈值 {res.ConfidenceThreshold:F2}，升级到更高级 AI";
             }
 
             // Audit 写入用原始 ct（即使链路超时也要落审计行）；含 token / 置信度 / 原文 / 升级链等监控维度
@@ -233,13 +236,22 @@ internal sealed class AiCallOrchestrator : IAiCallOrchestrator
                 chain.RecordSuccess();
                 attempts.Add(new AiCallAttempt(level, res.ProviderId, res.Name, res.Type, res.IsPrimary,
                     Success: true, Confidence: result.Confidence, ErrorType: null, ErrorDetail: null, LatencyMs: latencyMs));
-                return new AiCallOutcome(true, result, res.ProviderId, chain.ProvidersCalled, FailureSummary: null, Attempts: attempts);
+                return new AiCallOutcome(true, result, res.ProviderId, chain.ProvidersCalled, FailureSummary: null, Attempts: attempts, RequestMetadata: call.RequestMetadata);
             }
 
             // 失败 → 升级。仅「接口故障」触发健康追踪自动禁用评估；LowConfidence 不触发（provider 健康，只是结果不够好）
-            if (errorType != ErrorLowConfidence)
+            if (errorType is ErrorTransient or ErrorRateLimit or ErrorHttp4xx or ErrorHttp5xx or ErrorTimeout or ErrorModelRuntime)
                 await _healthTracker.EvaluateAsync(res.ProviderId, ct);
 
+            // 只对已有任务上下文传递安全语义代码；基础设施失败清除反馈，旧调用方保持 Context=null。
+            request = request with
+            {
+                Context = request.Context is null ? null : request.Context with
+                {
+                    PreviousFailureCode = errorType is ErrorLowConfidence or ErrorLogical or ErrorUnknownEvidence
+                        ? errorType : null,
+                },
+            };
             chain.RecordProviderFailure();
             attemptSummaries.Add($"{res.Name}({res.Type}): {errorType} {errorDetail}");
             attempts.Add(new AiCallAttempt(level, res.ProviderId, res.Name, res.Type, res.IsPrimary,
@@ -257,13 +269,14 @@ internal sealed class AiCallOrchestrator : IAiCallOrchestrator
         Stopwatch sw = Stopwatch.StartNew();
         while (true)
         {
+            ct.ThrowIfCancellationRequested();
             try
             {
                 AiParseOutcome o = await _parser.ParseAsync(res.Type, res.Endpoint, request, ct);
                 sw.Stop();
                 // 成功：HTTP 状态记 200（解析门面成功即 2xx），携带原文 + token 供监控
                 return new ProviderCallOutcome(true, o.Result, null, null, (int)sw.Elapsed.TotalMilliseconds,
-                    o.PromptTokens, o.CompletionTokens, 200, o.RequestText, o.ResponseText);
+                    o.PromptTokens, o.CompletionTokens, 200, o.RequestText, o.ResponseText, o.RequestMetadata);
             }
             catch (AiProviderTransientException ex)
             {
@@ -276,6 +289,11 @@ internal sealed class AiCallOrchestrator : IAiCallOrchestrator
                 }
                 sw.Stop();
                 return FailureOutcome(ErrorTransient, ex, (int)sw.Elapsed.TotalMilliseconds);
+            }
+            catch (AiProviderModelRuntimeException ex)
+            {
+                sw.Stop();
+                return FailureOutcome(ErrorModelRuntime, ex, (int)sw.Elapsed.TotalMilliseconds);
             }
             catch (AiProviderRateLimitException ex)
             {
@@ -290,6 +308,7 @@ internal sealed class AiCallOrchestrator : IAiCallOrchestrator
                 {
                     >= 400 and < 500 => ErrorHttp4xx,
                     >= 500 => ErrorHttp5xx,
+                    _ when ex.InnerException is TaskCanceledException => ErrorTimeout,
                     _ => ErrorLogical,
                 };
                 return FailureOutcome(errorType, ex, (int)sw.Elapsed.TotalMilliseconds);
@@ -317,5 +336,6 @@ internal sealed class AiCallOrchestrator : IAiCallOrchestrator
         int? CompletionTokens,
         int? HttpStatus,
         string? RequestText,
-        string? ResponseText);
+        string? ResponseText,
+        AiRequestMetadata? RequestMetadata = null);
 }

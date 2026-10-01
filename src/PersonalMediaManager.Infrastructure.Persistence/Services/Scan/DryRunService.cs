@@ -74,6 +74,11 @@ internal sealed class DryRunService : IDryRunService
         FileParseContext context = FileParseContext.FromFullPath(normalized, watchRoot: null);
         RuleParseResult rule = await _ruleEngine.ParseAsync(context, ct);
 
+        if (rule.Conflicts is { Count: > 0 })
+            return Build(normalized, fileName, rule, DryRunOutcome.WouldReview,
+                "规则与显式季集证据冲突，需人工确认；演练不会覆盖原字段",
+                tmdbQueried: false, candidates: [], picked: null, previewRel: null, previewNote: "解析字段证据冲突");
+
         // 决策一：规则置信度 / 特殊字符
         NextAction first = ParseTask
             .AfterRuleEngine(rule.Confidence, rule.HasSpecialChars, ConfidenceThreshold, candidateThreshold)
@@ -167,6 +172,18 @@ internal sealed class DryRunService : IDryRunService
             return Build(normalized, fileName, rule, DryRunOutcome.WouldReview,
                 $"命中 TMDB 剧集候选，但季 / 集字段不全（season={season?.ToString() ?? "?"} / episode={episode?.ToString() ?? "?"}），实际会转人工补全",
                 tmdbQueried: true, candidates, picked, previewRel: null, previewNote: "剧集季 / 集不全");
+        }
+
+        if (isTv && TmdbEpisodeCatalogueGuard.RequiresValidation(rule))
+        {
+            TmdbDetailsResult details;
+            try { details = await _tmdb.GetDetailsAsync(top.Id, top.MediaType, ct); }
+            catch (TmdbClientException ex) { throw new BusinessException("TMDB 服务异常", ex); }
+            string? catalogueIssue = TmdbEpisodeCatalogueGuard.Validate(details?.Seasons, season!.Value, episode!.Value, rule.EpisodeEnd);
+            if (catalogueIssue is not null)
+                return Build(normalized, fileName, rule, DryRunOutcome.WouldReview,
+                    "已提取字面季集，但 TMDB 季集目录未知或不符，需人工确认编号",
+                    tmdbQueried: true, candidates, picked, previewRel: null, previewNote: catalogueIssue);
         }
 
         string ext = Path.GetExtension(normalized).TrimStart('.');

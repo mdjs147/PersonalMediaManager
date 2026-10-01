@@ -231,6 +231,133 @@ public sealed class RuleEngineServiceTests : IDisposable
         b.HasSpecialChars.Should().BeFalse();
     }
 
+    [Theory]
+    [InlineData("Example Arc S4 - 01.mkv", 4)]
+    [InlineData("Example Arc 2nd Season - 01.mkv", 2)]
+    [InlineData("Example Arc 11th Season - 01.mkv", 11)]
+    [InlineData("Example Arc 21st Season - 01.mkv", 21)]
+    public async Task UserRule_TitleEpisodeOnly_FillsExplicitSeason(string file, int expectedSeason)
+    {
+        long id = SeedRule(new ParseRule { Name = "synthetic", Enabled = true, Priority = 1,
+            Scope = ParseScope.FileName, Pattern = @"^(?<title>.+?) - (?<episode>\d{2})", DefaultType = "tv", ForceType = true });
+        RuleParseResult result = await Parse(file, null);
+        result.Season.Should().Be(expectedSeason);
+        result.Episode.Should().Be(1);
+        result.MatchedRuleId.Should().Be(id);
+        result.Title.Should().Be("Example Arc");
+        result.FieldEvidence.Should().Contain(e => e.Field == "season" && e.Source == "FileName");
+    }
+
+    [Theory]
+    [InlineData("Example Arc 3 - 01.mkv")]
+    [InlineData("Example Arc 11st Season - 01.mkv")]
+    public async Task UserRule_NonSeasonNumbers_DoNotFill(string file)
+    {
+        SeedRule(new ParseRule { Name = "synthetic", Enabled = true, Priority = 1,
+            Scope = ParseScope.FileName, Pattern = @"^(?<title>.+?) - (?<episode>\d{2})", DefaultType = "tv", ForceType = true });
+        (await Parse(file, null)).Season.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task UserRule_ExplicitSeasonWins_ConflictReported()
+    {
+        SeedRule(new ParseRule { Name = "synthetic", Enabled = true, Priority = 1,
+            Scope = ParseScope.FileName, Pattern = @"^(?<title>.+?) \[S(?<season>\d)\]", DefaultType = "tv", ForceType = true });
+        RuleParseResult result = await Parse("Example Arc [S3] S04E02.mkv", null);
+        result.Season.Should().Be(3);
+        result.Episode.Should().Be(2);
+        result.Conflicts.Should().Contain(c => c.StartsWith("season"));
+    }
+
+    [Fact]
+    public async Task UserRule_ForceMovie_RomanSuffixDoesNotChangeType()
+    {
+        SeedRule(new ParseRule { Name = "synthetic", Enabled = true, Priority = 1,
+            Scope = ParseScope.FileName, Pattern = @"^(?<title>.+?)\.(?<year>\d{4})", DefaultType = "movie", ForceType = true });
+        RuleParseResult result = await Parse("Example Saga II.2024.mkv", null);
+        result.MediaType.Should().Be("movie");
+        result.Season.Should().BeNull();
+        result.Title.Should().Be("Example Saga II");
+    }
+
+    [Fact]
+    public async Task UserRule_RejectedFractionalEpisode_IsNotFilledFromParent()
+    {
+        SeedRule(new ParseRule { Name = "synthetic", Enabled = true, Priority = 1,
+            Scope = ParseScope.FileName, Pattern = @"^(?<title>.+?) - (?<episode>\d{2})", DefaultType = "tv", ForceType = true });
+        RuleParseResult result = await Parse("Example Arc - 11.5.mkv", "Example Arc S04E11");
+        result.Season.Should().Be(4);
+        result.Episode.Should().BeNull();
+        result.RejectedFields.Should().Contain("episode");
+    }
+
+    [Fact]
+    public async Task UserRule_FileSingleEpisode_DoesNotInheritParentRange()
+    {
+        SeedRule(new ParseRule { Name = "synthetic", Enabled = true, Priority = 1,
+            Scope = ParseScope.FileName, Pattern = @"^(?<title>.+?) - (?<episode>\d{2})", DefaultType = "tv", ForceType = true });
+        RuleParseResult result = await Parse("Example Arc - 03.mkv", "Example Arc S04E01-E12");
+        result.Season.Should().Be(4);
+        result.Episode.Should().Be(3);
+        result.EpisodeEnd.Should().BeNull();
+        result.Conflicts.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("Example Programme", true)]
+    [InlineData("Downloads", false)]
+    public async Task UserRule_DateOnlyIdentity_DoesNotSuppressParentContext(string parent, bool informative)
+    {
+        SeedRule(new ParseRule { Name = "synthetic", Enabled = true, Priority = 1,
+            Scope = ParseScope.FileName, Pattern = @"^(?<title>2026\.08\.26)", DefaultType = "movie", ForceType = true, ConfidenceBonus = 0.3 });
+        RuleParseResult result = await Parse("2026.08.26.mkv", parent);
+        result.Title.Should().Be("2026 08 26");
+        result.HasIdentityEvidence.Should().BeFalse();
+        result.Confidence.Should().BeLessThan(0.6);
+        if (informative) result.AlternativeTitles.Should().Contain("Example Programme");
+        else result.AlternativeTitles.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("Example.S01E11.5.mkv")]
+    [InlineData("Example.EP11.5.mkv")]
+    public async Task UserRule_TitleOnly_FractionalFileBlocksAncestorEpisode(string file)
+    {
+        SeedRule(new ParseRule { Name = "synthetic", Enabled = true, Priority = 1,
+            Scope = ParseScope.FileName, Pattern = @"^(?<title>Example)", DefaultType = "tv", ForceType = true });
+        RuleParseResult result = await Parse(file, "Example S01E11");
+        result.Episode.Should().BeNull();
+        result.RejectedFields.Should().Contain("episode");
+    }
+
+    [Fact]
+    public async Task UserRule_ConflictingSeasonMarkersInSameLayer_AreReported()
+    {
+        SeedRule(new ParseRule { Name = "synthetic", Enabled = true, Priority = 1,
+            Scope = ParseScope.FileName, Pattern = @"^(?<title>Example)", DefaultType = "tv", ForceType = true });
+        RuleParseResult result = await Parse("Example S02 Season 3 E01.mkv", null);
+        result.Conflicts.Should().Contain(c => c.StartsWith("season"));
+    }
+
+    [Fact]
+    public async Task Builtin_NewOrdinalSeason_CarriesEvidenceForCanonicalValidation()
+    {
+        RuleParseResult result = await Parse("Example 4th Season E03.mkv", null);
+        result.Season.Should().Be(4);
+        result.FieldEvidence.Should().Contain(e => e.Field == "season" && e.Value == 4);
+    }
+
+    [Fact]
+    public async Task UserRule_ParentCapturedEpisode_FractionalFileRejectsEffectiveInteger()
+    {
+        SeedRule(new ParseRule { Name = "synthetic", Enabled = true, Priority = 1,
+            Scope = ParseScope.ParentFolder, Pattern = @"^(?<title>Example) S(?<season>\d{2})E(?<episode>\d{2})", DefaultType = "tv", ForceType = true });
+        RuleParseResult result = await Parse("Example.S01E11.5.mkv", "Example S01E11");
+        result.Episode.Should().BeNull();
+        result.RejectedFields.Should().Contain("episode");
+        result.FieldEvidence.Should().Contain(e => e.Field == "episode" && e.Value == 11 && e.Source == "UserRule");
+    }
+
     // ---------- 用户规则 ----------
 
     [Fact]

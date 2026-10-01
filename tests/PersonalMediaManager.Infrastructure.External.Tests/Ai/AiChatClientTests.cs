@@ -13,11 +13,11 @@ namespace PersonalMediaManager.Infrastructure.External.Tests.Ai;
 /// 1. 成功调用落 success 审计行（model / token / 耗时 / HTTP 200 / 级序 / 主标 / chainId / 原文，MediaItemId=null）
 /// 2. 主失败 → 备成功：两行审计共享 chainId，级序 1→2，失败行错误分类 Http4xx + 状态码
 /// 3. 全失败：抛 AiChatUnavailableException 且每级失败行均已落（RateLimit / Transient 分类正确）
-/// 4. 空响应：按 Logical「返回空内容」落审计并升级到下一级
+/// 4. 空响应：按 Logical「返回空内容」落审计并升级到下一级，不触发健康评估
 /// 5. 链路总超时：补写 ErrorType=Timeout 行（中文 detail 含等待时长）+ 抛中文「链路超时」异常
 /// 6. 外部取消：原样上抛 OperationCanceledException，不落 Timeout 行（区分真取消与链路超时）
 /// 7. 协议无实现（配置漂移）：落 ConfigError 行并走下一级
-/// 8. 健康熔断评估（D3.4）与解析链同口径：仅「接口故障」（Transient/RateLimit/Http*/Logical）失败触发
+/// 8. 健康熔断评估（D3.4）与解析链同口径：仅「接口故障」（Transient/RateLimit/Http*/ModelRuntime）失败触发
 ///    EvaluateAsync；成功 / ConfigError / Timeout / 外部取消不触发——各场景在对应用例内随审计断言一并校验
 /// 本测试项目无 mock 框架，沿用手写桩约定（FakeResolver / FakeProtocol / RecordingAuditWriter / RecordingHealthTracker）。
 /// </remarks>
@@ -40,6 +40,20 @@ public sealed class AiChatClientTests
         {
             ChainTimeoutOverride = chainTimeout,
         };
+
+    [Fact]
+    public async Task ModelRuntime_RecordsCategoryAndHealth_ThenFallsBack()
+    {
+        RecordingAuditWriter audit = new();
+        RecordingHealthTracker health = new();
+        FakeProtocol bad = new(AiProviderType.Ollama, (_, _) => throw new AiProviderModelRuntimeException("runtime failure"));
+        FakeProtocol good = new(AiProviderType.Anthropic, (_, _) => Task.FromResult(new AiCompletion("ok")));
+        AiChatClient sut = NewSut([Res(1, AiProviderType.Ollama, true), Res(2, AiProviderType.Anthropic)],
+            audit, health: health, protocols: [bad, good]);
+        (await sut.CompleteAsync(Req())).ProviderId.Should().Be(2);
+        audit.Entries[0].ErrorType.Should().Be("ModelRuntime");
+        health.Evaluated.Should().Equal(1L);
+    }
 
     [Fact]
     public async Task Success_WritesSuccessAuditRow_WithTokensModelChain()
@@ -138,7 +152,7 @@ public sealed class AiChatClientTests
         audit.Entries[0].ErrorType.Should().Be("Logical");
         audit.Entries[0].ErrorDetail.Should().Be("返回空内容");
         audit.Entries[0].HttpStatus.Should().Be(200, "HTTP 成功但内容不可用");
-        health.Evaluated.Should().Equal(new long[] { 1 }, "空内容按 Logical 归类，属接口故障 → 触发熔断评估");
+        health.Evaluated.Should().BeEmpty("空内容是语义失败，不触发基础设施熔断");
     }
 
     [Fact]

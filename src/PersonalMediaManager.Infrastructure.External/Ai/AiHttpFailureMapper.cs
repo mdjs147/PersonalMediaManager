@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using PersonalMediaManager.Application.Contracts;
 
 namespace PersonalMediaManager.Infrastructure.External.Ai;
@@ -8,7 +9,8 @@ namespace PersonalMediaManager.Infrastructure.External.Ai;
 /// 把各协议策略重复的「HTTP 状态 → 三类异常」与「catch 块 → 三类异常」收敛到一处，所有 <see cref="IAiProtocol"/> 实现复用，
 /// 保证失败语义在全协议口径一致：
 ///   - HTTP 429 → <see cref="AiProviderRateLimitException"/>（已达上限，上层立即升级到更高级 AI，不在本级空耗重试）
-///   - HTTP &gt;= 500 → <see cref="AiProviderTransientException"/>（服务端瞬时故障，允许内部短重试）
+///   - Ollama HTTP 500 明确张量形状/断言失败 → <see cref="AiProviderModelRuntimeException"/>（不短重试）
+///   - 其余 HTTP &gt;= 500 → <see cref="AiProviderTransientException"/>（服务端瞬时故障，允许内部短重试）
 ///   - HTTP &gt;= 400 → <see cref="AiProviderLogicalException"/>（携带状态码，4xx 逻辑错误）
 ///   - <see cref="HttpRequestException"/>（DNS / TCP 连接失败）→ Transient
 ///   - <see cref="TaskCanceledException"/>：在 <see cref="AiPromptHelpers.TransientFirstByteThreshold"/>（5s）内取消 → 首字节超时归 Transient，超过 → 请求超时归 Logical
@@ -30,6 +32,8 @@ internal static class AiHttpFailureMapper
         string snippet = AiPromptHelpers.Truncate(body, 200);
         Exception ex = statusCode == HttpStatusCode.TooManyRequests
             ? new AiProviderRateLimitException($"{protocol} HTTP 429 限流/配额（body={snippet}）")
+            : IsKnownModelRuntimeFailure(protocol, statusCode, body)
+                ? new AiProviderModelRuntimeException($"{protocol} HTTP {status} 模型运行故障")
             : status >= 500
                 ? new AiProviderTransientException($"{protocol} HTTP {status}（body={snippet}）")
                 : new AiProviderLogicalException($"{protocol} HTTP {status}（body={snippet}）", status);
@@ -37,6 +41,32 @@ internal static class AiHttpFailureMapper
         ex.Data[AiCallDiagnostics.ResponseTextKey] = body;
         ex.Data[AiCallDiagnostics.HttpStatusKey] = status;
         throw ex;
+    }
+
+    // 仅检查有界的 Ollama 错误字段，不检查成功输出或任意供应商文本。
+    // 运行器停止本身可能是瞬时故障，仅明确断言或张量形状错误才跳过重试。
+    private static bool IsKnownModelRuntimeFailure(string protocol, HttpStatusCode status, string body)
+    {
+        if (protocol != "Ollama" || status != HttpStatusCode.InternalServerError || body.Length > 16_384)
+            return false;
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(body, new JsonDocumentOptions { MaxDepth = 8 });
+            if (document.RootElement.ValueKind != JsonValueKind.Object ||
+                !document.RootElement.TryGetProperty("error", out JsonElement error) ||
+                error.ValueKind != JsonValueKind.String)
+                return false;
+            string text = error.GetString() ?? string.Empty;
+            return text.Contains("GGML_ASSERT", StringComparison.Ordinal) ||
+                text.Contains("check_tensor_dims", StringComparison.Ordinal) ||
+                (text.Contains("tensor", StringComparison.OrdinalIgnoreCase) &&
+                 (text.Contains("wrong shape", StringComparison.OrdinalIgnoreCase) ||
+                  text.Contains("shape mismatch", StringComparison.OrdinalIgnoreCase)));
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     /// <summary>把 SendAsync 抛出的网络/超时异常映射为契约异常（始终抛出，不返回）</summary>

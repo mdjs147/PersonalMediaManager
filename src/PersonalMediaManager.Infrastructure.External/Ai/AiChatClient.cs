@@ -23,7 +23,7 @@ namespace PersonalMediaManager.Infrastructure.External.Ai;
 /// 对话类行以 MediaItemId=null + Confidence=null 区分于解析链。链路超时同样补写 ErrorType=Timeout 行
 /// （超时是全链预算耗尽，归因当级仅作诊断线索，不主动触发熔断评估）。
 ///
-/// 健康熔断评估（D3.4）与解析链同口径：仅「接口故障」类失败（Transient/RateLimit/Http4xx/Http5xx/Logical）
+/// 健康熔断评估（D3.4）与解析链同口径：仅「接口故障」类失败（Transient/RateLimit/Http4xx/Http5xx/Timeout/ModelRuntime）
 /// 写完失败审计行后调 <see cref="IAiProviderHealthTracker.EvaluateAsync"/>，滚动窗口失败达阈值即自动禁用该
 /// provider；ConfigError（配置漂移非 provider 故障）、Timeout（见上）与外部取消不触发——对话类失败不再只
 /// 「落审计等被动扫描」，与解析链一样主动驱动熔断。
@@ -41,6 +41,7 @@ internal sealed class AiChatClient : IAiChatClient
     // 错误分类常量：与解析链（AiCallOrchestrator）写 Audit_AiCall.ErrorType 的口径保持一致（字符串需逐字相等）
     private const string ErrorTransient = "Transient";
     private const string ErrorRateLimit = "RateLimit";
+    private const string ErrorModelRuntime = "ModelRuntime";
     private const string ErrorLogical = "Logical";
     private const string ErrorHttp4xx = "Http4xx";
     private const string ErrorHttp5xx = "Http5xx";
@@ -105,8 +106,7 @@ internal sealed class AiChatClient : IAiChatClient
                         ErrorLogical, "返回空内容",
                         completion.PromptTokens, completion.CompletionTokens,
                         httpStatus: 200, request.UserPrompt, completion.Text, ct);
-                    // Logical 属「接口故障」口径：与解析链一致，失败审计行落库后主动触发健康熔断评估（D3.4）
-                    await _healthTracker.EvaluateAsync(res.ProviderId, ct);
+                    // 模型返回空内容属于语义失败，不能据此判定基础设施故障。
                     attempts.Add($"{res.Name}: 返回空内容");
                     continue;
                 }
@@ -196,9 +196,9 @@ internal sealed class AiChatClient : IAiChatClient
     }
 
     /// <summary>是否「接口故障」类错误（与解析链同口径：仅此类失败触发 D3.4 健康熔断评估）</summary>
-    /// <remarks>排除项：ConfigError（配置漂移非 provider 故障）、Timeout（全链预算耗尽，归因当级仅作诊断线索）。</remarks>
+    /// <remarks>排除项：ConfigError、Logical（配置/内容错误）；全链超时在独立 catch 中只落审计、不立即评估。</remarks>
     private static bool IsProviderFault(string errorType) =>
-        errorType is ErrorTransient or ErrorRateLimit or ErrorHttp4xx or ErrorHttp5xx or ErrorLogical;
+        errorType is ErrorTransient or ErrorRateLimit or ErrorHttp4xx or ErrorHttp5xx or ErrorTimeout or ErrorModelRuntime;
 
     /// <summary>链路总超时 = 各级 provider 自身超时之和 + 每级开销，钳 [下限, 上限]（口径同 AiCallOrchestrator）</summary>
     private static TimeSpan ComputeChainTimeout(IReadOnlyList<AiProviderResolution> ordered)
@@ -216,9 +216,11 @@ internal sealed class AiChatClient : IAiChatClient
     private static string ClassifyError(Exception ex) => ex switch
     {
         AiProviderTransientException => ErrorTransient,
+        AiProviderModelRuntimeException => ErrorModelRuntime,
         AiProviderRateLimitException => ErrorRateLimit,
         AiProviderLogicalException { HttpStatus: >= 400 and < 500 } => ErrorHttp4xx,
         AiProviderLogicalException { HttpStatus: >= 500 } => ErrorHttp5xx,
+        AiProviderLogicalException { InnerException: TaskCanceledException } => ErrorTimeout,
         AiProviderLogicalException => ErrorLogical,
         InvalidOperationException => ErrorConfigError,   // 无 IAiProtocol 实现（配置漂移）
         _ => ErrorLogical,
