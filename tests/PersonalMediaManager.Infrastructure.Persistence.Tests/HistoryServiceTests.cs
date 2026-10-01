@@ -1077,7 +1077,9 @@ public sealed class HistoryServiceTests : IDisposable
             long id = SeedCompletedWithTarget("/dl/stem-source.mkv", target, archiveOp: "COPY", fileSize: 5);
             _fileProbe.FileExists(target).Returns(true);
             _fileProbe.FileExists("/dl/stem-source.mkv").Returns(true);
-            await _sut.UndoArchiveAsync(id);
+            UndoArchiveResult result = await _sut.UndoArchiveAsync(id);
+            result.Operation.Should().Be("DELETE_COPY");
+            File.Exists(target).Should().BeFalse();
             File.Exists(own).Should().BeFalse();
             File.ReadAllText(other).Should().Be("other");
             if (distinctCase) File.ReadAllText(caseOther).Should().Be("case-other");
@@ -1099,6 +1101,23 @@ public sealed class HistoryServiceTests : IDisposable
         r.Status.Should().Be(MediaItemStatus.Skipped);
         await _fileMover.DidNotReceive().MoveAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
         ReadItem(id).Status.Should().Be(MediaItemStatus.Skipped);
+    }
+
+    [Fact]
+    public async Task UndoArchive_Copy_WithWindowsPaths_UsesValidArchiveEvidence()
+    {
+        // 即使在 Unix 上也验证反斜杠被 JSON 正确转义，避免 COPY 审计退化成 MOVE_BACK。
+        string fixtureRoot = @"C:\pmm-undo-json-" + Guid.NewGuid().ToString("N");
+        string source = fixtureRoot + @"\downloads\source.mkv";
+        string target = fixtureRoot + @"\library\EP1.mkv";
+        long id = SeedCompletedWithTarget(source, target, archiveOp: "COPY");
+        _fileProbe.FileExists(source).Returns(true);
+        _fileProbe.FileExists(target).Returns(true);
+
+        UndoArchiveResult result = await _sut.UndoArchiveAsync(id);
+
+        result.Operation.Should().Be("DELETE_COPY");
+        await _fileMover.DidNotReceive().MoveAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Fact(DisplayName = "撤销归档：清理该媒体悬空的字幕下载记录，按 MediaItemId 限定不波及其它媒体")]
@@ -1309,7 +1328,7 @@ public sealed class HistoryServiceTests : IDisposable
             status: MediaItemStatus.Completed, targetPath: targetPath);
         if (archiveOp is not null)
             item.AppendStep(MediaItemStatus.Archiving, DateTimeOffset.UtcNow, 10,
-                $$"""{"operation":"{{archiveOp}}","source":"{{sourcePath}}","target":"{{targetPath}}"}""");
+                System.Text.Json.JsonSerializer.Serialize(new { operation = archiveOp, source = sourcePath, target = targetPath }));
         db.MediaItems.Add(item);
         db.SaveChanges();
         return item.Id;

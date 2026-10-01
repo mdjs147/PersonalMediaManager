@@ -105,24 +105,31 @@ private func writeError(_ message: String) {
     try? FileHandle.standardError.write(contentsOf: Data((message + "\n").utf8))
 }
 
-let options: TrayOptions
-do {
-    options = try TrayOptions.parse(Array(CommandLine.arguments.dropFirst()))
-    guard getppid() == options.parentPid else {
-        throw TrayOptions.ArgumentError.invalid("父进程编号与实际启动进程不一致。")
+// 显式主执行器入口保证初始化、事件循环及委托生命周期都在 AppKit 主线程。
+@main
+private struct TrayMain {
+    @MainActor
+    static func main() {
+        let options: TrayOptions
+        do {
+            options = try TrayOptions.parse(Array(CommandLine.arguments.dropFirst()))
+            guard getppid() == options.parentPid else {
+                throw TrayOptions.ArgumentError.invalid("父进程编号与实际启动进程不一致。")
+            }
+        } catch {
+            writeError(String(describing: error))
+            exit(64)
+        }
+
+        // 父进程关闭管道时写入失败即可，不让 SIGPIPE 直接终止菜单回调。
+        signal(SIGPIPE, SIG_IGN)
+
+        // AppKit 必须在进程主线程启动；accessory 不显示 Dock 图标或主窗口。
+        let application = NSApplication.shared
+        application.setActivationPolicy(.accessory)
+        let delegate = TrayDelegate(options: options)
+        application.delegate = delegate
+        application.run()
+        withExtendedLifetime(delegate) {}
     }
-} catch {
-    writeError(String(describing: error))
-    exit(64)
 }
-
-// 父进程关闭管道时写入失败即可，不让 SIGPIPE 直接终止菜单回调。
-signal(SIGPIPE, SIG_IGN)
-
-// AppKit 必须在进程主线程启动；accessory 不显示 Dock 图标或主窗口。
-let application = NSApplication.shared
-application.setActivationPolicy(.accessory)
-let delegate = TrayDelegate(options: options)
-application.delegate = delegate
-application.run()
-withExtendedLifetime(delegate) {}

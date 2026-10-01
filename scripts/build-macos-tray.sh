@@ -40,7 +40,7 @@ temporary_output="$(mktemp "$output_dir/.pmm-tray.XXXXXX")"
 trap 'rm -f "$temporary_output"' EXIT
 
 xcrun --sdk macosx swiftc \
-    -swift-version 5 \
+    -swift-version 5 -parse-as-library \
     -O -whole-module-optimization \
     -target "$architecture-apple-macos13.0" \
     -framework AppKit \
