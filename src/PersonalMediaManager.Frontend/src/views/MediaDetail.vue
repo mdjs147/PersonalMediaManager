@@ -127,6 +127,10 @@ function buildStory(d) {
     episode: info.episode ?? null,
     episodeEnd: info.episodeEnd ?? null,
     status: d?.status || 'Completed',
+    currentBlockingReason: d?.currentBlockingReason,
+    historicalReviewReason: d?.historicalReviewReason,
+    historicalErrorMessage: d?.historicalErrorMessage,
+    completionCategory: d?.completionProvenance?.category,
     source: d?.parseSource || 'Hybrid',
     confidence: d?.confidence ?? null,
     detectedAt,
@@ -383,6 +387,15 @@ onMounted(load);
       </div>
     </div>
 
+    <section class="card" v-if="record.currentBlockingReason || record.historicalReviewReason || record.historicalErrorMessage || record.completionCategory">
+      <div class="card-body">
+        <p v-if="record.currentBlockingReason">当前阻塞原因：{{ record.currentBlockingReason }}</p>
+        <p v-if="record.completionCategory && record.completionCategory !== 'NotCompleted'">最终完成路线：{{ { Confirmed: '审核确认完成', ManualArchive: '手动归档完成', AutomaticPipeline: '自动管线完成（仅最后路线）', Unknown: '未知 / 证据不足' }[record.completionCategory] || '未知' }}</p>
+        <p v-if="record.historicalReviewReason" class="muted small">历史待审原因：{{ record.historicalReviewReason }}</p>
+        <p v-if="record.historicalErrorMessage" class="muted small">历史错误记录：{{ record.historicalErrorMessage }}</p>
+      </div>
+    </section>
+
     <!-- Hero -->
     <div class="card hero">
       <div class="hero-bg" :style="{ background: 'linear-gradient(135deg, #4d1f29 0%, #a53c4f 60%, #f4a4b4 130%)' }" />
@@ -448,7 +461,7 @@ onMounted(load);
           </div>
         </header>
         <div class="tl-body">
-          <div v-for="(step, i) in record.steps" :key="step.stage" class="tl-step">
+          <div v-for="(step, i) in record.steps" :key="`${step.stage}-${i}`" class="tl-step">
             <div class="tl-rail">
               <div class="tl-dot" :class="[`tone-${STATUS_MAP[step.stage]?.variant || 'neutral'}`, { opened: isOpen(step.stage) }]">
                 <PmmIcon :name="step.icon" :size="15" />
@@ -700,6 +713,16 @@ onMounted(load);
 
                 <!-- AwaitingReview / Skipped / Failed 终态：通用 reason -->
                 <template v-else>
+                  <div v-if="step.detail.operation === 'Confirm' || step.detail.operation === 'BindTmdb'" class="kv">
+                    <span class="kv-k">审核操作</span><span>{{ step.detail.operation === 'Confirm' ? '已应用确认' : '已应用改绑' }} · {{ step.detail.explicitCorrection ? '存在明确 ID / 类型 / 季集变更' : '未记录这些字段的明确变更' }}（不代表归档成功）</span>
+                  </div>
+                  <div v-if="step.detail.before && step.detail.after" class="kv">
+                    <span class="kv-k">绑定前后</span><span>TMDB {{ step.detail.before.tmdbId ?? '空' }} → {{ step.detail.after.tmdbId ?? '空' }} · {{ step.detail.before.mediaType ?? '空' }} → {{ step.detail.after.mediaType ?? '空' }}</span>
+                  </div>
+                  <div v-if="step.detail.initialBinding" class="muted small">首次选择绑定，不计作替换已有 TMDB ID</div>
+                  <div v-if="step.detail.metadataSupplied" class="muted small">补全原先缺失的季集字段，与更正已有值分开记录</div>
+                  <div v-if="step.detail.automaticEpisodeCleanup" class="muted small">电影季集字段由系统清理，不计作人工季集更正</div>
+                  <div v-if="step.detail.automaticSeasonFilled" class="muted small">季号由单季规则自动补全，不计作人工季号更正</div>
                   <div v-if="step.detail.reason" class="kv"><span class="kv-k">原因</span><span>{{ step.detail.reason }}</span></div>
                   <div v-if="step.detail.fromStage" class="kv"><span class="kv-k">来自阶段</span><span class="font-mono">{{ step.detail.fromStage }}</span></div>
                   <div v-if="step.detail.note" class="muted small">{{ step.detail.note }}</div>

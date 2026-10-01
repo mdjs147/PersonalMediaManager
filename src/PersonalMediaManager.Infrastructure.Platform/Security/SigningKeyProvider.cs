@@ -9,7 +9,7 @@ namespace PersonalMediaManager.Infrastructure.Platform.Security;
 /// <remarks>
 /// 优先来源：①IConfiguration「Jwt:SigningKey」②AppPaths 下 jwt-signing-key.txt 兜底文件。
 /// 单例 + 启动时一次性解析；线程安全。
-/// 写回 appsettings.json 是开发期约定（需求文档 §3.12），生产环境可由用户/部署脚本预置。
+/// 文件通过同目录原子发布避免多进程生成不同密钥；Unix 创建权限固定为 0600。
 /// </remarks>
 public sealed class SigningKeyProvider : IJwtSigningKeyProvider
 {
@@ -25,22 +25,70 @@ public sealed class SigningKeyProvider : IJwtSigningKeyProvider
         }
 
         string keyFile = Path.Combine(paths.Root, "jwt-signing-key.txt");
-        if (File.Exists(keyFile))
-        {
-            _key = File.ReadAllText(keyFile).Trim();
-            return;
-        }
-
-        _key = GenerateAndPersist(keyFile);
+        // 跨进程锁覆盖“检查存在 + 发布”，不依赖 File.Move 的竞争失败语义。
+        using FileStream lease = AcquireLease(keyFile + ".lock");
+        _key = File.Exists(keyFile) ? ReadExisting(keyFile) : GenerateAndPersist(keyFile);
     }
 
     public string GetSigningKey() => _key;
+
+    private static FileStream AcquireLease(string path)
+    {
+        PrivateFileSystem.RejectSymbolicLink(path);
+        FileStreamOptions options = new()
+        {
+            Mode = FileMode.OpenOrCreate,
+            Access = FileAccess.ReadWrite,
+            Share = FileShare.None,
+        };
+        if (!OperatingSystem.IsWindows()) options.UnixCreateMode = PrivateFileSystem.FilePermissions;
+        long deadline = Environment.TickCount64 + 10000;
+        while (true)
+        {
+            try { return new FileStream(path, options); }
+            catch (IOException) when (Environment.TickCount64 < deadline)
+            {
+                Thread.Sleep(10);
+            }
+        }
+    }
 
     private static string GenerateAndPersist(string keyFile)
     {
         byte[] bytes = RandomNumberGenerator.GetBytes(32); // 256 位
         string base64 = Convert.ToBase64String(bytes);
-        File.WriteAllText(keyFile, base64);
-        return base64;
+        string temporary = keyFile + ".tmp-" + Guid.NewGuid().ToString("N");
+        try
+        {
+            using (FileStream file = PrivateFileSystem.CreateNew(temporary))
+            {
+                file.Write(global::System.Text.Encoding.UTF8.GetBytes(base64));
+                file.Flush(flushToDisk: true);
+            }
+
+            try
+            {
+                // 仅发布完整文件且不覆盖；竞争失败者读取获胜进程的密钥。
+                File.Move(temporary, keyFile, overwrite: false);
+                return base64;
+            }
+            catch (IOException) when (File.Exists(keyFile))
+            {
+                return ReadExisting(keyFile);
+            }
+        }
+        finally
+        {
+            if (File.Exists(temporary)) File.Delete(temporary);
+        }
+    }
+
+    private static string ReadExisting(string keyFile)
+    {
+        PrivateFileSystem.RestrictFile(keyFile);
+        string key = File.ReadAllText(keyFile).Trim();
+        if (string.IsNullOrWhiteSpace(key))
+            throw new InvalidDataException($"JWT 签名密钥文件为空，请检查并恢复原密钥：{keyFile}");
+        return key;
     }
 }

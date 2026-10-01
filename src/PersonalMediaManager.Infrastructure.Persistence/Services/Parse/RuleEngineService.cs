@@ -247,8 +247,12 @@ internal sealed class RuleEngineService : IRuleEngineService
         {
             (int? s, int? e, int? eEnd) = ExtractSeasonEpisode(layer);
             season ??= s;
-            episode ??= e;
-            episodeEnd ??= eEnd;
+            // 集号与末集是同一层的原子证据，父目录全集范围不能扩展文件单集。
+            if (episode is null && e is not null)
+            {
+                episode = e;
+                episodeEnd = eEnd;
+            }
             year ??= ExtractYear(layer);
             seasonTitle ??= ExtractSeasonTitle(layer);
             if (season is not null && episode is not null && year is not null) break;
@@ -523,7 +527,11 @@ internal sealed class RuleEngineService : IRuleEngineService
         // 然后剥总季数/总集数后缀——必须在分隔符折叠之前，否则「第1-6季」的连字符被折叠成空格后无法识别区间；
         // 「Season NN」全词季号须在通用噪声之前整体剥除（Noise 词表含裸 season 单词，先跑会只吃掉单词、
         // 把季号数字残留进标题，如「Show Season 2」→「Show 2」），最后剥噪声 token + 分隔符。
-        string s = SafeReplace(BuiltinRulesCatalog.ReleaseGroupSuffix, stem, " ");
+        // 仅在发布元数据之后剥尾组；Spider-Man / X-Men 等标题内连字符必须保留。
+        Match suffix = SafeMatch(BuiltinRulesCatalog.ReleaseGroupSuffix, stem);
+        string s = stem;
+        if (suffix.Success && SafeMatch(BuiltinRulesCatalog.Noise, stem[..suffix.Index]).Success)
+            s = stem[..suffix.Index];
         s = SafeReplace(BuiltinRulesCatalog.GroupBracket, s, " ");
         s = SafeReplace(BuiltinRulesCatalog.TotalCountNoise, s, " ");
         s = SafeReplace(BuiltinRulesCatalog.SeasonWordLatin, s, " ");

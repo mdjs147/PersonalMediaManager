@@ -213,6 +213,7 @@ public sealed class ParseTestCasesTests : IDisposable
     {
         await LoginAsAdminAsync();
 
+        string watchRoot = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "pmm-fixture-watch");
         // 直接往库塞一个 Failed Media_Item 与一个 WatchFolder（监控根反查的依据）
         IDbContextFactory<PmmDbContext> factory = _factory.Services.GetRequiredService<IDbContextFactory<PmmDbContext>>();
         await using (PmmDbContext ctx = await factory.CreateDbContextAsync())
@@ -220,11 +221,11 @@ public sealed class ParseTestCasesTests : IDisposable
             ctx.WatchFolders.Add(new WatchFolder
             {
                 Alias = "下载",
-                Path = @"F:\迅雷下载",
+                Path = watchRoot,
                 Enabled = true,
             });
             MediaItem mi = MediaItem.CreateFixture(
-                sourcePath: @"F:\迅雷下载\奇怪命名\episode01.mkv",
+                sourcePath: System.IO.Path.Combine(watchRoot, "奇怪命名", "episode01.mkv"),
                 fileName: "episode01.mkv",
                 fileSize: 100,
                 status: MediaItemStatus.Failed,
@@ -256,7 +257,7 @@ public sealed class ParseTestCasesTests : IDisposable
         list.GetProperty("data").GetProperty("total").GetInt32().Should().Be(1);
         JsonElement item = list.GetProperty("data").GetProperty("items")[0];
         item.GetProperty("source").GetString().Should().Be("FromFailed");
-        item.GetProperty("watchRootPath").GetString().Should().Be(@"F:\迅雷下载");
+        item.GetProperty("watchRootPath").GetString().Should().Be(watchRoot);
         item.GetProperty("notes").GetString().Should().Contain("解析超时");
     }
 

@@ -15,7 +15,6 @@ public sealed class LogQueryServiceTests : IDisposable
     public LogQueryServiceTests()
     {
         _root = Path.Combine(Path.GetTempPath(), $"pmm-logs-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(_root);
         _paths = AppPaths.ForRoot(_root);
         _sut = new LogQueryService(_paths, NullLogger<LogQueryService>.Instance);
     }

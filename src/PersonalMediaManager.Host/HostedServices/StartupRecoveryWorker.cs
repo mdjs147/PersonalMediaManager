@@ -405,7 +405,7 @@ public sealed class StartupRecoveryWorker : IHostedService
         foreach ((long id, string path) in folders)
         {
             if (!string.IsNullOrEmpty(path)
-                && sourcePath.StartsWith(path, StringComparison.OrdinalIgnoreCase)
+                && sourcePath.StartsWith(path, PlatformPaths.Comparison)
                 && path.Length > bestLen)
             {
                 bestId = id;

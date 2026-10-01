@@ -20,14 +20,15 @@ public static class PathSafetyGuard
         if (string.IsNullOrWhiteSpace(targetPath))
             throw new ArgumentException("目标路径不能为空", nameof(targetPath));
 
+        // Unix 把反斜杠当普通字符，但导入的 Windows 风格路径仍须通过另一种解释的穿越校验。
+        if (!OperatingSystem.IsWindows() && targetPath.Contains('\\')
+            && !PlatformPaths.IsWithinDirectory(targetPath.Replace('\\', '/'), categoryRoot.Replace('\\', '/')))
+            throw new PathTraversalException(categoryRoot, targetPath);
+
         string normRoot = NormalizeWithTrailingSeparator(categoryRoot);
         string normTarget = Path.GetFullPath(targetPath);
 
-        StringComparison cmp = OperatingSystem.IsWindows()
-            ? StringComparison.OrdinalIgnoreCase
-            : StringComparison.Ordinal;
-
-        if (!normTarget.StartsWith(normRoot, cmp))
+        if (!normTarget.StartsWith(normRoot, PlatformPaths.Comparison))
             throw new PathTraversalException(categoryRoot, targetPath);
         if (normTarget.Length == normRoot.Length)
             throw new PathTraversalException(categoryRoot, targetPath); // 命中根目录本身

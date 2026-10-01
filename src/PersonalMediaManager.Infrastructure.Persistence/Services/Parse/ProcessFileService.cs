@@ -530,7 +530,7 @@ internal sealed class ProcessFileService : IProcessFileService
                 tmdb.Candidates, [rule.Title], rule.Year, scoreWeights, preferredLanguage);
             // 用户可把候选阈值 N 配到 1 以下（候选 2 个即「过多」），榜首即全部时视为无次名、间距充分
             double gap = preRanked.Count > 1 ? preRanked[0].Score - preRanked[1].Score : double.MaxValue;
-            if (preRanked[0].Score >= CrossCheckDominantScore && gap >= CrossCheckDominantGap)
+            if (TmdbCandidateScorer.CanAutoSelect(preRanked) && preRanked[0].Score >= CrossCheckDominantScore && gap >= CrossCheckDominantGap)
             {
                 tmdb = tmdb with { Candidates = preRanked.Select(r => r.Candidate).ToList() };
                 firstDecision = NextAction.UseTmdb;
@@ -582,7 +582,8 @@ internal sealed class ProcessFileService : IProcessFileService
                 TmdbSearchResult aliasTmdb = await _tmdb.SearchAsync(
                     new TmdbSearchRequest(alias, rule.MediaType, rule.Year), ct);
                 if (aliasTmdb.Candidates.Count > 0) anyCandidateSeen = true;
-                if (ParseTask.DecideAfterAiRetmdb(aliasTmdb.Candidates.Count, candidateThreshold) == NextAction.UseTmdb)
+                if (TmdbCandidateScorer.CanAutoSelect(TmdbCandidateScorer.Rank(
+                    aliasTmdb.Candidates, [alias], rule.Year, scoreWeights, preferredLanguage)))
                 {
                     tmdb = aliasTmdb;
                     firstDecision = NextAction.UseTmdb;
@@ -617,9 +618,11 @@ internal sealed class ProcessFileService : IProcessFileService
                 {
                     (int Id, string Type) winnerKey = winners[0].Key;
                     TmdbCandidate winner = tmdb!.Candidates.First(c => c.Id == winnerKey.Id && c.MediaType == winnerKey.Type);
-                    double winnerScore = TmdbCandidateScorer.Rank(
-                            [winner], [rule.Title, winners[0].Value.FirstAlias], rule.Year, scoreWeights, preferredLanguage)[0].Score;
-                    if (winnerScore >= MultiCandidateMinScore)
+                    IReadOnlyList<TmdbCandidateScore> voteRanked = TmdbCandidateScorer.Rank(
+                            tmdb.Candidates, [rule.Title, winners[0].Value.FirstAlias], rule.Year, scoreWeights, preferredLanguage);
+                    double winnerScore = voteRanked[0].Score;
+                    if (voteRanked[0].Candidate.Id == winner.Id && voteRanked[0].Candidate.MediaType == winner.MediaType
+                        && TmdbCandidateScorer.CanAutoSelect(voteRanked))
                     {
                         tmdb = tmdb with { Candidates = [winner] };
                         firstDecision = NextAction.UseTmdb;
@@ -874,7 +877,9 @@ internal sealed class ProcessFileService : IProcessFileService
                 tmdb = await _tmdb.SearchAsync(
                     new TmdbSearchRequest(aiResult.Title, aiResult.MediaType, aiResult.Year), ct);
 
-                NextAction afterAi = ParseTask.DecideAfterAiRetmdb(tmdb.Candidates.Count, candidateThreshold);
+                NextAction afterAi = TmdbCandidateScorer.CanAutoSelect(TmdbCandidateScorer.Rank(
+                    tmdb.Candidates, [aiResult.Title, rule.Title], aiResult.Year ?? rule.Year, scoreWeights, preferredLanguage))
+                    ? NextAction.UseTmdb : NextAction.SendToReview;
 
                 // 第 0 层（国漫/日漫元数据兜底）：中文 title 二次 TMDB 不中（零结果 / 多候选）→ 用 AI 给的检索别名
                 // （原名 / 日文 / 英文官方译名 / 罗马音）逐个兜底重搜。TMDB 上冷门番剧 / 国产剧的主条目常是原名而非
@@ -885,7 +890,8 @@ internal sealed class ProcessFileService : IProcessFileService
                     {
                         TmdbSearchResult aliasTmdb = await _tmdb.SearchAsync(
                             new TmdbSearchRequest(alias, aiResult.MediaType, aiResult.Year), ct);
-                        if (ParseTask.DecideAfterAiRetmdb(aliasTmdb.Candidates.Count, candidateThreshold) == NextAction.UseTmdb)
+                        if (TmdbCandidateScorer.CanAutoSelect(TmdbCandidateScorer.Rank(
+                            aliasTmdb.Candidates, [alias, aiResult.Title], aiResult.Year, scoreWeights, preferredLanguage)))
                         {
                             tmdb = aliasTmdb;
                             afterAi = NextAction.UseTmdb;
@@ -945,10 +951,8 @@ internal sealed class ProcessFileService : IProcessFileService
             tmdb = tmdb with { Candidates = ranked.Select(r => r.Candidate).ToList() };
             topScore = ranked[0].Score;
 
-            // 综合得分门槛：多候选最高分 < 0.5 视为无法可信取舍；单候选放宽到 0.35（防残缺标题模糊命中
-            // 唯一一条错误结果被直接采纳）。低于门槛 → 候选全集落库转人工审核（复用多候选审核原因与 UX）。
-            double minScore = tmdb.Candidates.Count > 1 ? MultiCandidateMinScore : SingleCandidateMinScore;
-            if (topScore.Value < minScore)
+            // 统一守护：单候选也必须有标题实证，多候选还须领先次名；缺年/热度不能代替标题。
+            if (!TmdbCandidateScorer.CanAutoSelect(ranked))
             {
                 RecordExit(media.Status, new
                 {
@@ -956,17 +960,17 @@ internal sealed class ProcessFileService : IProcessFileService
                     source = TmdbSourceLabel(),
                     candidates = ProjectCandidates(tmdb),
                     scores = ranked.Select(r => new { tmdbId = r.Candidate.Id, score = Math.Round(r.Score, 3) }).ToArray(),
-                    decision = $"候选最高综合得分 {topScore.Value:F2} < 门槛 {minScore:F2}（四维加权：标题/年份/热度/语言）→ AwaitingReview",
+                    decision = $"候选标题证据不足、综合得分不足或候选间存在歧义（最高分 {topScore.Value:F2}，标题相似度 {ranked[0].TitleEvidence:F2}）→ AwaitingReview",
                 });
                 MediaItemStatus oldScore = media.Status;
                 media.SetTmdbCandidates(SerializeReviewCandidates(tmdb));
                 media.MarkAwaitingReview(ReviewReason.TmdbMultiCandidate);
-                RecordTerminal(MediaItemStatus.AwaitingReview, new { reason = "TMDB 候选综合得分低于门槛，无法自动取舍" });
+                RecordTerminal(MediaItemStatus.AwaitingReview, new { reason = "TMDB 候选证据不足或存在歧义，无法自动取舍" });
                 await db.SaveChangesAsync(ct);
                 await NotifyAsync(media, oldScore, ct);
                 await EmitReviewCreatedAsync(media, ct);
-                _logger.LogInformation("TMDB 候选最高综合得分 {Score:F2} 低于门槛 {Min:F2} → AwaitingReview：{Path}",
-                    topScore.Value, minScore, media.SourcePath);
+                _logger.LogInformation("TMDB 候选证据不足或存在歧义（最高分 {Score:F2}）→ AwaitingReview：{Path}",
+                    topScore.Value, media.SourcePath);
                 return new ProcessFileOutcome(media.Id, ProcessOutcome.AwaitingReview);
             }
         }
@@ -1089,11 +1093,11 @@ internal sealed class ProcessFileService : IProcessFileService
                 ? crossCheckNote
                 : matchedSearchAlias is not null
                     ? (aliasFromLocal
-                        ? $"主标题搜索不中，本地备选标题「{matchedSearchAlias}」命中（未动用 AI；候选 {tmdb.Candidates.Count} ≤ N={candidateThreshold}，综合得分 {topScore:F2}）"
-                        : $"中文名二次搜索不中，AI 别名「{matchedSearchAlias}」命中（候选 {tmdb.Candidates.Count} ≤ N={candidateThreshold}，综合得分 {topScore:F2}）")
+                        ? $"主标题搜索不中，本地备选标题「{matchedSearchAlias}」命中（未动用 AI；候选 {tmdb.Candidates.Count} 个，综合得分 {topScore:F2}）"
+                        : $"中文名二次搜索不中，AI 别名「{matchedSearchAlias}」命中（候选 {tmdb.Candidates.Count} 个，综合得分 {topScore:F2}）")
                     : reusedFromCache
                         ? "复用本地剧集映射合成单候选，直接采用"
-                        : $"候选 {tmdb.Candidates.Count} ≤ N (={candidateThreshold})，按四维加权打分（标题/年份/热度/语言）取最高分 {topScore:F2}",
+                        : $"候选 {tmdb.Candidates.Count} 个，通过标题证据和歧义守护后取四维最高分 {topScore:F2}",
         });
         media.Transition(MediaItemStatus.Classifying);
         await db.SaveChangesAsync(ct);
@@ -1196,7 +1200,17 @@ internal sealed class ProcessFileService : IProcessFileService
         });
         MediaItemStatus oldCmp = media.Status;
         media.Transition(MediaItemStatus.Completed);
-        RecordTerminal(MediaItemStatus.Completed, new { target = media.TargetPath });
+        RecordTerminal(MediaItemStatus.Completed, new
+        {
+            target = media.TargetPath,
+            provenanceVersion = 1,
+            completionRoute = "AutomaticPipeline",
+            actorCategory = "System",
+            // 仅证明本次自动管线完成；触发者与历史人工介入不能由队列 Source 推断。
+            triggerCategory = "Unknown",
+            forcedAnchor = forcedMatch,
+            folderReuse = reusedFromCache,
+        });
         await db.SaveChangesAsync(ct);
         await NotifyAsync(media, oldCmp, ct);
         if (metadataPending)

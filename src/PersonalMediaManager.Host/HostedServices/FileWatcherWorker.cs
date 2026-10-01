@@ -366,7 +366,7 @@ public sealed class FileWatcherWorker : BackgroundService
         }
         lock (_gate)
         {
-            return _watchers.FirstOrDefault(w => string.Equals(w.Path, path, StringComparison.OrdinalIgnoreCase))
+            return _watchers.FirstOrDefault(w => string.Equals(w.Path, path, PlatformPaths.Comparison))
                 ?.FolderId ?? 0;
         }
     }

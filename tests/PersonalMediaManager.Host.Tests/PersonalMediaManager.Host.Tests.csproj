@@ -10,6 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../src/PersonalMediaManager.Server/PersonalMediaManager.Server.csproj" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 

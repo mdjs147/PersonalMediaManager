@@ -40,7 +40,7 @@ public sealed class TaskCancellationRegistration : IDisposable
     }
 }
 
-/// <summary>线程安全的进程内单例实现；路径比较遵循 Windows 大小写不敏感语义。</summary>
+/// <summary>线程安全的进程内单例实现；路径比较遵循当前平台语义。</summary>
 public sealed class TaskCancellationManager : ITaskCancellationManager
 {
     private sealed class State
@@ -51,7 +51,7 @@ public sealed class TaskCancellationManager : ITaskCancellationManager
     }
 
     private readonly object _gate = new();
-    private readonly Dictionary<string, State> _states = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, State> _states = new(PlatformPaths.Comparer);
 
     public TaskCancellationRegistration Register(string sourcePath, CancellationToken stoppingToken)
     {

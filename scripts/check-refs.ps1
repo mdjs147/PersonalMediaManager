@@ -51,6 +51,7 @@ $allowed = @{
         'PersonalMediaManager.Infrastructure.External',
         'PersonalMediaManager.Infrastructure.Platform'
     )
+    'PersonalMediaManager.Server'                       = @('PersonalMediaManager.Host')
     'PersonalMediaManager.Launcher'                     = @('PersonalMediaManager.Host')
 }
 

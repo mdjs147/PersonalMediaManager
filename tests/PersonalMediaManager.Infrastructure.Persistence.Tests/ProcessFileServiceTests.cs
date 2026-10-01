@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -146,6 +147,16 @@ public sealed class ProcessFileServiceTests : IDisposable
         MediaItem m = ReadOne();
         m.Status.Should().Be(MediaItemStatus.Completed);
         m.TmdbId.Should().Be(100); // ConfigureTmdb 第一个候选 id=100
+        using (PmmDbContext evidenceDb = _dbFactory.CreateDbContext())
+        {
+            string? detail = evidenceDb.ProcessSteps.Where(step => step.MediaItemId == m.Id && step.Stage == MediaItemStatus.Completed)
+                .OrderByDescending(step => step.Id).Select(step => step.Detail).First();
+            using JsonDocument evidence = JsonDocument.Parse(detail!);
+            evidence.RootElement.GetProperty("provenanceVersion").GetInt32().Should().Be(1);
+            evidence.RootElement.GetProperty("completionRoute").GetString().Should().Be("AutomaticPipeline");
+            evidence.RootElement.GetProperty("forcedAnchor").GetBoolean().Should().BeFalse();
+            evidence.RootElement.GetProperty("folderReuse").GetBoolean().Should().BeFalse();
+        }
         m.ParseSource.Should().Be(ParseSource.Rule);
         m.CategoryId.Should().Be(7);
         m.TargetPath.Should().Be("/M/Inception (2010)/Inception (2010).mkv");
@@ -290,7 +301,7 @@ public sealed class ProcessFileServiceTests : IDisposable
         // 候选用 movie 避免触发「剧集字段不全」守护——本测试只关心「>N → AI 兜底」分支
         _tmdb.SearchAsync(Arg.Any<TmdbSearchRequest>(), Arg.Any<CancellationToken>())
              .Returns(new TmdbSearchResult(Enumerable.Range(1, 10).Select(i => NewCandidate(i, "movie")).ToList(), null),
-                      new TmdbSearchResult([NewCandidate(303, "movie")], null));
+                      new TmdbSearchResult([NewCandidate(303, "movie", "AI-Title", 2011)], null));
         ConfigureAi(success: true);
         ConfigureClassify(ClassifyDecision.Matched, 5);
         ConfigureArchive(ArchiveOutcome.Completed, "/Y.mkv");
@@ -436,7 +447,7 @@ public sealed class ProcessFileServiceTests : IDisposable
         ConfigureRule(confidence: 0.9, hasSpecialChars: false,
             year: null, title: "Jujutsu Kaisen", season: null, episode: 59);
         _tmdb.SearchAsync(Arg.Any<TmdbSearchRequest>(), Arg.Any<CancellationToken>())
-            .Returns(new TmdbSearchResult([NewCandidate(95479, "tv")], null));
+            .Returns(new TmdbSearchResult([NewCandidate(95479, "tv", "Jujutsu Kaisen")], null));
 
         ProcessFileOutcome r = await Run();
 
@@ -456,7 +467,7 @@ public sealed class ProcessFileServiceTests : IDisposable
         ConfigureRule(confidence: 0.9, hasSpecialChars: false,
             year: null, title: "Some Show", season: 2, episode: null);
         _tmdb.SearchAsync(Arg.Any<TmdbSearchRequest>(), Arg.Any<CancellationToken>())
-            .Returns(new TmdbSearchResult([NewCandidate(12345, "tv")], null));
+            .Returns(new TmdbSearchResult([NewCandidate(12345, "tv", "Some Show")], null));
 
         ProcessFileOutcome r = await Run();
 
@@ -471,7 +482,7 @@ public sealed class ProcessFileServiceTests : IDisposable
         _ruleEngine.ParseAsync(Arg.Any<FileParseContext>(), Arg.Any<CancellationToken>())
             .Returns(new RuleParseResult("Jujutsu Kaisen", null, "tv", null, 59, null, 0.9, false, 1));
         _tmdb.SearchAsync(Arg.Any<TmdbSearchRequest>(), Arg.Any<CancellationToken>())
-            .Returns(new TmdbSearchResult([NewCandidate(95479, "tv")], null));
+            .Returns(new TmdbSearchResult([NewCandidate(95479, "tv", "Jujutsu Kaisen")], null));
         _tmdb.GetDetailsAsync(95479, "tv", Arg.Any<CancellationToken>())
             .Returns(new TmdbDetailsResult(95479, "tv", "Jujutsu Kaisen", "呪術廻戦", 2020, 1, null, ["JP"], "ja", null, null, "{}"));
         ConfigureClassify(ClassifyDecision.Matched, 1);
@@ -493,7 +504,7 @@ public sealed class ProcessFileServiceTests : IDisposable
         _ruleEngine.ParseAsync(Arg.Any<FileParseContext>(), Arg.Any<CancellationToken>())
             .Returns(new RuleParseResult("Multi Show", null, "tv", null, 5, null, 0.9, false, 1));
         _tmdb.SearchAsync(Arg.Any<TmdbSearchRequest>(), Arg.Any<CancellationToken>())
-            .Returns(new TmdbSearchResult([NewCandidate(55555, "tv")], null));
+            .Returns(new TmdbSearchResult([NewCandidate(55555, "tv", "Multi Show")], null));
         _tmdb.GetDetailsAsync(55555, "tv", Arg.Any<CancellationToken>())
             .Returns(new TmdbDetailsResult(55555, "tv", "Show", "Show", 2018, 4, null, ["US"], "en", null, null, "{}"));
 
@@ -1073,7 +1084,7 @@ public sealed class ProcessFileServiceTests : IDisposable
         _ruleEngine.ParseAsync(Arg.Any<FileParseContext>(), Arg.Any<CancellationToken>())
             .Returns(new RuleParseResult("Multi Show", null, "tv", null, 5, null, 0.9, false, 1));
         _tmdb.SearchAsync(Arg.Any<TmdbSearchRequest>(), Arg.Any<CancellationToken>())
-            .Returns(new TmdbSearchResult([NewCandidate(55555, "tv")], null));
+            .Returns(new TmdbSearchResult([NewCandidate(55555, "tv", "Multi Show")], null));
         _tmdb.GetDetailsAsync(55555, "tv", Arg.Any<CancellationToken>())
             .Returns(new TmdbDetailsResult(55555, "tv", "Show", "Show", 2018, 4, null, ["US"], "en", null, null, "{}"));
 
@@ -1081,6 +1092,42 @@ public sealed class ProcessFileServiceTests : IDisposable
 
         r.Outcome.Should().Be(ProcessOutcome.AwaitingReview);
         await _webhook.Received(1).EmitAsync(WebhookEvents.ReviewCreated, Arg.Any<object>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AiRematch_ExactWinnerAboveCountThreshold_Completes()
+    {
+        ConfigureRule(0.2, false);
+        ConfigureAi(true, title: "Example", year: 2024);
+        List<TmdbCandidate> candidates = Enumerable.Range(1, 10)
+            .Select(i => NewCandidate(i, "movie", "Unrelated", 1980)).ToList();
+        candidates.Add(NewCandidate(99, "movie", "Example", 2024));
+        _tmdb.SearchAsync(Arg.Any<TmdbSearchRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new TmdbSearchResult(candidates, null));
+        ConfigureClassify(ClassifyDecision.Matched, 1);
+        ConfigureArchive(ArchiveOutcome.Completed, "/M/example.mkv");
+        (await Run()).Outcome.Should().Be(ProcessOutcome.Completed);
+        ReadOne().TmdbId.Should().Be(99);
+    }
+
+    [Fact]
+    public async Task MissingYearUnrelatedSingleton_GoesToReview()
+    {
+        ConfigureRule(0.9, false, year: null, title: "AAAA");
+        _tmdb.SearchAsync(Arg.Any<TmdbSearchRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new TmdbSearchResult([NewCandidate(99, "movie", "ZZZZ", null)], null));
+        (await Run()).Outcome.Should().Be(ProcessOutcome.AwaitingReview);
+        await _archive.DidNotReceive().ArchiveAsync(Arg.Any<MediaItem>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task NetworkFailure_DoesNotCallAi()
+    {
+        ConfigureRule(0.9, false);
+        _tmdb.SearchAsync(Arg.Any<TmdbSearchRequest>(), Arg.Any<CancellationToken>())
+            .Returns<Task<TmdbSearchResult>>(_ => throw new TmdbClientException("网络故障"));
+        (await Run()).Outcome.Should().Be(ProcessOutcome.Failed);
+        await _aiOrchestrator.DidNotReceive().ExecuteAsync(Arg.Any<AiParseRequest>(), Arg.Any<long?>(), Arg.Any<CancellationToken>());
     }
 
     // ---------- 17. TMDB 候选四维择优（修复盲取 Candidates[0] + Tmdb_Setting 权重死旋钮）----------
@@ -1142,7 +1189,7 @@ public sealed class ProcessFileServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task ScoreWeights_From_TmdbSetting_Affect_Pick()
+    public async Task ScoreWeights_CannotOverrideTitleEvidenceGuard()
     {
         // 把权重改成「只看年份」：标题全中但年份远的 51 落选、标题不沾边但年份全中的 52 当选 → 证明权重真从库读
         UpdateTmdbSetting(s =>
@@ -1163,8 +1210,8 @@ public sealed class ProcessFileServiceTests : IDisposable
 
         ProcessFileOutcome r = await Run();
 
-        r.Outcome.Should().Be(ProcessOutcome.Completed);
-        ReadOne().TmdbId.Should().Be(52, "权重改为只看年份后应选年份全中的候选");
+        r.Outcome.Should().Be(ProcessOutcome.AwaitingReview);
+        ReadOne().TmdbId.Should().BeNull("权重只看年份仍不能自动采纳无标题实证候选");
     }
 
     // ---------- 18. CandidateThreshold 从 Tmdb_Setting 运行时读取（修复死旋钮 N=3 硬编码）----------
@@ -1272,10 +1319,10 @@ public sealed class ProcessFileServiceTests : IDisposable
             ], null));
         _tmdb.SearchAsync(Arg.Is<TmdbSearchRequest>(r => r.Query == "Beta"), Arg.Any<CancellationToken>())
             .Returns(new TmdbSearchResult(
-                [NewCandidate(72, "movie", "Beta", 2020), NewCandidate(81, "movie", "B1", 2019), NewCandidate(82, "movie", "B2", 2018), NewCandidate(83, "movie", "B3", 2017)], null));
+                [NewCandidate(72, "movie", "Beta", 2020), NewCandidate(81, "movie", "Beta", 2020), NewCandidate(82, "movie", "Beta", 2020), NewCandidate(83, "movie", "Beta", 2020)], null));
         _tmdb.SearchAsync(Arg.Is<TmdbSearchRequest>(r => r.Query == "Ceta"), Arg.Any<CancellationToken>())
             .Returns(new TmdbSearchResult(
-                [NewCandidate(73, "movie", "Ceta", 2020), NewCandidate(84, "movie", "C1", 2019), NewCandidate(85, "movie", "C2", 2018), NewCandidate(86, "movie", "C3", 2017)], null));
+                [NewCandidate(73, "movie", "Ceta", 2020), NewCandidate(84, "movie", "Ceta", 2020), NewCandidate(85, "movie", "Ceta", 2020), NewCandidate(86, "movie", "Ceta", 2020)], null));
         _tmdb.SearchAsync(Arg.Is<TmdbSearchRequest>(r => r.Query == "AI-Title"), Arg.Any<CancellationToken>())
             .Returns(new TmdbSearchResult([NewCandidate(99, "movie", "AI-Title", 2011)], null));
         ConfigureAi(success: true);
@@ -1878,7 +1925,7 @@ public sealed class ProcessFileServiceTests : IDisposable
         List<TmdbCandidate> list = Enumerable.Range(0, candidates)
             .Select(i => NewCandidate(100 + i, "movie")).ToList();
         _tmdb.SearchAsync(Arg.Any<TmdbSearchRequest>(), Arg.Any<CancellationToken>())
-            .Returns(new TmdbSearchResult(list, null));
+            .Returns(ci => new TmdbSearchResult(list.Select(c => c with { Title = ci.Arg<TmdbSearchRequest>().Query }).ToList(), null));
     }
 
     private void ConfigureAi(bool success, string title = "AI-Title", int year = 2011, string mediaType = "movie", string[]? aliases = null)
@@ -1940,7 +1987,7 @@ public sealed class ProcessFileServiceTests : IDisposable
 
     /// <summary>构造候选；title/year 可定制——四维择优落地后，候选标题/年份须与解析结果匹配才能过得分门槛（贴近真实 TMDB 返回）</summary>
     private static TmdbCandidate NewCandidate(int id, string type, string? title = null, int? year = 2010, double popularity = 0.5)
-        => new(id, type, title ?? $"Title-{id}", $"Original-{id}", year, popularity, "en", ["US"], null, null);
+        => new(id, type, title ?? "Sample", $"Original-{id}", year, popularity, "en", ["US"], null, null);
 
     /// <summary>IFolderSeriesCache 测试替身（语义同生产实现，避免给 Application internal 加 InternalsVisibleTo）</summary>
     private sealed class InMemoryFolderSeriesCache : IFolderSeriesCache

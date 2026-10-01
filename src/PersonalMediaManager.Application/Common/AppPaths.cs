@@ -6,7 +6,7 @@ namespace PersonalMediaManager.Application.Common;
 /// <remarks>
 /// Windows: 优先「程序目录\data\」（绿色软件：数据跟随 exe，整目录可备份/迁移/卸载）；
 ///          程序目录不可写（典型：安装到 C:\Program Files\）时回退 %LocalAppData%\PersonalMediaManager。
-/// 非 Windows: ~/.local/share/PersonalMediaManager（产品仅支持 Windows，此分支仅作兜底不构成支持承诺）
+/// macOS: ~/Library/Application Support/PersonalMediaManager；Linux: $XDG_DATA_HOME/PersonalMediaManager，未设有效绝对路径则回退 ~/.local/share。
 /// 子目录：db / logs / keys / cache/posters。Resolve() 时自动 mkdir。
 /// </remarks>
 public sealed class AppPaths
@@ -28,25 +28,22 @@ public sealed class AppPaths
     public static AppPaths Resolve()
     {
         string root = ResolveRoot();
-        Directory.CreateDirectory(root);
+        PrivateFileSystem.EnsureDirectory(root);
         TryMigrateLegacyProgramData(root); // 摘除提权后：旧版「数据贴 Program Files\exe」的 data 目录一次性迁回新根
-        AppPaths paths = new(root);
-        Directory.CreateDirectory(paths.LogDir);
-        Directory.CreateDirectory(paths.KeyRingDir);
-        Directory.CreateDirectory(paths.PostersDir);
-        Directory.CreateDirectory(paths.BackupDir);
-        return paths;
+        return ForRoot(root);
     }
 
-    /// <summary>测试可显式指定根目录（避免污染用户 AppData）</summary>
+    /// <summary>命令行与测试可显式指定独立数据根目录</summary>
     public static AppPaths ForRoot(string root)
     {
-        Directory.CreateDirectory(root);
-        AppPaths paths = new(root);
-        Directory.CreateDirectory(paths.LogDir);
-        Directory.CreateDirectory(paths.KeyRingDir);
-        Directory.CreateDirectory(paths.PostersDir);
-        Directory.CreateDirectory(paths.BackupDir);
+        ArgumentException.ThrowIfNullOrWhiteSpace(root);
+        AppPaths paths = new(Path.GetFullPath(root));
+        PrivateFileSystem.EnsureDirectory(paths.Root);
+        PrivateFileSystem.EnsureDirectory(paths.LogDir);
+        PrivateFileSystem.EnsureDirectory(paths.KeyRingDir);
+        PrivateFileSystem.EnsureDirectory(paths.CacheDir);
+        PrivateFileSystem.EnsureDirectory(paths.PostersDir);
+        PrivateFileSystem.EnsureDirectory(paths.BackupDir);
         return paths;
     }
 
@@ -65,10 +62,17 @@ public sealed class AppPaths
             return Path.Combine(localAppData, "PersonalMediaManager");
         }
 
-        // 非 Windows 兜底（产品仅支持 Windows，不构成支持承诺）
-        string xdgData = Environment.GetEnvironmentVariable("XDG_DATA_HOME")
-                         ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "share");
-        return Path.Combine(xdgData, "PersonalMediaManager");
+        return ResolveUnixRoot(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            Environment.GetEnvironmentVariable("XDG_DATA_HOME"), OperatingSystem.IsMacOS());
+    }
+
+    /// <summary>纯路径解析，忽略不符合 XDG 规范的相对或空路径</summary>
+    internal static string ResolveUnixRoot(string home, string? xdgData, bool macOS)
+    {
+        string parent = macOS ? Path.Combine(home, "Library", "Application Support")
+            : !string.IsNullOrWhiteSpace(xdgData) && Path.IsPathFullyQualified(xdgData)
+                ? xdgData : Path.Combine(home, ".local", "share");
+        return Path.Combine(parent, "PersonalMediaManager");
     }
 
     /// <summary>解析「程序目录\data\」并校验可写；exe 路径不可得或目录不可写时返 null（交调用方回退 %LocalAppData%）</summary>

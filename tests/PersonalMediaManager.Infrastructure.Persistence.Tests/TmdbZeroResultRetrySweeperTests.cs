@@ -43,6 +43,62 @@ public sealed class TmdbZeroResultRetrySweeperTests : IDisposable
         try { if (File.Exists(_tempFile)) File.Delete(_tempFile); } catch { }
     }
 
+    [Fact]
+    public async Task MissingFirstBatch_DoesNotStarveLaterExistingFile()
+    {
+        for (int i = 0; i < 55; i++)
+            SeedZeroResultItem(Path.Combine(Path.GetTempPath(), $"missing-{Guid.NewGuid():N}.mkv"),
+                aiInvolved: false, createdDaysAgo: 3, updatedHoursAgo: 48);
+        SeedZeroResultItem(_tempFile, aiInvolved: false, createdDaysAgo: 2, updatedHoursAgo: 25);
+        (await _sut.SweepAsync()).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task LaterPageEligibilityChanged_IsNotRequeued()
+    {
+        for (int i = 0; i < 49; i++)
+            SeedZeroResultItem(Path.Combine(Path.GetTempPath(), $"missing-{Guid.NewGuid():N}.mkv"), false, 3, 48);
+        SeedZeroResultItem(_tempFile, false, 3, 47);
+        string laterFile = Path.GetTempFileName();
+        try
+        {
+            long laterId = SeedZeroResultItem(laterFile, false, 2, 25);
+            _queue.EnqueueAsync(Arg.Any<PendingFileItem>(), Arg.Any<CancellationToken>()).Returns(_ =>
+            {
+                using PmmDbContext db = _dbFactory.CreateDbContext();
+                db.MediaItems.Single(m => m.Id == laterId).MarkAiInvolved();
+                db.SaveChanges();
+                return ValueTask.CompletedTask;
+            });
+            (await _sut.SweepAsync()).Should().Be(1);
+            using PmmDbContext check = _dbFactory.CreateDbContext();
+            check.MediaItems.Single(m => m.Id == laterId).Status.Should().Be(MediaItemStatus.AwaitingReview);
+        }
+        finally { File.Delete(laterFile); }
+    }
+
+    [Fact]
+    public async Task QueueFailures_StillLimitTransitionsToFifty()
+    {
+        List<string> files = [];
+        try
+        {
+            for (int i = 0; i < 51; i++)
+            {
+                string file = Path.GetTempFileName();
+                files.Add(file);
+                SeedZeroResultItem(file, false, 2, 25);
+            }
+            _queue.EnqueueAsync(Arg.Any<PendingFileItem>(), Arg.Any<CancellationToken>())
+                .Returns(_ => ValueTask.FromException(new IOException("测试队列故障")));
+            (await _sut.SweepAsync()).Should().Be(0);
+            using PmmDbContext check = _dbFactory.CreateDbContext();
+            check.MediaItems.Count(m => m.Status == MediaItemStatus.Queued).Should().Be(50);
+            check.MediaItems.Count(m => m.Status == MediaItemStatus.AwaitingReview).Should().Be(1);
+        }
+        finally { foreach (string file in files) File.Delete(file); }
+    }
+
     // ---------- 1. 到期记录被重投：AwaitingReview → Queued + 入队 ----------
     [Fact]
     public async Task Due_ZeroResult_Item_Requeued_And_Enqueued()

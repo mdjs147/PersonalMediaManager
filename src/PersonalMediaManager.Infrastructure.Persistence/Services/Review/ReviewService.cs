@@ -194,7 +194,10 @@ internal sealed class ReviewService : IReviewService
             // 电影确认：顺带清掉解析阶段残留的季 / 集字段（电影无季集语义，残留会污染展示与后续归档判断）
             merged = merged with { Season = null, Episode = null, EpisodeEnd = null };
         }
+        object evidence = BuildReviewEvidence(item, req.TmdbId, req.MediaType, req.CategoryId, merged,
+            "Confirm", req.Season is not null, effectiveSeason != req.Season);
         item.ApplyManualMatch(req.TmdbId, req.MediaType.ToLowerInvariant(), req.CategoryId, merged);
+        item.AppendStep(MediaItemStatus.AwaitingReview, DateTimeOffset.UtcNow, 0, SerializeStep(evidence));
 
         item.Transition(MediaItemStatus.Archiving);
         await db.SaveChangesAsync(ct);
@@ -268,7 +271,7 @@ internal sealed class ReviewService : IReviewService
                 : MediaItemStatus.Skipped;
             item.Transition(next);
             item.AppendStep(next, now, durMs: 0, next == MediaItemStatus.Completed
-                ? SerializeStep(new { target = arc.TargetPath, confirm = true })
+                ? SerializeStep(new { target = arc.TargetPath, confirm = true, provenanceVersion = 1, completionRoute = "Confirmed", actorCategory = "Unknown", entryPoint = "ReviewApi" })
                 : SerializeStep(new { reason = "目标已存在同名文件（确认归档冲突跳过）", confirm = true }));
             // 终态落库用 CancellationToken.None：文件已实际移动，此刻被取消打断会让内存终态与 DB 的 Archiving
             // 永久分叉（终态进不了 MarkFailed 补偿），状态写入是恢复一致性的关键动作、不应被取消
@@ -456,7 +459,9 @@ internal sealed class ReviewService : IReviewService
                 mediaType: req.MediaType,
                 season: null,
                 episode: null);
+        object evidence = BuildReviewEvidence(item, req.TmdbId, req.MediaType, item.CategoryId, rebound, "BindTmdb", false, false);
         item.RebindTmdb(req.TmdbId, req.MediaType.ToLowerInvariant(), rebound);
+        item.AppendStep(MediaItemStatus.AwaitingReview, DateTimeOffset.UtcNow, 0, SerializeStep(evidence));
         await db.SaveChangesAsync(ct);
 
         // 用户改绑 TMDB：先失效同目录 series 复用缓存（防旧 tmdbId 残留），再沉淀改绑后的新绑定（仅 TV），
@@ -657,6 +662,44 @@ internal sealed class ReviewService : IReviewService
         if (item.Status != MediaItemStatus.AwaitingReview)
             throw new BusinessException("该记录不在待确认状态");
         return item;
+    }
+
+    /// <summary>保存已应用的有限字段差异，不推断调用者身份</summary>
+    private static object BuildReviewEvidence(MediaItem item, int tmdbId, string mediaType,
+        long? categoryId, ParsedInfo after, string operation, bool seasonSupplied, bool automaticSeasonFilled)
+    {
+        ParsedInfo? before = ParsedInfo.FromJson(item.ParsedInfo);
+        bool idChanged = item.TmdbId != tmdbId;
+        bool typeChanged = !string.Equals(item.TmdbMediaType, mediaType, StringComparison.OrdinalIgnoreCase);
+        bool idReplaced = item.TmdbId is not null && idChanged;
+        bool typeReplaced = item.TmdbMediaType is "movie" or "tv" && typeChanged;
+        bool initialBinding = item.TmdbId is null;
+        bool isTv = string.Equals(mediaType, "tv", StringComparison.OrdinalIgnoreCase);
+        bool seasonChanged = isTv && seasonSupplied && before?.Season != after.Season;
+        bool episodeChanged = isTv && operation == "Confirm" && before?.Episode != after.Episode;
+        bool episodeEndChanged = isTv && operation == "Confirm" && before?.EpisodeEnd != after.EpisodeEnd;
+        // 缺字段的首次补全与替换已有值分开，电影季集清理属于系统规范化。
+        bool explicitCorrection = idReplaced || typeReplaced
+            || (seasonChanged && before?.Season is not null)
+            || (episodeChanged && before?.Episode is not null)
+            || (episodeEndChanged && before?.EpisodeEnd is not null);
+        bool automaticEpisodeCleanup = !isTv && operation == "Confirm"
+            && (before?.Season is not null || before?.Episode is not null || before?.EpisodeEnd is not null);
+        return new
+        {
+            provenanceVersion = 1, operation, actorCategory = "Unknown", entryPoint = "ReviewApi",
+            confirm = operation == "Confirm",
+            explicitCorrection, initialBinding, idReplaced, typeReplaced,
+            confirmedExistingMatch = operation == "Confirm" && !initialBinding && !idChanged && !typeChanged && !explicitCorrection,
+            metadataSupplied = (seasonChanged && before?.Season is null) || (episodeChanged && before?.Episode is null)
+                || (episodeEndChanged && before?.EpisodeEnd is null),
+            idChanged, typeChanged, seasonChanged, episodeChanged, episodeEndChanged, automaticSeasonFilled, automaticEpisodeCleanup,
+            categoryChanged = item.CategoryId != categoryId,
+            before = new { tmdbId = item.TmdbId, mediaType = item.TmdbMediaType, season = before?.Season,
+                episode = before?.Episode, episodeEnd = before?.EpisodeEnd, categoryId = item.CategoryId },
+            after = new { tmdbId, mediaType = mediaType.ToLowerInvariant(), season = after.Season,
+                episode = after.Episode, episodeEnd = after.EpisodeEnd, categoryId },
+        };
     }
 
     private static void ValidateMediaType(string mediaType)

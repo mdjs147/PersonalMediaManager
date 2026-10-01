@@ -60,9 +60,25 @@ public static class TmdbCandidateScorer
                 (wTitle * TitleScore(titles, c)
                  + wYear * YearScore(parsedYear, c.Year)
                  + wPop * PopularityScore(c.Popularity, maxPopularity)
-                 + wLang * LanguageScore(c, langPrimary, langRegion)) / total))
+                 + wLang * LanguageScore(c, langPrimary, langRegion)) / total,
+                TitleScore(titles, c)))
             .OrderByDescending(s => s.Score) // LINQ 稳定排序：同分保持服务端原始顺序
             .ToList();
+    }
+
+    public const double MinimumTitleEvidence = 0.65;
+    public const double MinimumScoreGap = 0.1;
+
+    /// <summary>统一采纳守护：标题实证、综合分和领先幅度缺一不可</summary>
+    public static bool CanAutoSelect(IReadOnlyList<TmdbCandidateScore> ranked)
+    {
+        if (ranked.Count == 0) return false;
+        TmdbCandidateScore top = ranked[0];
+        if (top.TitleEvidence < MinimumTitleEvidence || top.Score < 0.5) return false;
+        // 同一实体重复出现不制造歧义；不同条目的近似同分必须人工消歧。
+        TmdbCandidateScore? runnerUp = ranked.Skip(1).FirstOrDefault(r =>
+            r.Candidate.Id != top.Candidate.Id || r.Candidate.MediaType != top.Candidate.MediaType);
+        return runnerUp is null || top.Score - runnerUp.Score >= MinimumScoreGap;
     }
 
     /// <summary>标题维度：所有解析标题 × 候选（Title / OriginalTitle）组合的归一化相似度取最高</summary>
@@ -130,7 +146,7 @@ public static class TmdbCandidateScorer
 /// <summary>单个候选的综合打分结果</summary>
 /// <param name="Candidate">原候选</param>
 /// <param name="Score">四维加权综合得分 [0,1]</param>
-public sealed record TmdbCandidateScore(TmdbCandidate Candidate, double Score);
+public sealed record TmdbCandidateScore(TmdbCandidate Candidate, double Score, double TitleEvidence = 0);
 
 /// <summary>TMDB 候选打分四维权重（与 Tmdb_Setting.ScoreWeight* 一一对应）</summary>
 /// <remarks>权重总和由打分器内部归一化，不强制 = 1；Default 与 Tmdb_Setting 种子默认值保持一致。</remarks>

@@ -15,13 +15,19 @@
 - 说明性内容、代码注释、日志、错误/异常文案一律使用中文。
 - 文档（docx/md）中文字体优先「宋体」。
 
+## 跨平台增补（2026-10-01）
+- Windows 原有托盘与发布流程保留；Linux 使用 Server，无桌面必需。
+- macOS 默认必须有原生菜单栏（状态 / 打开 WebUI / 退出）；`--headless` 是明确的无桌面选项。
+- PR CI 增加 Ubuntu/macOS 可移植测试、Server 冒烟和原生 helper 编译；旧 Windows 验证保持。
+- Linux 验证不代表 macOS 验证；签名、公证、登录启动注册和真实桌面验收另行完成。
+
 ## 三、环境与技术栈
 - 操作系统：Windows 11
 - IDE：Visual Studio
 - 技术栈：.NET 10、Vue 3、JavaScript、SQLite、EF
 
 ## 四、目录结构约定
-- `/src` — 项目代码（7 个 .NET 项目 + Frontend `.esproj`，矩阵见 §十二）
+- `/src` — 项目代码（8 个 .NET 项目 + Frontend `.esproj`，矩阵见 §十二）
 - `/tests` — 测试项目（6 个，见 §十二）
 - `/docs` — 设计/规范/需求/开发计划文档（仅存现行有效文档）
 - `/db` — 数据库脚本目录
@@ -139,7 +145,7 @@
 ### Launcher 托盘库
 - **禁止**在 `PersonalMediaManager.Launcher` 引入跨平台 UI 框架：`Eto.Forms` / `Avalonia` / `Microsoft.WindowsAppSDK` / `Microsoft.Maui.*`。
 - 托盘锁定 **Windows 原生**：**内置 `System.Windows.Forms.NotifyIcon`**（`<UseWindowsForms>true</UseWindowsForms>` 启用，.NET SDK 自带，零外部包）。
-- **Why**：NuGet 上 `H.NotifyIcon` **没有** WinForms 变体（仅 base/WPF/WinUI/Uno/MAUI），内置 NotifyIcon 即开即用零包风险（WinForms 是 .NET 自带的 Windows 原生框架，不在禁止范围）；Launcher 仅需托盘 + 菜单 + 浏览器跳转（交互全在 WebUI），OS 原生 API 最稳、产物最小，引大型 UI 框架是把版本风险捆绑进项目；macOS 支持已彻底移除（不在路线图），`IPlatformTray` / `IPlatformAutoStart` / `IPlatformSingleInstance` 三接口保留仅为**隔离 OS API 便于单测**，非为回填。
+- **Why**：NuGet 上 `H.NotifyIcon` **没有** WinForms 变体（仅 base/WPF/WinUI/Uno/MAUI），内置 NotifyIcon 即开即用零包风险（WinForms 是 .NET 自带的 Windows 原生框架，不在禁止范围）；Launcher 仅需托盘 + 菜单 + 浏览器跳转（交互全在 WebUI），OS 原生 API 最稳、产物最小，引大型 UI 框架是把版本风险捆绑进项目；新增 Linux/macOS 支持使用独立 `Server` 入口共享 Host；macOS 菜单栏使用 Swift/AppKit 小型辅助程序，仍不引入大型跨平台 UI 框架。Windows 三个接口继续隔离 OS API。
 - **How to apply**：`Launcher.csproj` 走单 TFM `net10.0-windows`。任何「加个跨平台 UI 框架更省事」的建议都不要给。
 
 ## 九、Git 工作流与 CI/CD
@@ -249,11 +255,12 @@
 
 ## 十二、解决方案结构与项目命名
 
-### 项目矩阵（7 src + 6 tests，强制）
+### 项目矩阵（8 src + 6 tests，强制）
 
 | 项目 | 类型 | 职责 | 主要依赖 NuGet |
 |---|---|---|---|
-| `PersonalMediaManager.Launcher` | Exe（唯一可执行） | 进程入口、托盘图标、单实例守护（Win Mutex）、开机自启注册、IPC 唤起浏览器；**不写业务** | **Windows 原生**（单 TFM `net10.0-windows`）：**内置 `System.Windows.Forms.NotifyIcon`**（`<UseWindowsForms>true</UseWindowsForms>`，SDK 自带）<br>**禁止**引入 Eto.Forms / Avalonia / WindowsAppSDK / MAUI 等任何跨平台 UI 框架 |
+| `PersonalMediaManager.Launcher` | Exe（Windows） | 进程入口、托盘图标、单实例守护（Win Mutex）、开机自启注册、IPC 唤起浏览器；**不写业务** | **Windows 原生**（单 TFM `net10.0-windows`）：**内置 `System.Windows.Forms.NotifyIcon`**（`<UseWindowsForms>true</UseWindowsForms>`，SDK 自带）<br>**禁止**引入 Eto.Forms / Avalonia / WindowsAppSDK / MAUI 等任何跨平台 UI 框架 |
+| `PersonalMediaManager.Server` | Exe（net10.0） | Linux/macOS 入口、数据根独占锁、控制台生命周期；macOS 原生 AppKit 辅助程序提供菜单栏，见 `docs/跨平台运行.md` | Host / Microsoft.AspNetCore.App |
 | `PersonalMediaManager.Host` | 类库 | ASP.NET Core 宿主装配：Kestrel + REST API（Controllers）+ SignalR Hub + `IHostedService` 后台 worker（FileWatcher / TaskProcessor / WebhookOutbox / Quartz / NetworkShareMonitor）+ 中间件 + 过滤器；对外暴露 `PmmHost.CreateApp(args, paths)` 工厂 | Microsoft.AspNetCore.App / SignalR |
 | `PersonalMediaManager.Application` | 类库 | 应用服务（用例编排）+ 外部依赖契约接口（`IAiProvider` / `ITmdbClient` / `IFileMover` / `IProtectedFieldService` / `ICurrentUser`）+ Request/Response DTO + `Result<T>` + `ApiCode` 常量；**不引 EF Core / ASP.NET Core** | 仅 Microsoft.Extensions.* |
 | `PersonalMediaManager.Domain` | 类库 | **充血聚合**（`ParseTask` / `AiCallChain` / `WatchDirectory` / `MediaItem` 等）+ **贫血实体**（CRUD-shape：用户/设置/字典/Webhook/审计/TMDB 缓存）+ 值对象 + 状态枚举 + 领域异常 + 实体基类；**零外部依赖**（连 EF/ASP.NET 都不引） | 无 |
@@ -261,13 +268,13 @@
 | `PersonalMediaManager.Infrastructure.External` | 类库 | `TmdbClient` + AI Providers（Ollama / Qwen / DeepSeek / OpenAICompatible）+ Webhook 出站 HTTP 发送器；实现 Application 定义的契约 | Microsoft.Extensions.Http.Polly |
 | `PersonalMediaManager.Infrastructure.Platform` | 类库 | `FileMover` + `FileSystemWatcher` 适配 + `DataProtection` 包装 + Quartz Job + 跨平台路径解析；实现 Application 定义的契约 | Quartz / DataProtection.Extensions |
 
-### 前端工程（并入解决方案，不计入 7 个 .NET 项目矩阵）
+### 前端工程（并入解决方案，不计入 8 个 .NET 项目矩阵）
 
 | 项目 | 类型 | 职责 | SDK |
 |---|---|---|---|
 | `PersonalMediaManager.Frontend` | `.esproj`（JS 工程） | Vue 3 + Vite SPA；`npm run build:host` 产物写入 `Host/wwwroot`；VS 资源管理器可见、可 F5 起 vite dev(5173) | `Microsoft.VisualStudio.JavaScript.SDK`（参考 VS「Vue 应用」模板） |
 
-- **不计入「7 src」矩阵**：它是 JavaScript 工程而非 .NET 项目；矩阵的引用关系图与红线只约束 7 个 .NET 项目。
+- **不计入「8 src」矩阵**：它是 JavaScript 工程而非 .NET 项目；矩阵的引用关系图与红线只约束 8 个 .NET 项目。
 - **隔离根 MSBuild**：`Frontend/Directory.Build.props` + `Directory.Build.targets`（均为空壳）切断对仓库根 `Directory.Build.props/.targets` 的继承，避免 `TargetFramework=net10.0` 等 .NET 属性污染 JS 工程；前端版本号仍由 `vite.config.js` 直接读根 props 注入，不受影响。
 - **构建集成（深度集成：build/publish slnx 即出前端）**：
   - `Host._PmmBuildFrontend`（`BeforeTargets=_CalculateEmbeddedFilesManifestInputs;BeforeCompile`）显式 `<MSBuild>` 调 `.esproj` 的 Build → 跑 `npm run build:host`。**Debug/Release 均触发，但带 MSBuild 增量**（`Inputs`=前端源码 src/public/index.html/package.json/vite.config.js，排除 vite 生成的 `*.d.ts`；`Outputs`=`wwwroot/index.html`）：仅当前端源码比 wwwroot 新时才重跑 vite，否则短路跳过——**F5 启动 Launcher 即拿到最新前端，未改前端时秒过**。**为何锚到 `_CalculateEmbeddedFilesManifestInputs`**：wwwroot 要嵌入 Host 程序集（见下条），前端产物须在「嵌入清单收集 + Host 编译」之前就绪，挂成 `BeforeTargets=Build` 会晚于编译。`dotnet build *solution*` 不会自动调 `.esproj` 的 Build（只跑 restore 图），项目级 ProjectReference 又会触发，故统一显式触发 + `BuildReference=false` 防重复。前端 HMR / 源码调试可另起 vite dev(5173)，与本构建解耦。
@@ -291,7 +298,7 @@
 ### 引用关系（强制单向，违反即拒绝合并）
 
 ```
-Launcher → Host
+Launcher / Server → Host
 Host → Application + Infrastructure.{Persistence, External, Platform}
 Infrastructure.Persistence → Application + Domain
 Infrastructure.External    → Application
@@ -305,7 +312,7 @@ Domain → (无)
 - Application 引 EF Core / ASP.NET Core / Quartz / HttpClient 实现
 - 三个 Infrastructure 子项目**互引**（跨域协作必须在 Application 服务层编排）
 - Host 直接引 Domain（必须经 Application；防止 Controller 直接 new 聚合）
-- 任何项目反向引 Host / Launcher
+- 除 Launcher / Server 外的产品项目反向引 Host；任何产品项目反向引 Launcher / Server
 
 ### 内部目录纪律（用文件夹边界替代项目边界）
 
@@ -381,7 +388,7 @@ Domain → (无)
     ├─ IPlatformTray.cs             # 抽象：Show / Hide / SetMenu / OnClick / SetState / ShowBalloon / RunMessageLoop
     ├─ IPlatformAutoStart.cs        # 抽象：IsEnabled / Enable / Disable
     ├─ IPlatformSingleInstance.cs   # 抽象：TryAcquire / NotifyExistingInstance / OnSecondInstance
-    └─ Windows/                     # Windows 原生实现（产品仅支持 Windows）
+    └─ Windows/                     # Windows 原生实现（Windows 专用）
         ├─ WindowsTray.cs           # System.Windows.Forms.NotifyIcon（SDK 内置）+ 程序化绘制图标 + 主题响应
         ├─ WindowsAutoStart.cs      # HKCU\Software\Microsoft\Windows\CurrentVersion\Run 注册表
         ├─ WindowsSingleInstance.cs # Mutex + 命名管道 IPC

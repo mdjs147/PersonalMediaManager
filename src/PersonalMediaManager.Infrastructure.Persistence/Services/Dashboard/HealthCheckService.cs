@@ -280,7 +280,7 @@ internal sealed class HealthCheckService : IHealthCheckService
     /// <summary>取路径所在盘根（失败返 null）</summary>
     private static string? TryDriveRoot(string path)
     {
-        try { return Path.GetPathRoot(Path.GetFullPath(path)); }
+        try { return MountedVolumeResolver.TryResolve(path); }
         catch { return null; }
     }
 

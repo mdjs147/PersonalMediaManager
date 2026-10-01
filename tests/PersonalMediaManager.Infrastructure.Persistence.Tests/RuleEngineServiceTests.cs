@@ -32,18 +32,50 @@ public sealed class RuleEngineServiceTests : IDisposable
 
     /// <summary>测试 helper：把旧 (fileName, parentFolderName) 入参翻译为 FileParseContext 调用</summary>
     /// <remarks>
-    /// 测试用的「监控根」固定为 C:\watch（跨平台值无所谓，FileParseContext.FromFullPath 内部用
+    /// 测试用的「监控根」固定为 C:\watch（通过 FromNativeTestPath 映射分隔符，FileParseContext 内部用
     /// Path.GetRelativePath 算出 RelativeSegments，与盘符无关）。
     /// parentFolderName=null → FileNameOnly 模式，RelativeSegments=[]，等价于旧的「无父目录」。
     /// </remarks>
+    // 固定样本使用 Windows 分隔符书写；测试时映射为本机路径，避免把整条路径误当文件名。
+    private static FileParseContext FromNativeTestPath(string path, string root)
+        => FileParseContext.FromFullPath(path.Replace('\\', Path.DirectorySeparatorChar),
+            root.Replace('\\', Path.DirectorySeparatorChar));
+
     private Task<RuleParseResult> Parse(string fileName, string? parentFolderName, CancellationToken ct = default)
     {
         FileParseContext ctx = parentFolderName is null
             ? FileParseContext.FileNameOnly(fileName)
-            : FileParseContext.FromFullPath(
+            : FromNativeTestPath(
                 Path.Combine("C:\\watch", parentFolderName, fileName),
                 "C:\\watch");
         return _sut.ParseAsync(ctx, ct);
+    }
+
+    [Theory]
+    [InlineData("Spider-Man.2002.1080p.mkv", "Spider Man")]
+    [InlineData("X-Men.2000.1080p.mkv", "X Men")]
+    [InlineData("WALL-E.2008.1080p.mkv", "WALL E")]
+    [InlineData("Spider-Man.mkv", "Spider Man")]
+    public async Task Builtin_InternalHyphen_PreservesTitle(string file, string title)
+    {
+        (await Parse(file, null)).Title.Should().Be(title);
+    }
+
+    [Fact]
+    public async Task Builtin_BracketYear_IsNotEpisode()
+    {
+        RuleParseResult result = await Parse("Example [2024].1080p.mkv", null);
+        result.Year.Should().Be(2024);
+        result.Episode.Should().BeNull();
+        result.MediaType.Should().Be("movie");
+    }
+
+    [Fact]
+    public async Task Builtin_ParentRange_DoesNotExpandFileSingleEpisode()
+    {
+        RuleParseResult result = await Parse("Example.S01E03.mkv", "Example.S01E01-E12");
+        result.Episode.Should().Be(3);
+        result.EpisodeEnd.Should().BeNull();
     }
 
     // ---------- 内置规则：电影 ----------
@@ -134,7 +166,7 @@ public sealed class RuleEngineServiceTests : IDisposable
         // 复现真实日志样本：[字幕组][剧名][绝对集数][技术参数] 全方括号命名，整条路径无季号标记。
         // 内置规则的 GroupBracket 会把方括号块全部剥光 → 无有效标题（生产环境由种子规则 P45
         // 「方括号包裹剧集」捕获 title 走直查）→ 标题无效压 0.50 走 AI 兜底，不能拿原始串直查 TMDB。
-        FileParseContext ctx = FileParseContext.FromFullPath(
+        FileParseContext ctx = FromNativeTestPath(
             "F:\\迅雷下载\\[BeanSub&FZSD][Jujutsu_Kaisen][48-59][GB][1080P][MP4]\\[BeanSub&FZSD][Jujutsu_Kaisen][59][GB][1080P][x264_AAC].mp4",
             "F:\\迅雷下载");
         RuleParseResult r = await _sut.ParseAsync(ctx);
@@ -482,7 +514,7 @@ public sealed class RuleEngineServiceTests : IDisposable
         // F:\迅雷下载\国务卿女士 6季\第1季\01.mp4
         // 监控根 = F:\迅雷下载，文件名 01.mp4 只能看出第 1 集，第1季 给出季号，
         // **国务卿女士 6季** 才是剧名。当前内置规则应能从祖父目录回填 title
-        FileParseContext ctx = FileParseContext.FromFullPath(
+        FileParseContext ctx = FromNativeTestPath(
             "F:\\迅雷下载\\国务卿女士 6季\\第1季\\01.mp4",
             "F:\\迅雷下载");
         RuleParseResult r = await _sut.ParseAsync(ctx);
@@ -500,7 +532,7 @@ public sealed class RuleEngineServiceTests : IDisposable
     public async Task RealSample_PtSinglePackedDir_ExtractsAllFields()
     {
         // 父目录承载全部元信息，文件本身只剩 SxxExx 双集合并
-        FileParseContext ctx = FileParseContext.FromFullPath(
+        FileParseContext ctx = FromNativeTestPath(
             "F:\\迅雷下载\\【高清剧集网发布 www.PTHDTV.com】低智商犯罪[第08-09集][国语音轨+简繁英字幕].Born.with.Luck.S01.2026.2160p.IQ.WEB-DL.H265.DDP5.1-ColorWEB\\Born.with.Luck.S01E08-E09.mkv",
             "F:\\迅雷下载");
         RuleParseResult r = await _sut.ParseAsync(ctx);
@@ -604,7 +636,7 @@ public sealed class RuleEngineServiceTests : IDisposable
     public async Task Builtin_SingleSeason_NotStrippedAsTotalCount()
     {
         // 「第3季」是单季季号，必须交给季号提取（season=3），不能被总量清洗规则误吞为噪声
-        FileParseContext ctx = FileParseContext.FromFullPath(
+        FileParseContext ctx = FromNativeTestPath(
             "C:\\watch\\庆余年 第3季\\第05集.mkv", "C:\\watch");
         RuleParseResult r = await _sut.ParseAsync(ctx);
 
@@ -620,7 +652,7 @@ public sealed class RuleEngineServiceTests : IDisposable
     public async Task Builtin_SeasonWordDir_StandardLayout_SeasonFromDirEpisodeFromStem()
     {
         // 标准目录布局：Show Name (2020)/Season 02/07.mkv —— 季号只在「Season 02」目录段，文件名只剩集号
-        FileParseContext ctx = FileParseContext.FromFullPath(
+        FileParseContext ctx = FromNativeTestPath(
             "C:\\watch\\Show Name (2020)\\Season 02\\07.mkv", "C:\\watch");
         RuleParseResult r = await _sut.ParseAsync(ctx);
 
@@ -634,7 +666,7 @@ public sealed class RuleEngineServiceTests : IDisposable
     [Fact]
     public async Task Builtin_SeasonWordDir_DotSeparator_SeasonParsed()
     {
-        FileParseContext ctx = FileParseContext.FromFullPath(
+        FileParseContext ctx = FromNativeTestPath(
             "C:\\watch\\Season.03\\EP05.mkv", "C:\\watch");
         RuleParseResult r = await _sut.ParseAsync(ctx);
 
@@ -666,7 +698,7 @@ public sealed class RuleEngineServiceTests : IDisposable
     public async Task Builtin_CjkNoiseDirSegment_NotSelectedAsTitle()
     {
         // 「正片」是下载站常见目录层级，纯噪声不能胜出为标题；真实剧名在更外层目录
-        FileParseContext ctx = FileParseContext.FromFullPath(
+        FileParseContext ctx = FromNativeTestPath(
             "F:\\迅雷下载\\三体.2023.S01.2160p\\正片\\S01E05.mkv", "F:\\迅雷下载");
         RuleParseResult r = await _sut.ParseAsync(ctx);
 
@@ -752,7 +784,7 @@ public sealed class RuleEngineServiceTests : IDisposable
     public async Task Builtin_FractionalEpisode_PureNumericStem_WithSeasonDir_NotDirectArchive()
     {
         // 纯数字小数文件名「11.5.mkv」：stem「11.5」非纯整数，不得当作第 11 集；组合季目录后不得直通
-        FileParseContext ctx = FileParseContext.FromFullPath(
+        FileParseContext ctx = FromNativeTestPath(
             "C:\\watch\\Show Name (2020)\\Season 01\\11.5.mkv", "C:\\watch");
         RuleParseResult r = await _sut.ParseAsync(ctx);
 
@@ -766,7 +798,7 @@ public sealed class RuleEngineServiceTests : IDisposable
     {
         // 无扩展名文件「11.5」：GetFileNameWithoutExtension 会把「.5」当扩展名剥掉、stem 截成「11」，
         // 纯数字兜底不得再把它当第 11 集
-        FileParseContext ctx = FileParseContext.FromFullPath(
+        FileParseContext ctx = FromNativeTestPath(
             "C:\\watch\\Show Name (2020)\\Season 01\\11.5", "C:\\watch");
         RuleParseResult r = await _sut.ParseAsync(ctx);
 

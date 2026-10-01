@@ -76,7 +76,8 @@ public sealed class SystemService : ISystemService
 
     public async Task<ExportResult> ExportAsync(Stream output, CancellationToken ct = default)
     {
-        string tempDbCopy = Path.Combine(Path.GetTempPath(), $"pmm-export-{Guid.NewGuid():N}.db");
+        string tempDirectory = PrivateFileSystem.CreateTemporaryDirectory("pmm-export-");
+        string tempDbCopy = Path.Combine(tempDirectory, DbEntryName);
         try
         {
             // SQLite VACUUM INTO：在线快照（不锁主库，输出为干净紧凑的副本）；源库取生效路径（override 感知）
@@ -88,6 +89,7 @@ public sealed class SystemService : ISystemService
                 cmd.Parameters.AddWithValue("@target", tempDbCopy);
                 await cmd.ExecuteNonQueryAsync(ct);
             }
+            PrivateFileSystem.RestrictFile(tempDbCopy);
 
             // 写 zip：先 buffer 到内存（ZipArchive 内部用同步 Write，而 ASP.NET Core Response.Body 禁同步 IO）
             // 然后整体 CopyToAsync 到目标流。一份 pmm.db 一般 <100MB，内存压力可接受
@@ -118,14 +120,13 @@ public sealed class SystemService : ISystemService
         }
         finally
         {
-            try { if (File.Exists(tempDbCopy)) File.Delete(tempDbCopy); } catch { }
+            try { Directory.Delete(tempDirectory, recursive: true); } catch { }
         }
     }
 
     public async Task<ImportResult> ImportAsync(Stream input, CancellationToken ct = default)
     {
-        string tempExtractDir = Path.Combine(Path.GetTempPath(), $"pmm-import-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(tempExtractDir);
+        string tempExtractDir = PrivateFileSystem.CreateTemporaryDirectory("pmm-import-");
         try
         {
             // 1. 严格防 Zip Slip：枚举条目时校验解压目标在 tempExtractDir 内
@@ -134,24 +135,28 @@ public sealed class SystemService : ISystemService
                 foreach (ZipArchiveEntry entry in archive.Entries)
                 {
                     if (string.IsNullOrWhiteSpace(entry.FullName)) continue;
-                    string destination = Path.GetFullPath(Path.Combine(tempExtractDir, entry.FullName));
-                    string normalizedRoot = tempExtractDir.EndsWith(Path.DirectorySeparatorChar)
-                        ? tempExtractDir
-                        : tempExtractDir + Path.DirectorySeparatorChar;
-                    if (!destination.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase))
+                    // Unix 链接类型记录在高 16 位，Windows 重解析标记在低位；两者均不得导入。
+                    if (((entry.ExternalAttributes >> 16) & 0xF000) == 0xA000
+                        || (entry.ExternalAttributes & (int)FileAttributes.ReparsePoint) != 0)
+                        throw new BusinessException($"导入包不能包含符号链接条目：{entry.FullName}");
+
+                    // 统一 ZIP 分隔符，同时拒绝 Windows 盘符 / ADS，保证跨系统备份无法改变落点语义。
+                    string entryPath = entry.FullName.Replace('\\', '/');
+                    string destination = Path.GetFullPath(Path.Combine(tempExtractDir, entryPath));
+                    if (entryPath.Contains(':') || !PlatformPaths.IsWithinDirectory(destination, tempExtractDir))
                     {
                         throw new BusinessException($"导入包条目路径非法（Zip Slip 守卫触发）: {entry.FullName}");
                     }
 
                     // 目录条目
-                    if (entry.FullName.EndsWith('/'))
+                    if (entryPath.EndsWith('/'))
                     {
-                        Directory.CreateDirectory(destination);
+                        PrivateFileSystem.EnsureDirectory(destination);
                         continue;
                     }
 
-                    Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-                    await using FileStream fs = File.Create(destination);
+                    PrivateFileSystem.EnsureDirectory(Path.GetDirectoryName(destination)!);
+                    await using FileStream fs = PrivateFileSystem.CreateNew(destination);
                     await using Stream es = entry.Open();
                     await es.CopyToAsync(fs, ct);
                 }
@@ -172,20 +177,20 @@ public sealed class SystemService : ISystemService
             //    真正换库由 ImportStaging.ApplyPendingIfAny 在 Host 下次启动、开库之前原子完成
             string pendingPath = ImportStaging.PendingPathFor(_dbLocation.Path);
             Directory.CreateDirectory(Path.GetDirectoryName(pendingPath)!);
-            File.Copy(extractedDb, pendingPath, overwrite: true);
+            PrivateFileSystem.CopyFile(extractedDb, pendingPath, overwrite: true);
 
             // 4. 追加式合并 DataProtection 密钥环（进程内安全：DataProtection 仅读 keyring，新增文件无害）
             //    用合并而非「先清空再覆盖」：备份包可能只带当前活动密钥，清空会丢掉现库其它密钥导致解密失败
             string extractedKeysDir = Path.Combine(tempExtractDir, KeysDirPrefix.TrimEnd('/'));
             if (Directory.Exists(extractedKeysDir))
             {
-                Directory.CreateDirectory(_paths.KeyRingDir);
+                PrivateFileSystem.EnsureDirectory(_paths.KeyRingDir);
                 foreach (string file in Directory.EnumerateFiles(extractedKeysDir, "*", SearchOption.AllDirectories))
                 {
                     string relative = Path.GetRelativePath(extractedKeysDir, file);
                     string target = Path.Combine(_paths.KeyRingDir, relative);
-                    Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-                    File.Copy(file, target, overwrite: true);
+                    PrivateFileSystem.EnsureDirectory(Path.GetDirectoryName(target)!);
+                    PrivateFileSystem.CopyFile(file, target, overwrite: true);
                 }
             }
 

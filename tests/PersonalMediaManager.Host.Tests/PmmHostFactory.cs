@@ -46,7 +46,14 @@ public sealed class PmmHostFactory : WebApplicationFactory<Program>
             args: [],
             paths: Paths,
             webHostOverride: wh => wh.UseTestServer(),
-            servicesOverride: ConfigureTestServices);
+            servicesOverride: services =>
+            {
+                // 所有默认外部 HTTP 均在进程内拒绝，测试不能意外联网发送本地数据。
+                // 个别协议测试可在后续钩子显式替换为确定性的内存 handler。
+                services.ConfigureHttpClientDefaults(client =>
+                    client.ConfigurePrimaryHttpMessageHandler(() => new OfflineHttpHandler()));
+                ConfigureTestServices?.Invoke(services);
+            });
 
         // 应用 Migration 建表 + 写入种子数据（生产由 Launcher.Program 跑；测试夹具同步跑一次）
         using (IServiceScope scope = app.Services.CreateScope())
@@ -58,6 +65,12 @@ public sealed class PmmHostFactory : WebApplicationFactory<Program>
 
         app.Start();
         return app;
+    }
+
+    private sealed class OfflineHttpHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+            => Task.FromException<HttpResponseMessage>(new HttpRequestException("测试默认禁止外部 HTTP，请注册内存响应桩"));
     }
 
     protected override void Dispose(bool disposing)

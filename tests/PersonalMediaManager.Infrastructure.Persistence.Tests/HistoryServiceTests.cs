@@ -1059,6 +1059,33 @@ public sealed class HistoryServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task UndoArchive_PreservesOtherFileStemAndCase()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "pmm-undo-stem-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            string target = Path.Combine(root, "EP1.mkv");
+            string own = Path.Combine(root, "EP1.zh.srt");
+            string other = Path.Combine(root, "EP11.zh.srt");
+            string caseOther = Path.Combine(root, "ep1.zh.srt");
+            File.WriteAllText(target, "video");
+            File.WriteAllText(own, "own");
+            File.WriteAllText(other, "other");
+            bool distinctCase = !File.Exists(caseOther);
+            if (distinctCase) File.WriteAllText(caseOther, "case-other");
+            long id = SeedCompletedWithTarget("/dl/stem-source.mkv", target, archiveOp: "COPY", fileSize: 5);
+            _fileProbe.FileExists(target).Returns(true);
+            _fileProbe.FileExists("/dl/stem-source.mkv").Returns(true);
+            await _sut.UndoArchiveAsync(id);
+            File.Exists(own).Should().BeFalse();
+            File.ReadAllText(other).Should().Be("other");
+            if (distinctCase) File.ReadAllText(caseOther).Should().Be("case-other");
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task UndoArchive_Copy_DeletesArchivedCopy_Without_Moving()
     {
         // 审计链记录 operation=COPY 且源仍在 → 撤销 = 删归档副本，不反向 move

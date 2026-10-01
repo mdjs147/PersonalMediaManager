@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using PersonalMediaManager.Application.Common;
 using PersonalMediaManager.Application.Contracts;
 using PersonalMediaManager.Application.Dtos.Dashboard;
+using PersonalMediaManager.Application.Dtos.History;
 using PersonalMediaManager.Application.Services.Dashboard;
 using PersonalMediaManager.Domain.Aggregates.MediaItems;
 using PersonalMediaManager.Domain.Aggregates.WatchDirectories;
@@ -70,12 +71,22 @@ internal sealed class DashboardService : IDashboardService
 
         long uptime = Math.Max(0, (long)(DateTimeOffset.UtcNow - Process.GetCurrentProcess().StartTime.ToUniversalTime()).TotalSeconds);
 
+        var completedRows = await items.Where(m => m.Status == MediaItemStatus.Completed)
+            .Select(m => new { m.Id, m.Status, m.ParseSource }).ToListAsync(ct);
+        var evidenceSteps = await db.ProcessSteps.AsNoTracking()
+            .Where(s => db.MediaItems.Any(m => m.Id == s.MediaItemId && m.Status == MediaItemStatus.Completed))
+            .Select(s => new { s.MediaItemId, Step = new ProcessStepEntry(s.Id, s.Stage, s.StartedAt, s.DurMs, s.Detail) })
+            .ToListAsync(ct);
+        ILookup<long, ProcessStepEntry> byItem = evidenceSteps.ToLookup(s => s.MediaItemId, s => s.Step);
+        CompletionProvenanceStats provenance = CompletionProvenanceProjection.Aggregate(completedRows.Select(m =>
+            CompletionProvenanceProjection.Project(m.Status, m.ParseSource, byItem[m.Id])));
+
         return new DashboardStats(
             new DashboardTodayBucket(todayProcessed, todaySkipped, todayFailed, todayReview),
             new DashboardTotalBucket(totalProcessed, totalSkipped, totalFailed),
             new DashboardQueueBucket(queueReview, queueRunning, queuePending),
             new DashboardParseSourceBucket(psRule, psAi, psHybrid),
-            new DashboardServiceBucket(Running: true, UptimeSeconds: uptime));
+            new DashboardServiceBucket(Running: true, UptimeSeconds: uptime), provenance);
     }
 
     public async Task<DashboardTasksResponse> GetTasksAsync(int windowHours, int limit, CancellationToken ct = default)
@@ -204,7 +215,7 @@ internal sealed class DashboardService : IDashboardService
             if (string.IsNullOrEmpty(r.SourcePath)) continue;
             WatchFolder? owner = sortedByPathLen.FirstOrDefault(f =>
                 !string.IsNullOrEmpty(f.Path) &&
-                r.SourcePath.StartsWith(f.Path, StringComparison.OrdinalIgnoreCase));
+                r.SourcePath.StartsWith(f.Path, PlatformPaths.Comparison));
             if (owner is null) continue;
 
             DateTimeOffset utc = r.ArchivedAt!.Value.ToUniversalTime();

@@ -22,6 +22,39 @@ public sealed class EmptyDirectoryCleanerTests : IDisposable
         try { Directory.Delete(_root, recursive: true); } catch { /* 临时目录清理失败无碍 */ }
     }
 
+    [Fact]
+    public void CaseDistinctSibling_DoesNotCrossBoundary()
+    {
+        if (OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()) return;
+        string boundary = Dir("TV");
+        string sibling = Dir("tv", "empty");
+        _sut.CleanUpward(sibling, boundary, Ignore()).Should().BeEmpty();
+        Directory.Exists(sibling).Should().BeTrue();
+    }
+
+    [Fact]
+    public void SharedPrefix_DoesNotCrossBoundary()
+    {
+        string boundary = Dir("TV");
+        string sibling = Dir("TV-extra", "empty");
+        _sut.CleanUpward(sibling, boundary, Ignore()).Should().BeEmpty();
+        Directory.Exists(sibling).Should().BeTrue();
+    }
+
+    [Fact]
+    public void SymbolicLinkAncestor_DoesNotDeleteExternalDirectory()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        string boundary = Dir("watch-link");
+        string outside = Dir("outside", "empty");
+        string link = Path.Combine(boundary, "link");
+        Directory.CreateSymbolicLink(link, Path.GetDirectoryName(outside)!);
+        _sut.CleanUpward(Path.Combine(link, "empty"), boundary, Ignore()).Should().BeEmpty();
+        Directory.Exists(outside).Should().BeTrue();
+        _sut.CleanUpward(link, boundary, Ignore()).Should().BeEmpty();
+        Directory.Exists(link).Should().BeTrue();
+    }
+
     private static IReadOnlySet<string> Ignore(params string[] exts)
         => new HashSet<string>(exts, StringComparer.OrdinalIgnoreCase);
 

@@ -78,6 +78,30 @@ public sealed class HistoryServiceStepsTests : IDisposable
         resp.Steps.Single().Detail.Should().Be(detailJson);
     }
 
+    [Theory]
+    [InlineData(MediaItemStatus.Completed, null)]
+    [InlineData(MediaItemStatus.AwaitingReview, "ParseIncomplete")]
+    [InlineData(MediaItemStatus.Failed, "历史网络异常")]
+    public async Task GetDetail_SeparatesCurrentBlockerFromHistoricalEvidence(MediaItemStatus status, string? expected)
+    {
+        long id;
+        using (PmmDbContext db = _dbFactory.CreateDbContext())
+        {
+            MediaItem item = MediaItem.CreateFixture($"/tmp/{Guid.NewGuid():N}.mkv", "x.mkv", 100,
+                status: status, reviewReason: ReviewReason.ParseIncomplete);
+            item.RecordError("历史网络异常");
+            db.MediaItems.Add(item);
+            db.SaveChanges();
+            id = item.Id;
+        }
+        MediaItemDetailResponse result = await _sut.GetDetailAsync(id);
+        result.CurrentBlockingReason.Should().Be(expected);
+        result.HistoricalReviewReason.Should().Be(ReviewReason.ParseIncomplete);
+        result.HistoricalErrorMessage.Should().Be("历史网络异常");
+        result.ErrorMessage.Should().Be("历史网络异常");
+        if (status == MediaItemStatus.Completed) result.CompletionProvenance!.Category.Should().Be("Unknown");
+    }
+
     // ---------- helpers ----------
 
     private long SeedMediaItem()

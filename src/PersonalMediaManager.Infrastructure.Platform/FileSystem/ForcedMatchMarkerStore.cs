@@ -1,3 +1,4 @@
+using PersonalMediaManager.Application.Common;
 using Microsoft.Extensions.Logging;
 using PersonalMediaManager.Application.Contracts;
 using PersonalMediaManager.Application.Services.Parse;
@@ -96,7 +97,7 @@ internal sealed class ForcedMatchMarkerStore : IForcedMatchMarkerStore
             // 监控根未知：只看直接父目录，不继续上溯（避免逃逸到系统目录）
             if (root is null) yield break;
             // 已到监控根：到此为止（监控根自身已 yield）
-            if (string.Equals(Path.TrimEndingDirectorySeparator(dir), root, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(Path.TrimEndingDirectorySeparator(dir), root, PlatformPaths.Comparison))
                 yield break;
 
             dir = SafeGetDirectoryName(dir);

@@ -24,6 +24,32 @@ public sealed class TmdbCandidateScorerTests
         string? originalTitle = null, string? language = "en", string[]? countries = null)
         => new(id, "movie", title, originalTitle, year, popularity, language, countries ?? ["US"], null, null);
 
+    [Fact]
+    public void Selection_RejectsUnrelatedMissingYearSingleton()
+    {
+        IReadOnlyList<TmdbCandidateScore> ranked = TmdbCandidateScorer.Rank([Candidate(1, "ZZZZ", null, 1000)], ["AAAA"], null,
+            new TmdbScoreWeights(0, 1, 1, 1));
+        TmdbCandidateScorer.CanAutoSelect(ranked).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Selection_RejectsTiedIdentities()
+    {
+        IReadOnlyList<TmdbCandidateScore> ranked = TmdbCandidateScorer.Rank([Candidate(1, "Example", null), Candidate(2, "Example", null)],
+            ["Example"], null, TmdbScoreWeights.Default);
+        TmdbCandidateScorer.CanAutoSelect(ranked).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Selection_AcceptsExactWinnerAmongMany()
+    {
+        List<TmdbCandidate> candidates = Enumerable.Range(1, 10).Select(i => Candidate(i, "Unrelated", 1980)).ToList();
+        candidates.Add(Candidate(11, "Example", 2024));
+        IReadOnlyList<TmdbCandidateScore> ranked = TmdbCandidateScorer.Rank(candidates, ["Example"], 2024, TmdbScoreWeights.Default);
+        TmdbCandidateScorer.CanAutoSelect(ranked).Should().BeTrue();
+        ranked[0].Candidate.Id.Should().Be(11);
+    }
+
     // ---------- 1. 同名不同剧（重制版场景）：年份是判别器 ----------
     [Fact]
     public void SameTitle_DifferentYear_PrefersCloserYear()

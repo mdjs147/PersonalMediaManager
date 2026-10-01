@@ -33,6 +33,25 @@ public sealed class DashboardServiceTests : IDisposable
     public void Dispose() => _connection.Dispose();
 
     [Fact]
+    public async Task GetStats_ProvenanceUsesRetainedCompletionEvidence()
+    {
+        long confirmed = SeedItem(MediaItemStatus.Completed, ParseSource.Rule);
+        SeedItem(MediaItemStatus.Completed, ParseSource.Ai);
+        SeedItem(MediaItemStatus.Failed);
+        using (PmmDbContext db = _dbFactory.CreateDbContext())
+        {
+            MediaItem item = db.MediaItems.Single(m => m.Id == confirmed);
+            item.AppendStep(MediaItemStatus.Completed, DateTimeOffset.UtcNow, 0, "{\"confirm\":true}");
+            db.SaveChanges();
+        }
+        DashboardStats result = await _sut.GetStatsAsync();
+        result.CompletionProvenance!.Completed.Should().Be(2);
+        result.CompletionProvenance.Confirmed.Should().Be(1);
+        result.CompletionProvenance.Unknown.Should().Be(1);
+        result.CompletionProvenance.AutomaticPipeline.Should().Be(0);
+    }
+
+    [Fact]
     public async Task GetStats_Empty_DB_Returns_All_Zero()
     {
         DashboardStats stats = await _sut.GetStatsAsync();

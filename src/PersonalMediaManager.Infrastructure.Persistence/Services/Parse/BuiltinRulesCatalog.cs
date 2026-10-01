@@ -43,7 +43,7 @@ internal static class BuiltinRulesCatalog
 
     public const string BracketEpisodePattern =
         // 单集 [01] + 范围 [08-09] / [08~09]
-        @"\[(?<episode>\d{1,4})(?:[\-~](?<episodeEnd>\d{1,4}))?\]";
+        @"\[(?!(?:19|20)\d{2}\])(?<episode>\d{1,4})(?:[\-~](?<episodeEnd>\d{1,4}))?\]";
 
     /// <summary>压制代号-集号整串形态（DACZLNF-09 / YTYHXBYL-30 一类无标题文件名）</summary>
     /// <remarks>
@@ -139,8 +139,8 @@ internal static class BuiltinRulesCatalog
     /// <summary>方括号块剥离：同时匹配半角 [ ] 和中文全角【 】（PT 站发布组前缀常用 【高清剧集网...】）</summary>
     public const string GroupBracketPattern = @"[\[【][^\[\]【】]{1,60}[\]】]";
 
-    /// <summary>发布组尾缀剥离：'-' 后到结尾或下一个分隔符前的 ASCII 单词（如 -ColorWEB / -FRDS / -CMCT）</summary>
-    public const string ReleaseGroupSuffixPattern = @"-[A-Za-z][A-Za-z0-9_]{1,20}(?=$|[\.\s])";
+    /// <summary>发布组尾缀剥离：段尾 '-' 后的 ASCII 单词（如 -ColorWEB / -FRDS / -CMCT）</summary>
+    public const string ReleaseGroupSuffixPattern = @"-[A-Za-z][A-Za-z0-9_]{1,20}(?=$)";
 
     /// <summary>分隔符折叠：补 + 号（PT 站元信息常用 [国语音轨+简繁英字幕]）</summary>
     public const string SeparatorPattern = @"[\.\-_\+]+";
@@ -204,7 +204,7 @@ internal static class BuiltinRulesCatalog
         new(
             Key: "BracketEpisode",
             Name: "方括号集号「[01]」（含范围）",
-            Description: "纯数字方括号集号，常见于动漫字幕组、番剧整理目录；支持范围 [08-09] / [08~09] 捕获 episodeEnd。",
+            Description: "纯数字方括号集号（排除 1900-2099 年份），常见于动漫字幕组、番剧整理目录；支持范围 [08-09] / [08~09] 捕获 episodeEnd。",
             Pattern: BracketEpisodePattern,
             Order: 50,
             Samples: new[] { "[字幕组] 某番 [01][1080p].mkv", "[番名][24].mkv", "[番名][08-09].mkv" }),
@@ -284,7 +284,7 @@ internal static class BuiltinRulesCatalog
         new(
             Key: "ReleaseGroupSuffix",
             Name: "发布组尾缀「-Group」剥离",
-            Description: "剥离文件名 / 目录名末尾的「-发布组名」（ASCII 字母数字，长度 ≤ 20），如 -ColorWEB / -FRDS / -CMCT / -MeM。仅匹配末尾或紧跟分隔符的位置，避免误吞中间的 -。",
+            Description: "剥离文件名 / 目录名末尾的「-发布组名」（ASCII 字母数字，长度 ≤ 20），如 -ColorWEB / -FRDS / -CMCT / -MeM。仅匹配末尾，且执行时要求前方存在技术元数据，避免误吞标题内的 -。",
             Pattern: ReleaseGroupSuffixPattern,
             Order: 85,
             Samples: new[] { "Born.with.Luck.S01.WEB-DL-ColorWEB", "Show.S01.1080p-FRDS.mkv" }),

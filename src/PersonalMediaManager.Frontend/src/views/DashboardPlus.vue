@@ -201,7 +201,7 @@ const tiles = computed(() => {
 // 服务运行状态（stats.service：running 恒 true + uptimeSeconds）
 const service = computed(() => stats.value?.service ?? { running: false, uptimeSeconds: null });
 
-// 累计概览（stats.total，全历史口径）：成功率分母 = 完成 + 失败，跳过不计入成败
+// 累计概览（stats.total，保留记录口径）：完成占比分母 = 完成 + 失败，跳过不计入成败
 const totals = computed(() => {
   const t = stats.value?.total ?? {};
   const processed = t.processed ?? 0;
@@ -225,7 +225,7 @@ const parseSource = computed(() => {
     segs: [
       { key: 'rule', label: '规则引擎', value: rule, pct: pct(rule), color: 'var(--success)' },
       { key: 'ai', label: 'AI 解析', value: ai, pct: pct(ai), color: 'var(--accent)' },
-      { key: 'hybrid', label: '规则 + AI 混合', value: hybrid, pct: pct(hybrid), color: 'var(--info)' },
+      { key: 'hybrid', label: '混合 / 文件夹复用', value: hybrid, pct: pct(hybrid), color: 'var(--info)' },
     ],
   };
 });
@@ -318,6 +318,20 @@ onMounted(async () => {
       </div>
     </div>
 
+    <section class="card" v-if="stats?.completionProvenance">
+      <header class="card-head row-head"><h3 class="h3">最终完成路线</h3><span class="muted small">当前保留的已完成记录</span></header>
+      <div class="card-body">
+        <div class="totals-grid">
+          <div class="total-cell"><div class="total-val tabular">{{ stats.completionProvenance.confirmed }}</div><div class="total-label">审核确认完成</div></div>
+          <div class="total-cell"><div class="total-val tabular">{{ stats.completionProvenance.manualArchive }}</div><div class="total-label">手动归档完成</div></div>
+          <div class="total-cell"><div class="total-val tabular">{{ stats.completionProvenance.automaticPipeline }}</div><div class="total-label">自动管线完成（有证据）</div></div>
+          <div class="total-cell"><div class="total-val tabular">{{ stats.completionProvenance.unknown }}</div><div class="total-label">来源未知 / 证据不足</div></div>
+        </div>
+        <p class="muted small">四类互斥，共 {{ stats.completionProvenance.completed }} 条。完成不代表匹配正确；自动管线仅表示最后完成路线，不代表全程无人干预。审核确认也不代表改过 TMDB ID。</p>
+        <p class="muted small">保留历史中的重叠标记：曾待审 {{ stats.completionProvenance.everReviewed }} · 曾确认 {{ stats.completionProvenance.everConfirmed }} · 明确改绑或季集变更 {{ stats.completionProvenance.explicitCorrection }} · 强制锚定 {{ stats.completionProvenance.forcedAnchor }} · 文件夹复用 {{ stats.completionProvenance.folderReuse }} · 自动重试 {{ stats.completionProvenance.automaticRetry }}。无标记不证明无干预，文件夹复用的上游来源可能未知。</p>
+      </div>
+    </section>
+
     <!-- 累计概览 + 解析来源 -->
     <div class="row-2">
       <section class="card">
@@ -333,7 +347,7 @@ onMounted(async () => {
             </div>
             <div class="total-cell">
               <div class="total-val font-display tabular" style="color: var(--success)">{{ totals.successRate }}%</div>
-              <div class="total-label">成功率</div>
+              <div class="total-label">完成占比（完成 / 完成+失败）</div>
             </div>
             <div class="total-cell">
               <div class="total-val font-display tabular" style="color: var(--warning)">{{ totals.skipped.toLocaleString() }}</div>

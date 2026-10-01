@@ -499,6 +499,7 @@ internal sealed class TmdbClient : ITmdbClient
 
         for (int attempt = 0; attempt <= MaxRetries; attempt++)
         {
+            ct.ThrowIfCancellationRequested();
             await _rateLimiter.ConsumeAsync(ct);
 
             using HttpRequestMessage req = new(method, url);
@@ -509,14 +510,25 @@ internal sealed class TmdbClient : ITmdbClient
             HttpResponseMessage resp;
             try
             {
-                resp = await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+                resp = await client.SendAsync(req, HttpCompletionOption.ResponseContentRead, ct);
             }
             catch (HttpRequestException ex)
             {
+                ct.ThrowIfCancellationRequested();
+                if (attempt < MaxRetries)
+                {
+                    await _delayAsync(TimeSpan.FromSeconds(Math.Pow(2, attempt)), ct);
+                    continue;
+                }
                 throw new TmdbClientException($"TMDB 请求 HTTP 异常：{ex.Message}", inner: ex);
             }
-            catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
+            catch (OperationCanceledException ex) when (!ct.IsCancellationRequested)
             {
+                if (attempt < MaxRetries)
+                {
+                    await _delayAsync(TimeSpan.FromSeconds(Math.Pow(2, attempt)), ct);
+                    continue;
+                }
                 throw new TmdbClientException("TMDB 请求超时", inner: ex);
             }
 
@@ -538,6 +550,18 @@ internal sealed class TmdbClient : ITmdbClient
                         (int)HttpStatusCode.TooManyRequests);
                 }
                 _logger.LogWarning("TMDB 429，第 {Attempt} 次退避 {Delay}", attempt + 1, delay);
+                await _delayAsync(delay, ct);
+                continue;
+            }
+
+            // 仅瞬态服务端故障重试，鉴权/参数等 4xx 原样失败；与 429 共用总尝试预算。
+            if ((int)resp.StatusCode >= 500 && (int)resp.StatusCode <= 599 && attempt < MaxRetries)
+            {
+                TimeSpan delay = ParseRetryAfter(resp.Headers.RetryAfter) ?? TimeSpan.FromSeconds(Math.Pow(2, attempt));
+                int status = (int)resp.StatusCode;
+                resp.Dispose();
+                if (delay > TimeSpan.FromSeconds(MaxRetryAfterSeconds))
+                    throw new TmdbClientException($"TMDB {status} 恢复等待过长，稍后重试", status);
                 await _delayAsync(delay, ct);
                 continue;
             }

@@ -52,7 +52,7 @@
        .esproj 的 Build（只跑 restore 图），而项目级又会触发，两种入口行为不一致；统一改由下方
        _PmmBuildFrontend 显式 <MSBuild> 触发，避免项目级重复构建。 -->
   <ItemGroup>
-    <ProjectReference Include="..\PersonalMediaManager.Frontend\PersonalMediaManager.Frontend.esproj">
+    <ProjectReference Include="..\PersonalMediaManager.Frontend\PersonalMediaManager.Frontend.esproj" Condition="'$(OS)' == 'Windows_NT'">
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
       <SkipGetTargetFrameworkProperties>true</SkipGetTargetFrameworkProperties>
       <Private>false</Private>
@@ -91,7 +91,12 @@
     <Message Text="[PMM] 前端源码有变更，重建 wwwroot（npm run build:host）..." Importance="high" />
     <MSBuild Projects="..\PersonalMediaManager.Frontend\PersonalMediaManager.Frontend.esproj"
              Targets="Build"
+             Condition="'$(OS)' == 'Windows_NT'"
              Properties="Configuration=$(Configuration)" />
+    <!-- Unix 直接调用同一 npm 构建，避免 VS JS SDK 的 Windows 中间目录分隔符。 -->
+    <Exec Condition="'$(OS)' != 'Windows_NT'"
+          WorkingDirectory="$(MSBuildThisFileDirectory)../PersonalMediaManager.Frontend"
+          Command="npm run build:host" />
   </Target>
 
   <!--
