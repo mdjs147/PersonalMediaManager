@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
 using PersonalMediaManager.Application.Common;
 using PersonalMediaManager.Application.Contracts;
@@ -207,15 +208,23 @@ public sealed class NetworkShareMonitorWorkerTests : IDisposable
     [Fact]
     public async Task StartStop_With_Period_Smoke()
     {
-        // 用极小 period 触发一次 timer tick，验证 ExecuteAsync + StopAsync 串联正常
+        // 等待真实落库信号，验证启动扫描、周期扫描与停止串联，避免固定 sleep 的调度竞态。
         SeedFolder(_scratchRoot, enabled: true, isNetworkShare: true);
         _clock.Set(DateTimeOffset.UtcNow);
 
-        NetworkShareMonitorWorker sut = new(_dbFactory, _clock, NullLogger<NetworkShareMonitorWorker>.Instance, period: TimeSpan.FromMilliseconds(80));
+        SweepCompletionInterceptor completed = new();
+        TestDbContextFactory factory = new(_connection, completed);
+        using NetworkShareMonitorWorker sut = new(factory, _clock, NullLogger<NetworkShareMonitorWorker>.Instance, period: TimeSpan.FromMilliseconds(80));
 
         await sut.StartAsync(CancellationToken.None);
-        await Task.Delay(250); // 让 timer 至少 tick 一次
-        await sut.StopAsync(CancellationToken.None);
+        try
+        {
+            await completed.SecondSave.Task.WaitAsync(TimeSpan.FromSeconds(15));
+        }
+        finally
+        {
+            await sut.StopAsync(CancellationToken.None);
+        }
 
         WatchFolder f = ReadFolderByPath(_scratchRoot);
         f.LastReachableAt.Should().NotBeNull("启动循环至少应跑过一次 sweep");
@@ -327,12 +336,28 @@ public sealed class NetworkShareMonitorWorkerTests : IDisposable
     private sealed class TestDbContextFactory : IDbContextFactory<PmmDbContext>
     {
         private readonly SqliteConnection _connection;
-        public TestDbContextFactory(SqliteConnection c) { _connection = c; }
+        private readonly IInterceptor[] _interceptors;
+        public TestDbContextFactory(SqliteConnection c, params IInterceptor[] interceptors)
+        { _connection = c; _interceptors = interceptors; }
         public PmmDbContext CreateDbContext()
         {
             DbContextOptionsBuilder<PmmDbContext> opts = new();
-            opts.UseSqlite(_connection);
+            opts.UseSqlite(_connection).AddInterceptors(_interceptors);
             return new PmmDbContext(opts.Options);
+        }
+    }
+
+    /// <summary>仅在数据库异步保存成功后通知，第二次保存证明周期循环已运行</summary>
+    private sealed class SweepCompletionInterceptor : SaveChangesInterceptor
+    {
+        private int _saves;
+        public TaskCompletionSource SecondSave { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override ValueTask<int> SavedChangesAsync(SaveChangesCompletedEventData eventData,
+            int result, CancellationToken cancellationToken = default)
+        {
+            if (Interlocked.Increment(ref _saves) >= 2) SecondSave.TrySetResult();
+            return ValueTask.FromResult(result);
         }
     }
 
