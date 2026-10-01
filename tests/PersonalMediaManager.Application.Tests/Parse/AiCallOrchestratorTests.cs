@@ -98,9 +98,13 @@ public sealed class AiCallOrchestratorTests
         FakeProvider backup = new(AiProviderType.Anthropic) { NextResults = [OkResult()] };
         AiCallOrchestrator sut = NewSut([primary, backup],
             [Resolution(1, AiProviderType.Ollama, true), Resolution(2, AiProviderType.Anthropic, false)], Substitute.For<IAuditAiCallWriter>());
-        using CancellationTokenSource cts = new(TimeSpan.FromMilliseconds(100));
-        await ((Func<Task>)(() => sut.ExecuteAsync(SampleRequest(), null, cts.Token)))
-            .Should().ThrowAsync<OperationCanceledException>();
+        using CancellationTokenSource cts = new();
+        // 桩调用同步完成；拿到未完成任务时已进入重试等待，避免两个定时器在 CI 上竞速。
+        Task<AiCallOutcome> pending = sut.ExecuteAsync(SampleRequest(), null, cts.Token);
+        primary.CallCount.Should().Be(1);
+        pending.IsCompleted.Should().BeFalse("取消必须发生在重试等待中");
+        cts.Cancel();
+        await ((Func<Task>)(() => pending)).Should().ThrowAsync<OperationCanceledException>();
         primary.CallCount.Should().Be(1);
         backup.CallCount.Should().Be(0);
     }
