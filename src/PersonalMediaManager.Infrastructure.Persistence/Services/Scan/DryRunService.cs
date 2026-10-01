@@ -161,6 +161,11 @@ internal sealed class DryRunService : IDryRunService
         int? season = rule.Season;
         int? episode = rule.Episode;
 
+        if (isTv && MediaExtraClip.HasMarker(fileName, context.DirectParentFolderName))
+            return Build(normalized, fileName, rule, DryRunOutcome.WouldReview,
+                "片头、片尾或宣传短片标记需人工确认映射，不能按正片编号自动归档",
+                tmdbQueried: true, candidates, picked, previewRel: null, previewNote: "附加短片需人工映射");
+
         if (year is null)
         {
             return Build(normalized, fileName, rule, DryRunOutcome.WouldReview,

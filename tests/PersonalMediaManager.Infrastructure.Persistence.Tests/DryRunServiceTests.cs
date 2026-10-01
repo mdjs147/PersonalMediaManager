@@ -217,6 +217,20 @@ public sealed class DryRunServiceTests
         result.Candidates.Should().HaveCount(2);
     }
 
+    [Theory]
+    [InlineData("Example.2024.S01E18.[NCOP].mkv")]
+    [InlineData("Example.2024.S01E18 NCOP EP18.mkv")]
+    [InlineData("Example.2024.S01E18【NCOP】.mkv")]
+    [InlineData("Example.2024.S01E18.[CM].mkv")]
+    public async Task ExtrasWithCompleteFieldsPreviewReview(string file)
+    {
+        DryRunService sut = Sut(Rule("Example", "tv", 2024, 0.9, 1, 18), Cand(1001, "tv", "Example", 2024));
+        DryRunPreview result = await sut.PreviewAsync(file);
+        result.Outcome.Should().Be(DryRunOutcome.WouldReview);
+        result.PreviewRelativePath.Should().BeNull();
+        result.PreviewNote.Should().Contain("附加短片");
+    }
+
     [Fact]
     public async Task RuleConflict_ReviewsBeforeAnyTmdbRequest()
     {

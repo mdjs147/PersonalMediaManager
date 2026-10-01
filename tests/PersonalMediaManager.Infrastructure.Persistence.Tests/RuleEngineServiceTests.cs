@@ -52,6 +52,119 @@ public sealed class RuleEngineServiceTests : IDisposable
     }
 
     [Theory]
+    [InlineData("35.1080p.HD国语中字无水印.mkv", "Example Programme S01E30-40")]
+    [InlineData("35.2160p.HD国语中字无水印[www.example.com].mkv", "Example Programme S01-35-37.2160p")]
+    public async Task NumericTechnicalFileUsesInformativeParentIdentity(string file, string parent)
+    {
+        RuleParseResult result = await Parse(file, parent);
+        result.Title.Should().Be("Example Programme");
+        result.HasIdentityEvidence.Should().BeTrue();
+        result.Season.Should().Be(1);
+        result.Episode.Should().Be(35);
+        result.EpisodeEnd.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("Downloads")]
+    [InlineData("Movies")]
+    public async Task NumericTechnicalFileWithoutIdentityCannotGainConfidenceFromEpisode(string parent)
+    {
+        RuleParseResult result = await Parse("35.1080p.HD国语中字无水印.mkv", parent);
+        result.HasIdentityEvidence.Should().BeFalse();
+        result.Confidence.Should().BeLessThan(0.5);
+        result.Episode.Should().Be(35);
+    }
+
+    [Fact]
+    public async Task UserTechnicalTitleKeepsEvidenceButPrioritizesMeaningfulParentAlias()
+    {
+        SeedRule(new ParseRule { Name = "synthetic", Enabled = true, Priority = 1, Scope = ParseScope.FileName,
+            Pattern = @"^(?<episode>35)\.1080p\.(?<title>HD国语中字无水印)", DefaultType = "tv", ConfidenceBonus = 1 });
+        RuleParseResult result = await Parse("35.1080p.HD国语中字无水印.mkv", "Example Programme S01E30-40");
+        result.Title.Should().Be("HD国语中字无水印");
+        result.HasIdentityEvidence.Should().BeFalse();
+        result.Confidence.Should().BeLessThan(0.5);
+        result.AlternativeTitles.Should().Contain("Example Programme");
+    }
+
+    [Theory]
+    [InlineData("35 Days in HD")]
+    [InlineData("无水印之城")]
+    [InlineData("国语中字的秘密")]
+    [InlineData("HD Chronicles")]
+    public async Task LegitimateTitleContainingTechnicalSubstringsRetainsIdentity(string title)
+    {
+        RuleParseResult result = await Parse(title + ".S01E03.mkv", "Example Parent");
+        result.Title.Should().Be(title);
+        result.HasIdentityEvidence.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("Example.1920x1080.mkv", null)]
+    [InlineData("Example.1920×1080.mkv", null)]
+    [InlineData("Example.1080x1920.mkv", null)]
+    [InlineData("Example.1920 X 1080.mkv", null)]
+    [InlineData("Example.1920.1920x1080.mkv", 1920)]
+    [InlineData("Example.2024.1920×1080.mkv", 2024)]
+    public async Task Builtin_DimensionsDoNotProvideYear(string file, int? year)
+    {
+        (await Parse(file, null)).Year.Should().Be(year);
+    }
+
+    [Theory]
+    [InlineData("Example 1920x1080.mkv", null)]
+    [InlineData("Example 1920×1080.mkv", null)]
+    [InlineData("Example 1920.mkv", 1920)]
+    public async Task UserRule_YearCaptureRequiresNonDimensionEvidence(string file, int? year)
+    {
+        SeedRule(new ParseRule { Name = "synthetic", Enabled = true, Priority = 1,
+            Scope = ParseScope.FileName, Pattern = @"^(?<title>Example) (?<year>\d{4})" });
+        (await Parse(file, null)).Year.Should().Be(year);
+    }
+
+    [Theory]
+    [InlineData("33.mkv", 33)]
+    [InlineData("33.1080p.HD国语中字无水印.mkv", 33)]
+    [InlineData("unknown.mkv", null)]
+    [InlineData("33.5.1080p.mkv", null)]
+    public async Task Builtin_ParentPackRangeCannotReplaceNumericFile(string file, int? episode)
+    {
+        RuleParseResult result = await Parse(file, "Example Show s01E30-33");
+        result.Season.Should().Be(1);
+        result.Episode.Should().Be(episode);
+        result.EpisodeEnd.Should().BeNull();
+        if (file.StartsWith("33.1080p", StringComparison.Ordinal))
+            TmdbEpisodeCatalogueGuard.RequiresValidation(result).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("33.1080p.S01E30.mkv", 30, null)]
+    [InlineData("33.1080p.S01E30-E31.mkv", 30, 31)]
+    [InlineData("33.1080p.S01E30.5.mkv", null, null)]
+    public async Task Builtin_NumericResolutionPrefixDoesNotOverrideExplicitEpisode(string file, int? episode, int? end)
+    {
+        RuleParseResult result = await Parse(file, "Example Show s01E30-33");
+        result.Episode.Should().Be(episode);
+        result.EpisodeEnd.Should().Be(end);
+    }
+
+    [Theory]
+    [InlineData("Example [X265_Main10p_Flac].mkv")]
+    [InlineData("Example [x264_AAC].mkv")]
+    public async Task Builtin_CodecIsNotRomanSeason(string file)
+    {
+        (await Parse(file, null)).Season.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Builtin_HashOnlyTitleDoesNotAssertIdentity()
+    {
+        RuleParseResult result = await Parse("(C7EE9693).mkv", null);
+        result.HasIdentityEvidence.Should().BeFalse();
+        result.Confidence.Should().BeLessThan(0.5);
+    }
+
+    [Theory]
     [InlineData("Spider-Man.2002.1080p.mkv", "Spider Man")]
     [InlineData("X-Men.2000.1080p.mkv", "X Men")]
     [InlineData("WALL-E.2008.1080p.mkv", "WALL E")]

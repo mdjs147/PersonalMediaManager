@@ -254,8 +254,30 @@ public sealed class AiTaskContractTests
     public void KnownYearCannotBeOverwritten()
     {
         AiParseResult result = AiPromptHelpers.ParseTaskContent("""{"title":"Example","type":"movie","year":1999,"confidence":1}""",
-            new("Example.mkv", RuleHintYear: 2024, Context: new()));
+            new("Example.2024.mkv", RuleHintYear: 2024, Context: new()));
         result.Year.Should().Be(2024);
+    }
+
+    [Theory]
+    [InlineData("Example.1920x1080.mkv", null)]
+    [InlineData("Example.1920×1080.mkv", null)]
+    [InlineData("Example.1080x1920.mkv", null)]
+    [InlineData("Example.mkv", null)]
+    [InlineData("Example.1920.1920x1080.mkv", 1920)]
+    public void RuleYearHintRequiresIndependentSource(string file, int? expected)
+    {
+        AiParseResult result = AiParseResultGuard.Validate(new("Example", null, "movie", null, null, null, 1),
+            new(file, RuleHintYear: 1920, Context: new()));
+        result.Year.Should().Be(expected);
+    }
+
+    [Fact]
+    public void LockedCatalogueYearRemainsAuthoritative()
+    {
+        AiParseResult result = AiParseResultGuard.Validate(new("Example", null, "movie", null, null, null, 1),
+            new("Example.1920x1080.mkv", Context: new(TaskType: AiParseTaskType.FillMissingFields,
+                LockedBinding: new(1001, "movie", "Example", 1920))));
+        result.Year.Should().Be(1920);
     }
 
     [Fact]

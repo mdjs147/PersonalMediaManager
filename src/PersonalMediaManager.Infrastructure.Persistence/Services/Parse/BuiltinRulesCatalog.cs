@@ -84,7 +84,7 @@ internal static class BuiltinRulesCatalog
     /// 罗马数字 → int 由 RuleEngineService.ParseRomanSeason 转换。
     /// </remarks>
     public const string SeasonRomanPattern =
-        @"(?<![A-Za-z0-9])(?<roman>VIII|VII|III|VI|IV|IX|II|V|X)(?=[\s\.\-_]*(?:$|\[|\d))";
+        @"(?<![A-Za-z0-9])(?![Xx](?:264|265)(?![0-9]))(?<roman>VIII|VII|III|VI|IV|IX|II|V|X)(?=[\s\.\-_]*(?:$|\[|\d))";
 
     /// <summary>季的篇章标题（中文「XXX篇」，如「锻刀村篇 / 柱训练篇 / 游郭篇 / 无限列车篇」），以篇章名标识季的番剧用</summary>
     /// <remarks>

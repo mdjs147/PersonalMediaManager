@@ -62,10 +62,13 @@ public static class AiParseResultGuard
         if (result.MediaType == "movie") { season = null; episode = null; end = null; }
         if (locked is null)
         {
-            if (request.RuleHintYear is int knownYear) result = result with { Year = knownYear };
-            else if (result.Year is int year && !new[] { request.FileName, request.ParentFolderName ?? "" }.Concat(request.RelativeSegments ?? [])
-                .Any(text => Regex.IsMatch(text, $@"(?<![\dA-Za-z]){year}(?![\dA-Za-z])")))
+            string[] yearSources = [request.FileName, request.ParentFolderName ?? "", .. request.RelativeSegments ?? []];
+            int? knownYear = request.RuleHintYear is int hint && MediaYearEvidence.ContainsYear(yearSources, hint) ? hint : null;
+            if (knownYear.HasValue) result = result with { Year = knownYear };
+            else if (result.Year is int year && !MediaYearEvidence.ContainsYear(yearSources, year))
             { result = result with { Year = null }; rejected.Add("year"); reasons.Add("UnsupportedField"); }
+            if (request.RuleHintYear.HasValue && !knownYear.HasValue)
+            { rejected.Add("year"); reasons.Add("UnsupportedRuleYear"); }
         }
         if (result.Abstained) reasons.Add("UnknownEvidence");
         return result with { Season = season, Episode = episode, EpisodeEnd = end,

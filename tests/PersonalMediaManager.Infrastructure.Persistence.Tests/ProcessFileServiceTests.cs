@@ -2116,6 +2116,212 @@ public sealed class ProcessFileServiceTests : IDisposable
         return m.Id;
     }
 
+    [Fact]
+    public async Task DimensionYearIsNotSentToAiOrRestoredForRematch()
+    {
+        ConfigureRule(0.3, false, year: 1920, title: "Example");
+        _aiOrchestrator.ExecuteAsync(Arg.Any<AiParseRequest>(), Arg.Any<long?>(), Arg.Any<CancellationToken>())
+            .Returns(new AiCallOutcome(true, new AiParseResult("Example", null, "movie", null, null, null, 0.9), 1L, 1, null));
+        _tmdb.SearchAsync(Arg.Any<TmdbSearchRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new TmdbSearchResult([NewCandidate(1001, "movie", "Example", 2024)], null));
+        ConfigureClassify(ClassifyDecision.Matched, 3);
+        ConfigureArchive(ArchiveOutcome.Completed, "/Movies/Example.mkv");
+        string file = Path.Combine(Path.GetTempPath(), "Example.1920×1080.mkv");
+        (await NewSut().ProcessAsync(new PendingFileItem(file, 0, PendingFileSource.Manual), CancellationToken.None))
+            .Outcome.Should().Be(ProcessOutcome.Completed);
+        await _aiOrchestrator.Received(1).ExecuteAsync(Arg.Is<AiParseRequest>(q => q.RuleHintYear == null),
+            Arg.Any<long?>(), Arg.Any<CancellationToken>());
+        await _tmdb.Received(1).SearchAsync(Arg.Is<TmdbSearchRequest>(q => q.Year == null), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task FolderCacheUsesAdoptedCandidateTitleAfterAliasSearch()
+    {
+        string watchRoot = Path.Combine(Path.GetTempPath(), $"pmm-watch-{Guid.NewGuid():N}");
+        long watchId = SeedWatchFolder(watchRoot);
+        string folder = Path.Combine(watchRoot, "Example Programme");
+        ConfigureRule(0.9, false, year: null, title: "BluRay", season: 1, episode: 1, mediaType: "tv",
+            alternativeTitles: ["Example Programme"]);
+        _tmdb.SearchAsync(Arg.Any<TmdbSearchRequest>(), Arg.Any<CancellationToken>())
+            .Returns(ci => new TmdbSearchResult(ci.Arg<TmdbSearchRequest>().Query == "Example Programme"
+                ? [NewCandidate(1001, "tv", "Example Programme", 2024)] : [], null));
+        ConfigureClassify(ClassifyDecision.Matched, 3);
+        ConfigureArchive(ArchiveOutcome.Completed, "/Tv/Example/S01E01.mkv");
+        (await NewSut().ProcessAsync(new PendingFileItem(Path.Combine(folder, "Example.S01E01.mkv"),
+            watchId, PendingFileSource.Watcher), CancellationToken.None)).Outcome.Should().Be(ProcessOutcome.Completed);
+        _folderCache.TryGet(folder).Should().BeEquivalentTo(new FolderSeriesEntry(1001, "tv", "Example Programme", 2024, 0.9, ["Original-1001"]));
+    }
+
+    [Theory]
+    [InlineData(true, "BluRay")]
+    [InlineData(false, "BluRay")]
+    [InlineData(false, "1920x1080 BluRay")]
+    [InlineData(false, "UHD 1080i DDP")]
+    public async Task ColdFolderCachePrefersLocalMetadataAndSanitizesAbsentMetadata(bool hasMetadata, string technicalTitle)
+    {
+        string watchRoot = Path.Combine(Path.GetTempPath(), $"pmm-watch-{Guid.NewGuid():N}");
+        long watchId = SeedWatchFolder(watchRoot);
+        string folder = Path.Combine(watchRoot, "Example Programme");
+        ConfigureRule(0.9, false, year: null, title: technicalTitle, season: 1, episode: 1, mediaType: "tv",
+            alternativeTitles: ["Example Programme"]);
+        _tmdb.SearchAsync(Arg.Any<TmdbSearchRequest>(), Arg.Any<CancellationToken>())
+            .Returns(ci => new TmdbSearchResult(ci.Arg<TmdbSearchRequest>().Query == "Example Programme"
+                ? [NewCandidate(1001, "tv", "Example Programme", 2024)] : [], null));
+        ConfigureClassify(ClassifyDecision.Matched, 3);
+        ConfigureArchive(ArchiveOutcome.Completed, "/Tv/Example/S01E01.mkv");
+        string first = Path.Combine(folder, "Example.S01E01.mkv");
+        (await NewSut().ProcessAsync(new PendingFileItem(first, watchId, PendingFileSource.Watcher), CancellationToken.None))
+            .Outcome.Should().Be(ProcessOutcome.Completed);
+        using (PmmDbContext db = _dbFactory.CreateDbContext())
+        {
+            db.MediaItems.Single(m => m.SourcePath == first).ParsedInfo.Should().Contain(technicalTitle);
+            if (hasMetadata)
+            {
+                db.TmdbMetadataCaches.Add(new TmdbMetadataCache { TmdbId = 1001, MediaType = "tv", Title = "Example Programme", Year = 2024 });
+                db.SaveChanges();
+            }
+        }
+        InMemoryFolderSeriesCache restartedCache = new();
+        ConfigureRule(0.9, false, year: null, title: "Example Programme", season: 1, episode: 2, mediaType: "tv");
+        _tmdb.SearchAsync(Arg.Any<TmdbSearchRequest>(), Arg.Any<CancellationToken>()).Returns(new TmdbSearchResult([], null));
+        ConfigureAi(false);
+        await NewSutWithCache(restartedCache).ProcessAsync(new PendingFileItem(Path.Combine(folder, "Example.S01E02.mkv"),
+            watchId, PendingFileSource.Watcher), CancellationToken.None);
+        FolderSeriesEntry? hydrated = restartedCache.TryGet(folder);
+        hydrated.Should().NotBeNull();
+        hydrated!.TmdbId.Should().Be(1001);
+        hydrated.Title.Should().Be(hasMetadata ? "Example Programme" : null);
+        hydrated.Year.Should().Be(hasMetadata ? 2024 : null);
+        using PmmDbContext verify = _dbFactory.CreateDbContext();
+        verify.MediaItems.Single(m => m.SourcePath == first).ParsedInfo.Should().Contain(technicalTitle);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CanonicalLocalizedTitleKeepsTrustedOriginalAliasForWarmAndColdReuse(bool restart)
+    {
+        string watchRoot = Path.Combine(Path.GetTempPath(), $"pmm-watch-{Guid.NewGuid():N}");
+        long watchId = SeedWatchFolder(watchRoot);
+        string folder = Path.Combine(watchRoot, "Hoshi no Tabi");
+        ConfigureRule(0.9, false, year: null, title: "Hoshi no Tabi", season: 1, episode: 1, mediaType: "tv");
+        _tmdb.SearchAsync(Arg.Any<TmdbSearchRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new TmdbSearchResult([NewCandidate(1001, "tv", "星空之旅", 2024) with { OriginalTitle = "Hoshi no Tabi" }], null));
+        ConfigureClassify(ClassifyDecision.Matched, 3);
+        ConfigureArchive(ArchiveOutcome.Completed, "/Tv/Example/S01E01.mkv");
+        (await NewSut().ProcessAsync(new PendingFileItem(Path.Combine(folder, "Hoshi.no.Tabi.S01E01.mkv"),
+            watchId, PendingFileSource.Watcher), CancellationToken.None)).Outcome.Should().Be(ProcessOutcome.Completed);
+        using (PmmDbContext db = _dbFactory.CreateDbContext())
+        {
+            db.TmdbMetadataCaches.Add(new TmdbMetadataCache { TmdbId = 1001, MediaType = "tv", Title = "星空之旅",
+                OriginalTitle = "Hoshi no Tabi", Year = 2024 });
+            db.SaveChanges();
+        }
+        IFolderSeriesCache cache = restart ? new InMemoryFolderSeriesCache() : _folderCache;
+        ConfigureRule(0.9, false, year: null, title: "Hoshi no Tabi", season: 1, episode: 2, mediaType: "tv");
+        (await NewSutWithCache(cache).ProcessAsync(new PendingFileItem(Path.Combine(folder, "Hoshi.no.Tabi.S01E02.mkv"),
+            watchId, PendingFileSource.Watcher), CancellationToken.None)).Outcome.Should().Be(ProcessOutcome.Completed);
+        cache.TryGet(folder)!.Title.Should().Be("星空之旅");
+        cache.TryGet(folder)!.AlternateTitles.Should().Contain("Hoshi no Tabi");
+        await _tmdb.Received(1).SearchAsync(Arg.Any<TmdbSearchRequest>(), Arg.Any<CancellationToken>());
+        await _aiOrchestrator.DidNotReceive().ExecuteAsync(Arg.Any<AiParseRequest>(), Arg.Any<long?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task TechnicalPrimaryIdentitySkipsPrimaryLookupAndUsesParentAlias()
+    {
+        _ruleEngine.ParseAsync(Arg.Any<FileParseContext>(), Arg.Any<CancellationToken>())
+            .Returns(new RuleParseResult("35 HD国语中字无水印", null, "tv", 1, 35, null, 0.3, false, 1,
+                AlternativeTitles: ["Example Programme"], HasIdentityEvidence: false));
+        _tmdb.SearchAsync(Arg.Any<TmdbSearchRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new TmdbSearchResult([NewCandidate(1001, "tv", "Example Programme", 2024)], null));
+        ConfigureClassify(ClassifyDecision.Matched, 3);
+        ConfigureArchive(ArchiveOutcome.Completed, "/Tv/Example/S01E35.mkv");
+        (await Run()).Outcome.Should().Be(ProcessOutcome.Completed);
+        await _tmdb.Received(1).SearchAsync(Arg.Is<TmdbSearchRequest>(q => q.Query == "Example Programme"), Arg.Any<CancellationToken>());
+        await _tmdb.DidNotReceive().SearchAsync(Arg.Is<TmdbSearchRequest>(q => q.Query.Contains("无水印")), Arg.Any<CancellationToken>());
+        await _aiOrchestrator.DidNotReceive().ExecuteAsync(Arg.Any<AiParseRequest>(), Arg.Any<long?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData("[Group][Example_Show][X264_Hi10p_AAC][720P][BluRay][06](26DC4D40).mkv", true)]
+    [InlineData("[Group][X264_Hi10p_AAC][720P][BluRay][06](26DC4D40).mkv", false)]
+    [InlineData("[DDP5.1][1080p][06].mkv", false)]
+    [InlineData("[WEB.DL][1080p][06].mkv", false)]
+    [InlineData("[Dolby Vision][REPACK][PROPER][06].mkv", false)]
+    [InlineData("[A Proper Story][WEB.DL][DDP5.1][06].mkv", true)]
+    public async Task WeakTechnicalRuleTitleAllowsIdentifyAiOnlyWhenBracketWorkClueRemains(string name, bool shouldCall)
+    {
+        _ruleEngine.ParseAsync(Arg.Any<FileParseContext>(), Arg.Any<CancellationToken>())
+            .Returns(new RuleParseResult("BluRay", null, "tv", null, 6, null, 0.3, false, 1,
+                AlternativeTitles: [], HasIdentityEvidence: false));
+        ConfigureAi(false);
+        _tmdb.SearchAsync(Arg.Any<TmdbSearchRequest>(), Arg.Any<CancellationToken>()).Returns(new TmdbSearchResult([], null));
+        string path = Path.Combine(Path.GetTempPath(), name);
+        (await NewSut().ProcessAsync(new PendingFileItem(path, 0, PendingFileSource.Manual), CancellationToken.None))
+            .Outcome.Should().Be(ProcessOutcome.AwaitingReview);
+        await _aiOrchestrator.Received(shouldCall ? 1 : 0).ExecuteAsync(Arg.Is<AiParseRequest>(q => q.Context != null
+            && q.Context.TaskType == AiParseTaskType.IdentifyWork && q.RuleHintSeason == null && q.FileName == name),
+            Arg.Any<long?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData("[NCOP_EP18]", null)]
+    [InlineData("[NCED_EP22]", null)]
+    [InlineData("[TV_SPOTS]", null)]
+    [InlineData("[CM]", null)]
+    [InlineData("[NCOP_EP18]", 1)]
+    [InlineData(" NCOP EP18", null)]
+    [InlineData("【NCOP】", 1)]
+    [InlineData("（CM）", 1)]
+    [InlineData("[ CM ]", null)]
+    [InlineData("【 CM 】", 1)]
+    public async Task ExtrasCannotAutoArchiveEvenWithSingleSeasonCatalogue(string marker, int? season)
+    {
+        ConfigureRule(0.9, false, year: null, title: "Example Show", season: season, episode: 18, mediaType: "tv");
+        _tmdb.SearchAsync(Arg.Any<TmdbSearchRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new TmdbSearchResult([NewCandidate(1001, "tv", "Example Show", 2024)], null));
+        _tmdb.GetDetailsAsync(1001, "tv", Arg.Any<CancellationToken>())
+            .Returns(new TmdbDetailsResult(1001, "tv", "Example Show", "Example Show", 2024, 1, null, ["JP"], "ja", null, null, "{}"));
+        ConfigureClassify(ClassifyDecision.Matched, 3);
+        ConfigureArchive(ArchiveOutcome.Completed, "/Tv/Example/S01E18.mkv");
+        string path = Path.Combine(Path.GetTempPath(), "Example.Show." + marker + ".mkv");
+        (await NewSut().ProcessAsync(new PendingFileItem(path, 0, PendingFileSource.Manual), CancellationToken.None))
+            .Outcome.Should().Be(ProcessOutcome.AwaitingReview);
+        await _archive.DidNotReceive().ArchiveAsync(Arg.Any<MediaItem>(), Arg.Any<CancellationToken>());
+        await _tmdb.DidNotReceive().GetDetailsAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData("Example.CM.Chronicles.mkv")]
+    [InlineData("Example.NCOPter.S01E18.mkv")]
+    [InlineData("Example.TV_SPOTSomething.mkv")]
+    public async Task ExtrasGuardDoesNotMatchOrdinaryTitleSubstrings(string filename)
+    {
+        ConfigureRule(0.9, false, year: null, title: "Example Show", season: 1, episode: 18, mediaType: "tv");
+        _tmdb.SearchAsync(Arg.Any<TmdbSearchRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new TmdbSearchResult([NewCandidate(1001, "tv", "Example Show", 2024)], null));
+        ConfigureClassify(ClassifyDecision.Matched, 3);
+        ConfigureArchive(ArchiveOutcome.Completed, "/Tv/Example/S01E18.mkv");
+        (await NewSut().ProcessAsync(new PendingFileItem(Path.Combine(Path.GetTempPath(), filename), 0, PendingFileSource.Manual), CancellationToken.None))
+            .Outcome.Should().Be(ProcessOutcome.Completed);
+    }
+
+    [Fact]
+    public async Task ExtrasExplicitForcedSeasonMappingRemainsAuthoritative()
+    {
+        _forcedMatch.TryReadAsync(Arg.Any<FileParseContext>(), Arg.Any<CancellationToken>())
+            .Returns(new ForcedMatchMarker(1001, "tv", Season: 0, EpisodeGroupId: null, GroupId: null, TitleOverride: null));
+        ConfigureRule(0.3, false, year: null, title: "Example Show", episode: 18, mediaType: "tv");
+        _tmdb.GetDetailsAsync(1001, "tv", Arg.Any<CancellationToken>())
+            .Returns(new TmdbDetailsResult(1001, "tv", "Example Show", "Example Show", 2024, 1, null, ["JP"], "ja", null, null, "{}"));
+        ConfigureClassify(ClassifyDecision.Matched, 3);
+        ConfigureArchive(ArchiveOutcome.Completed, "/Tv/Example/S00E18.mkv");
+        (await NewSut().ProcessAsync(new PendingFileItem(Path.Combine(Path.GetTempPath(), "Example.[NCOP_EP18].mkv"),
+            0, PendingFileSource.Manual), CancellationToken.None)).Outcome.Should().Be(ProcessOutcome.Completed);
+        ReadOne().ParsedInfo.Should().Contain("\"season\":0");
+    }
+
     private long SeedWatchFolder(string path)
     {
         using PmmDbContext db = _dbFactory.CreateDbContext();

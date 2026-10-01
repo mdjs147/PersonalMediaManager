@@ -15,11 +15,33 @@ public static partial class MediaTitleClue
     /// <summary>文件名（去扩展名）与所有路径段剥离技术噪音后是否<b>全部</b>无实质剧名文本</summary>
     public static bool HasNoTitleClue(string fileName, IReadOnlyList<string>? segments)
     {
+        if (HasUntrustedBracketTitleClue(fileName, segments)) return false;
         if (HasSubstance(StripExtension(fileName))) return false;
         if (segments is not null)
             foreach (string s in segments)
                 if (HasSubstance(s)) return false;
         return true;
+    }
+
+    /// <summary>括号中保留的疑似作品文本，只允许交给 AI 判断，不代表已确认身份</summary>
+    public static bool HasUntrustedBracketTitleClue(string fileName, IReadOnlyList<string>? segments)
+    {
+        IEnumerable<string> sources = new[] { fileName }.Concat(segments ?? []);
+        foreach (string source in sources)
+        {
+            foreach (Match bracket in BracketRe().Matches(source))
+            {
+                string content = bracket.Value[1..^1].Trim().Replace('_', ' ').Replace('.', ' ');
+                // 发布组惯例、通用目录标签和网址不能成为作品证据；未知普通文本保守留给 AI。
+                if (Regex.IsMatch(content, @"(?i)^(?:group|release[ -]?group|downloads?|movies?|tv|videos?|media|MKV|MP4|.*[- ](?:raws|subs))$|https?://|www[ .]",
+                    RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(500))) continue;
+                string residual = BracketTechVariantsRe().Replace(content, " ");
+                residual = HexRe().Replace(TechRe().Replace(SeasonEpRe().Replace(residual, " "), " "), " ");
+                residual = Regex.Replace(residual, @"(?i)\b(?:HI10P|NCOP|NCED|OP|ED|FIN)\b", " ", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(500));
+                if (LatinWordRe().IsMatch(residual)) return true;
+            }
+        }
+        return false;
     }
 
     /// <summary>去掉扩展名（仅当点在末尾 5 字符内，避免误伤剧名里的点）</summary>
@@ -52,6 +74,10 @@ public static partial class MediaTitleClue
         }
         return LatinWordRe().IsMatch(StripNoise(s));
     }
+
+    // 点和下划线已归一为空格；按完整技术词消费可选声道，保留标题中的其他文字。
+    [GeneratedRegex(@"(?i)(?<![A-Za-z0-9])(?:WEB[ -]?DL|DOLBY[ -]?(?:VISION|ATMOS)|REPACK|PROPER|ATMOS|(?:DDP|DD\+|DTS(?:[ -]?HD)?(?:[ -]?MA)?|TRUE[ -]?HD|E[ -]?AC3|AC3|AAC|FLAC|OPUS|MP3)(?:\s*[0-9](?:\s+[0-9])?)?)(?![A-Za-z0-9])")]
+    private static partial Regex BracketTechVariantsRe();
 
     [GeneratedRegex(@"[\[\(【].*?[\]\)】]")]
     private static partial Regex BracketRe();

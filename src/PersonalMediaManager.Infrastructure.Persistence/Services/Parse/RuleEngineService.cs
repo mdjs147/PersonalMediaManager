@@ -1,8 +1,9 @@
-﻿using System.Text;
+using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using PersonalMediaManager.Application.Services.Parse;
+using PersonalMediaManager.Application.Contracts;
 using PersonalMediaManager.Domain.Aggregates.ParseRules;
 using PersonalMediaManager.Domain.Enums;
 
@@ -116,6 +117,7 @@ internal sealed class RuleEngineService : IRuleEngineService
 
         string? title = TryGroup(capt, "title");
         int? year = TryParseInt(TryGroup(capt, "year"));
+        if (year is int capturedYear && !MediaYearEvidence.ContainsYear([matchedInput], capturedYear)) year = null;
         int? season = ParseCjkSeason(TryGroup(capt, "season"));
         string? seasonTitle = TryGroup(capt, "seasonTitle");
         int? episode = TryParseInt(TryGroup(capt, "episode"));
@@ -209,6 +211,7 @@ internal sealed class RuleEngineService : IRuleEngineService
             }
             if (episodeRejected) continue;
             (int? _, int? foundEpisode, int? foundEnd) = ExtractSeasonEpisode(text);
+            if (source == "FileName") foundEpisode ??= ExtractNumericFileEpisode(text);
             // 父目录范围描述整包，不作为当前文件的单集或范围证据。
             if (source != "FileName" && foundEnd is not null) continue;
             if (foundEpisode is int ep)
@@ -357,6 +360,14 @@ internal sealed class RuleEngineService : IRuleEngineService
         foreach (string layer in layers)
         {
             (int? s, int? e, int? eEnd) = ExtractSeasonEpisode(layer);
+            // 数字前缀只是兜底，同文件明确 E 标记及小数集拒绝优先。
+            if (layer == stem && e is null && !HasExplicitFractionalEpisode(stem)
+                && !HasFractionalEpisodeTail(fileName, stem.Length))
+            {
+                e = ExtractNumericFileEpisode(stem);
+                if (e is int numericEpisode && !int.TryParse(stem, out _))
+                    fieldEvidence.Add(new("episode", numericEpisode, "FileName", stem.Length <= 128 ? stem : stem[..128]));
+            }
             if (season is null && s is int literalSeason)
             {
                 Match ordinal = SafeMatch(BuiltinRulesCatalog.SeasonOrdinalLatin, layer);
@@ -366,7 +377,7 @@ internal sealed class RuleEngineService : IRuleEngineService
             }
             season ??= s;
             // 集号与末集是同一层的原子证据，父目录全集范围不能扩展文件单集。
-            if (episode is null && e is not null)
+            if (episode is null && e is not null && (layer == stem || eEnd is null))
             {
                 episode = e;
                 episodeEnd = eEnd;
@@ -437,7 +448,7 @@ internal sealed class RuleEngineService : IRuleEngineService
             // 「压制代号-集号」整串层：字母段是压制组 / 缩写代号，跳过竞选让更外层（父目录）接手
             if (IsReleaseTagEpisodeLayer(raw)) continue;
             string cleaned = ExtractTitle(raw, season, episode, year);
-            if (HasMeaningfulContent(cleaned))
+            if (HasMeaningfulContent(cleaned) && !IsNonIdentityTitle(cleaned) && !IsGenericFolder(cleaned))
             {
                 return (cleaned, true);
             }
@@ -463,7 +474,7 @@ internal sealed class RuleEngineService : IRuleEngineService
     /// </remarks>
     private static bool HasMeaningfulContent(string s)
     {
-        if (string.IsNullOrWhiteSpace(s)) return false;
+        if (string.IsNullOrWhiteSpace(s) || IsHashOnlyTitle(s)) return false;
         foreach (string token in s.Split(' ', StringSplitOptions.RemoveEmptyEntries))
         {
             if (token.Length < 2) continue;
@@ -587,9 +598,17 @@ internal sealed class RuleEngineService : IRuleEngineService
         return next is '.' or '-' or '_' or ' ' or '\t';
     }
 
+    /// <summary>文件开头的纯集号可后接明确分辨率；不把任意数字前缀或小数集当作单集</summary>
+    private static int? ExtractNumericFileEpisode(string stem)
+    {
+        Match numeric = Regex.Match(stem, @"^(?<episode>[0-9]{1,3})(?:$|[. _-]+(?:480|720|1080|1440|2160)[pP](?![A-Za-z0-9]))",
+            RegexOptions.CultureInvariant, RegexTimeout);
+        return numeric.Success ? TryParseInt(numeric.Groups["episode"].Value) : null;
+    }
+
     private static int? ExtractYear(string s)
     {
-        Match m = SafeMatch(BuiltinRulesCatalog.Year, s);
+        Match m = SafeMatch(BuiltinRulesCatalog.Year, MediaYearEvidence.WithoutDimensions(s));
         return m.Success ? TryParseInt(m.Groups["year"].Value) : null;
     }
 
@@ -656,6 +675,7 @@ internal sealed class RuleEngineService : IRuleEngineService
         string s = stem;
         if (suffix.Success && SafeMatch(BuiltinRulesCatalog.Noise, stem[..suffix.Index]).Success)
             s = stem[..suffix.Index];
+        s = MediaYearEvidence.WithoutDimensions(s);
         s = SafeReplace(BuiltinRulesCatalog.GroupBracket, s, " ");
         s = SafeReplace(BuiltinRulesCatalog.TotalCountNoise, s, " ");
         s = SafeReplace(BuiltinRulesCatalog.SeasonOrdinalLatin, s, " ");
@@ -820,11 +840,17 @@ internal sealed class RuleEngineService : IRuleEngineService
     }
 
     /// <summary>日期、纯技术或发行宣传词不构成作品身份</summary>
-    private static bool IsNonIdentityTitle(string title)
+    private static bool IsHashOnlyTitle(string title) => Regex.IsMatch(title.Trim(),
+        @"^[\[\(]?([A-Fa-f0-9]{8}|[A-Fa-f0-9]{32}|[A-Fa-f0-9]{40}|[A-Fa-f0-9]{64})[\]\)]?$", BaseOptions, RegexTimeout);
+
+    internal static bool IsNonIdentityTitle(string title)
     {
+        if (IsHashOnlyTitle(title)) return true;
         string normalized = Normalize(SafeReplace(BuiltinRulesCatalog.Separator, title, " "));
         if (Regex.IsMatch(normalized, @"^(?:19|20)\d{2}\s*(?:0?[1-9]|1[0-2])\s*(?:0?[1-9]|[12]\d|3[01])$", BaseOptions, RegexTimeout)) return true;
-        if (Regex.IsMatch(normalized, @"^(?:(?:4K|8K|2160p|1080p|720p|480p|HDR|UHD|HD|高清|蓝光|国语|粤语|中字|字幕|无水印|修复版)|\s)+$", BaseOptions, RegexTimeout)) return true;
+        // 数字集号不能为纯技术残渣提供作品身份；只去掉有分隔符的短数字前缀，避免误伤正常标题。
+        string withoutEpisodePrefix = Regex.Replace(normalized, @"^[0-9]{1,4}\s+", "", BaseOptions, RegexTimeout);
+        if (Regex.IsMatch(withoutEpisodePrefix, @"^(?:(?:4K|8K|2160p|1080p|720p|480p|HDR|UHD|HD|高清|蓝光|国语|粤语|中字|字幕|无水印|修复版)|\s)+$", BaseOptions, RegexTimeout)) return true;
         return !title.Contains('[') && !title.Contains('【') && string.IsNullOrWhiteSpace(CleanedStem(title));
     }
 
