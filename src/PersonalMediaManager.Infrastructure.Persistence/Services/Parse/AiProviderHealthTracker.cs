@@ -41,6 +41,10 @@ internal sealed class AiProviderHealthTracker : IAiProviderHealthTracker
 
         int failures = await ctx.AuditAiCalls
             .Where(a => a.ProviderId == providerId && !a.Success && a.Timestamp >= windowStart)
+            // 仅基础设施错误计入熔断；语义错误和低置信度历史不触发冷却。
+            .Where(a => a.ErrorType == "Transient" || (a.ErrorType == "RateLimit" && a.HttpStatus == 429) ||
+                a.ErrorType == "Http4xx" || a.ErrorType == "Http5xx" ||
+                a.ErrorType == "Timeout" || a.ErrorType == "ModelRuntime")
             .CountAsync(ct);
 
         if (failures < FailureThreshold) return;

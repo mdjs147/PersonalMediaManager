@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using PersonalMediaManager.Application.Contracts;
 using PersonalMediaManager.Domain.Aggregates.AiProviders;
 using PersonalMediaManager.Domain.Entities;
@@ -112,6 +112,50 @@ public sealed class AiProviderHealthTrackerTests : IClassFixture<PmmDbContextTes
         await act.Should().NotThrowAsync();
     }
 
+    [Theory]
+    [InlineData("LowConfidence")]
+    [InlineData("Logical")]
+    [InlineData("UnknownEvidence")]
+    [InlineData("ConfigError")]
+    [InlineData("RateLimit")]
+    [InlineData(null)]
+    public async Task SemanticHistoryThenNetworkFailure_DoesNotDisable(string? errorType)
+    {
+        DateTimeOffset now = new(2026, 5, 17, 12, 0, 0, TimeSpan.Zero);
+        long pid = await SeedProviderAsync();
+        for (int i = 0; i < 8; i++)
+            await SeedSingleAuditAsync(pid, false, now.AddMinutes(-2), errorType);
+        await SeedSingleAuditAsync(pid, false, now.AddMinutes(-1), "Transient");
+
+        await NewTracker(now).EvaluateAsync(pid);
+        (await ReadDisabledUntilAsync(pid)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task RemoteRateLimit_WithHttpStatus_CountsAsInfrastructure()
+    {
+        DateTimeOffset now = new(2026, 5, 17, 12, 0, 0, TimeSpan.Zero);
+        long pid = await SeedProviderAsync();
+        for (int i = 0; i < AiProviderHealthTracker.FailureThreshold; i++)
+            await SeedSingleAuditAsync(pid, false, now.AddMinutes(-1), "RateLimit", 429);
+        await NewTracker(now).EvaluateAsync(pid);
+        (await ReadDisabledUntilAsync(pid)).Should().Be(now.AddMinutes(AiProviderHealthTracker.CooldownMinutes));
+    }
+
+    [Fact]
+    public async Task ModelRuntime_UsesExistingThresholdAndCooldown_NotFirstFailure()
+    {
+        DateTimeOffset now = new(2026, 5, 17, 12, 0, 0, TimeSpan.Zero);
+        long pid = await SeedProviderAsync();
+        await SeedSingleAuditAsync(pid, false, now.AddMinutes(-1), "ModelRuntime");
+        await NewTracker(now).EvaluateAsync(pid);
+        (await ReadDisabledUntilAsync(pid)).Should().BeNull();
+        for (int i = 1; i < AiProviderHealthTracker.FailureThreshold; i++)
+            await SeedSingleAuditAsync(pid, false, now.AddMinutes(-1), "ModelRuntime");
+        await NewTracker(now).EvaluateAsync(pid);
+        (await ReadDisabledUntilAsync(pid)).Should().Be(now.AddMinutes(AiProviderHealthTracker.CooldownMinutes));
+    }
+
     private AiProviderHealthTracker NewTracker(DateTimeOffset now) =>
         new(new FixtureDbContextFactory(_fixture), new FixedClock(now));
 
@@ -150,7 +194,7 @@ public sealed class AiProviderHealthTrackerTests : IClassFixture<PmmDbContextTes
         await ctx.SaveChangesAsync();
     }
 
-    private async Task SeedSingleAuditAsync(long providerId, bool success, DateTimeOffset at)
+    private async Task SeedSingleAuditAsync(long providerId, bool success, DateTimeOffset at, string? errorType = "Http5xx", int? httpStatus = null)
     {
         await using PmmDbContext ctx = _fixture.CreateContext();
         ctx.AuditAiCalls.Add(new AuditAiCall
@@ -158,7 +202,8 @@ public sealed class AiProviderHealthTrackerTests : IClassFixture<PmmDbContextTes
             ProviderId = providerId,
             Success = success,
             LatencyMs = 100,
-            ErrorType = success ? null : "Http5xx",
+            ErrorType = success ? null : errorType,
+            HttpStatus = httpStatus,
             Timestamp = at,
         });
         await ctx.SaveChangesAsync();

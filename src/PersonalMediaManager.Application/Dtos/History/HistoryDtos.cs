@@ -140,7 +140,16 @@ public sealed record MediaItemDetailResponse(
     DateTimeOffset UpdatedAt,
     TmdbMetadataSummary? Tmdb,
     IReadOnlyList<AiCallEntryResponse> AiCalls,
-    IReadOnlyList<ProcessStepEntry> Steps);
+    IReadOnlyList<ProcessStepEntry> Steps,
+    ReviewReason? HistoricalReviewReason = null,
+    PersonalMediaManager.Application.Dtos.Dashboard.CompletionProvenance? CompletionProvenance = null)
+{
+    /// <summary>只在当前阻塞状态展示原因；原始证据仍保留</summary>
+    public string? CurrentBlockingReason => Status == MediaItemStatus.AwaitingReview
+        ? HistoricalReviewReason?.ToString()
+        : Status == MediaItemStatus.Failed ? ErrorMessage : null;
+    public string? HistoricalErrorMessage => ErrorMessage;
+}
 
 /// <summary>处理时间线单步（Process_Step 行投影；前端 MediaDetail 时间线按 Stage 渲染 Detail）</summary>
 /// <param name="Id">主键</param>

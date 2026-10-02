@@ -28,12 +28,12 @@ public sealed class FolderSeriesCacheTests
     }
 
     [Fact]
-    public void Key_Is_Case_Insensitive()
+    public void Key_Uses_Operating_System_Case_Semantics()
     {
-        // Windows 路径大小写不敏感：同一目录的不同大小写应命中同一条
+        // 非 Windows 保守区分大小写，不能把两个实际存在的目录合并。
         FolderSeriesCache cache = new();
         cache.Set(@"X:\Media\Show A", Entry());
-        cache.TryGet(@"x:\media\show a").Should().NotBeNull();
+        (cache.TryGet(@"x:\media\show a") is not null).Should().Be(OperatingSystem.IsWindows());
     }
 
     [Fact]
@@ -69,15 +69,15 @@ public sealed class FolderSeriesCacheTests
     }
 
     [Fact]
-    public void Remove_Is_Case_Insensitive()
+    public void Remove_Uses_Operating_System_Case_Semantics()
     {
-        // 与 Set / TryGet 同走 OrdinalIgnoreCase：Windows 路径大小写不敏感，不同大小写也要能失效同一条
+        // 与 Set / TryGet 共用平台路径比较规则。
         FolderSeriesCache cache = new();
         cache.Set(@"X:\Media\Show A", Entry());
 
         cache.Remove(@"x:\media\show a");
 
-        cache.TryGet(@"X:\Media\Show A").Should().BeNull();
+        (cache.TryGet(@"X:\Media\Show A") is null).Should().Be(OperatingSystem.IsWindows());
     }
 
     [Theory]

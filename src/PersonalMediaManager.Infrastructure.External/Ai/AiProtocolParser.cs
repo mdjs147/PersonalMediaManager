@@ -32,10 +32,11 @@ internal sealed class AiProtocolParser : IAiParser
             throw new AiProviderLogicalException($"无 IAiProtocol 实现：{protocol}");
 
         // 请求原文：仅 user 提示词（system 恒定不入库省体积）；失败路径也补挂供诊断
-        string userPrompt = AiPromptHelpers.BuildUserPrompt(request);
+        AiPromptHelpers.PreparedTaskPrompt? prepared = request.Context is null ? null : AiPromptHelpers.PrepareTaskPrompt(request);
+        string userPrompt = prepared?.UserPrompt ?? AiPromptHelpers.BuildUserPrompt(request);
         List<AiChatMessage> messages =
         [
-            new("system", AiPromptHelpers.SystemPrompt),
+            new("system", prepared is null ? AiPromptHelpers.SystemPrompt : AiPromptHelpers.TaskSystemPrompt),
             new("user", userPrompt),
         ];
 
@@ -43,10 +44,10 @@ internal sealed class AiProtocolParser : IAiParser
         try
         {
             completion = await impl.CompleteAsync(
-                new AiProtocolRequest(endpoint, messages, JsonMode: endpoint.StructuredJson, Temperature: 0),
+                new AiProtocolRequest(endpoint, messages, JsonMode: endpoint.StructuredJson, Temperature: 0, MaxTokens: 1024),
                 ct);
         }
-        catch (Exception ex) when (ex is AiProviderTransientException or AiProviderRateLimitException or AiProviderLogicalException)
+        catch (Exception ex) when (ex is AiProviderTransientException or AiProviderRateLimitException or AiProviderLogicalException or AiProviderModelRuntimeException)
         {
             // 接口故障：补挂请求原文（响应体 + 状态码已由 AiHttpFailureMapper 在抛出前塞入 Exception.Data）
             ex.Data[AiCallDiagnostics.RequestTextKey] = userPrompt;
@@ -55,10 +56,11 @@ internal sealed class AiProtocolParser : IAiParser
 
         try
         {
-            AiParseResult result = AiPromptHelpers.ParseContent(completion.Text);
+            AiParseResult result = prepared is null ? AiPromptHelpers.ParseContent(completion.Text)
+                : AiPromptHelpers.ParseTaskContent(completion.Text, prepared.Request);
             // 字面溯源守护：剔除 AI 凭作品名幻觉、文件名 / 路径里根本没写的年份（多版本作品会锚到最早版本，污染 TMDB 匹配）
-            result = AiPromptHelpers.GroundYear(result, request);
-            return new AiParseOutcome(result, userPrompt, completion.Text, completion.PromptTokens, completion.CompletionTokens);
+            if (prepared is null) result = AiPromptHelpers.GroundYear(result, request);
+            return new AiParseOutcome(result, userPrompt, completion.Text, completion.PromptTokens, completion.CompletionTokens, prepared?.Metadata);
         }
         catch (AiProviderLogicalException ex)
         {

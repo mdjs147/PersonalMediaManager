@@ -181,7 +181,7 @@ public sealed class FileMoverTests : IDisposable
 
         File.Exists(dst).Should().BeTrue();
         (await File.ReadAllTextAsync(dst)).Should().Be("payload");
-        File.Exists(stale).Should().BeTrue("被锁定的陈旧 .tmp 清扫失败但被容错保留");
+        File.Exists(stale).Should().Be(OperatingSystem.IsWindows(), "Windows 独占句柄阻止删除；Unix 允许 unlink 已打开文件");
     }
 
     private string WriteFile(string relativePath, string content)

@@ -145,6 +145,68 @@ public sealed class ReviewServiceTests : IDisposable
 
     // ---------- Confirm ----------
 
+    [Theory]
+    [InlineData(27205, false)]
+    [InlineData(111, true)]
+    [InlineData(null, false)]
+    public async Task Confirm_PersistsIdChangeSeparatelyFromConfirmation(int? previousId, bool corrected)
+    {
+        long catId = SeedCategory();
+        long id = SeedItem(MediaItemStatus.AwaitingReview, ParseSource.Rule, previousId, previousId is null ? null : "movie");
+        _tmdb.GetDetailsAsync(27205, "movie", Arg.Any<CancellationToken>())
+            .Returns(new TmdbDetailsResult(27205, "movie", "Inception", null, 2010, null, null, ["US"], "en", null, null, "{}"));
+        _archive.ArchiveAsync(Arg.Any<MediaItem>(), Arg.Any<CancellationToken>())
+            .Returns(new ArchiveResult("/M/Inception.mkv", ArchiveOutcome.Completed));
+        await _sut.ConfirmAsync(id, new ConfirmRequest(27205, "movie", catId, "Inception", 2010, null, null, ReadItem(id).RowVersion));
+        ProcessStep operation = ReadSteps(id).Single(s => s.Stage == MediaItemStatus.AwaitingReview);
+        using System.Text.Json.JsonDocument evidence = System.Text.Json.JsonDocument.Parse(operation.Detail!);
+        evidence.RootElement.GetProperty("idChanged").GetBoolean().Should().Be(previousId != 27205);
+        evidence.RootElement.GetProperty("idReplaced").GetBoolean().Should().Be(corrected);
+        evidence.RootElement.GetProperty("initialBinding").GetBoolean().Should().Be(previousId is null);
+        evidence.RootElement.GetProperty("explicitCorrection").GetBoolean().Should().Be(corrected);
+        evidence.RootElement.GetProperty("confirm").GetBoolean().Should().BeTrue();
+        evidence.RootElement.GetProperty("actorCategory").GetString().Should().Be("Unknown");
+        ReadItem(id).ParseSource.Should().Be(ParseSource.Rule);
+    }
+
+    [Fact]
+    public async Task Confirm_MovieCleanup_IsSystemNormalizationNotExplicitCorrection()
+    {
+        long catId = SeedCategory();
+        long id = SeedItem(MediaItemStatus.AwaitingReview, ParseSource.Rule, 27205, "movie",
+            """{"title":"Film","year":2020,"type":"movie","season":1,"episode":2,"episodeEnd":3}""");
+        _tmdb.GetDetailsAsync(27205, "movie", Arg.Any<CancellationToken>())
+            .Returns(new TmdbDetailsResult(27205, "movie", "Film", null, 2020, null, null, ["US"], "en", null, null, "{}"));
+        _archive.ArchiveAsync(Arg.Any<MediaItem>(), Arg.Any<CancellationToken>())
+            .Returns(new ArchiveResult("/M/Film.mkv", ArchiveOutcome.Completed));
+        await _sut.ConfirmAsync(id, new ConfirmRequest(27205, "movie", catId, "Film", 2020, null, null, ReadItem(id).RowVersion));
+        using System.Text.Json.JsonDocument evidence = System.Text.Json.JsonDocument.Parse(
+            ReadSteps(id).Single(s => s.Stage == MediaItemStatus.AwaitingReview).Detail!);
+        evidence.RootElement.GetProperty("explicitCorrection").GetBoolean().Should().BeFalse();
+        evidence.RootElement.GetProperty("automaticEpisodeCleanup").GetBoolean().Should().BeTrue();
+        evidence.RootElement.GetProperty("confirmedExistingMatch").GetBoolean().Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Confirm_PersistsTypeSeasonEpisodeCorrections()
+    {
+        long catId = SeedCategory();
+        long id = SeedItem(MediaItemStatus.AwaitingReview, ParseSource.Rule, 27205, "movie",
+            """{"title":"Series","year":2020,"type":"tv","season":1,"episode":2,"episodeEnd":3}""");
+        _tmdb.GetDetailsAsync(27205, "tv", Arg.Any<CancellationToken>())
+            .Returns(new TmdbDetailsResult(27205, "tv", "Series", null, 2020, 2, null, ["US"], "en", null, null, "{}"));
+        _archive.ArchiveAsync(Arg.Any<MediaItem>(), Arg.Any<CancellationToken>())
+            .Returns(new ArchiveResult("/M/Series.mkv", ArchiveOutcome.Completed));
+        await _sut.ConfirmAsync(id, new ConfirmRequest(27205, "tv", catId, "Series", 2020, 2, 4, ReadItem(id).RowVersion));
+        using System.Text.Json.JsonDocument evidence = System.Text.Json.JsonDocument.Parse(
+            ReadSteps(id).Single(s => s.Stage == MediaItemStatus.AwaitingReview).Detail!);
+        foreach (string field in new[] { "typeChanged", "seasonChanged", "episodeChanged", "episodeEndChanged", "explicitCorrection" })
+            evidence.RootElement.GetProperty(field).GetBoolean().Should().BeTrue();
+        evidence.RootElement.GetProperty("idChanged").GetBoolean().Should().BeFalse();
+        evidence.RootElement.GetProperty("before").GetProperty("season").GetInt32().Should().Be(1);
+        evidence.RootElement.GetProperty("after").GetProperty("season").GetInt32().Should().Be(2);
+    }
+
     [Fact]
     public async Task Confirm_Movie_Transitions_To_Archiving_And_Calls_ArchiveService()
     {

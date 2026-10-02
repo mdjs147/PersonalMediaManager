@@ -43,7 +43,7 @@ internal static class BuiltinRulesCatalog
 
     public const string BracketEpisodePattern =
         // 单集 [01] + 范围 [08-09] / [08~09]
-        @"\[(?<episode>\d{1,4})(?:[\-~](?<episodeEnd>\d{1,4}))?\]";
+        @"\[(?!(?:19|20)\d{2}\])(?<episode>\d{1,4})(?:[\-~](?<episodeEnd>\d{1,4}))?\]";
 
     /// <summary>压制代号-集号整串形态（DACZLNF-09 / YTYHXBYL-30 一类无标题文件名）</summary>
     /// <remarks>
@@ -69,7 +69,11 @@ internal static class BuiltinRulesCatalog
     /// 同时季号天然限定 1-2 位（与 SxxExx / SeasonOnlyLatin 同口径，不产出归档层无法接受的 3 位季号）。
     /// </remarks>
     public const string SeasonWordLatinPattern =
-        @"(?<![A-Za-z])Season[\s\._\-]*(?<season>\d{1,2})(?!\d)";
+        @"(?<![A-Za-z])(?<!\d(?:st|nd|rd|th)[\s._-]+)Season[\s\._\-]*(?<season>\d{1,2})(?!\d)";
+
+    /// <summary>英文序数季号（2nd Season / 4th Season），不把标题尾数字当季</summary>
+    public const string SeasonOrdinalLatinPattern =
+        @"(?<![A-Za-z0-9])(?:(?<season>11|12|13)th|(?<season>[2-9]?1)st|(?<season>[2-9]?2)nd|(?<season>[2-9]?3)rd|(?<season>[1-9]?[4-9]|[1-9]0)th)[\s._-]+Season(?![A-Za-z])";
 
     /// <summary>罗马数字季号（标题尾部 II-X，主要用于动漫如「刀剑神域II」「进击的巨人 III」）</summary>
     /// <remarks>
@@ -80,7 +84,7 @@ internal static class BuiltinRulesCatalog
     /// 罗马数字 → int 由 RuleEngineService.ParseRomanSeason 转换。
     /// </remarks>
     public const string SeasonRomanPattern =
-        @"(?<![A-Za-z0-9])(?<roman>VIII|VII|III|VI|IV|IX|II|V|X)(?=[\s\.\-_]*(?:$|\[|\d))";
+        @"(?<![A-Za-z0-9])(?![Xx](?:264|265)(?![0-9]))(?<roman>VIII|VII|III|VI|IV|IX|II|V|X)(?=[\s\.\-_]*(?:$|\[|\d))";
 
     /// <summary>季的篇章标题（中文「XXX篇」，如「锻刀村篇 / 柱训练篇 / 游郭篇 / 无限列车篇」），以篇章名标识季的番剧用</summary>
     /// <remarks>
@@ -139,8 +143,8 @@ internal static class BuiltinRulesCatalog
     /// <summary>方括号块剥离：同时匹配半角 [ ] 和中文全角【 】（PT 站发布组前缀常用 【高清剧集网...】）</summary>
     public const string GroupBracketPattern = @"[\[【][^\[\]【】]{1,60}[\]】]";
 
-    /// <summary>发布组尾缀剥离：'-' 后到结尾或下一个分隔符前的 ASCII 单词（如 -ColorWEB / -FRDS / -CMCT）</summary>
-    public const string ReleaseGroupSuffixPattern = @"-[A-Za-z][A-Za-z0-9_]{1,20}(?=$|[\.\s])";
+    /// <summary>发布组尾缀剥离：段尾 '-' 后的 ASCII 单词（如 -ColorWEB / -FRDS / -CMCT）</summary>
+    public const string ReleaseGroupSuffixPattern = @"-[A-Za-z][A-Za-z0-9_]{1,20}(?=$)";
 
     /// <summary>分隔符折叠：补 + 号（PT 站元信息常用 [国语音轨+简繁英字幕]）</summary>
     public const string SeparatorPattern = @"[\.\-_\+]+";
@@ -154,6 +158,7 @@ internal static class BuiltinRulesCatalog
     public static readonly Regex BracketEpisode = new(BracketEpisodePattern, NoIgnoreCase, Timeout);
     public static readonly Regex ReleaseTagEpisode = new(ReleaseTagEpisodePattern, BaseOptions, Timeout);
     public static readonly Regex SeasonOnlyLatin = new(SeasonOnlyLatinPattern, BaseOptions, Timeout);
+    public static readonly Regex SeasonOrdinalLatin = new(SeasonOrdinalLatinPattern, BaseOptions, Timeout);
     public static readonly Regex SeasonWordLatin = new(SeasonWordLatinPattern, BaseOptions, Timeout);
     // NoIgnoreCase：罗马数字季号一律大写匹配，避免小写编码 token（x264 的 x → X、hevc 的 v → V）被误当季号
     public static readonly Regex SeasonRoman = new(SeasonRomanPattern, NoIgnoreCase, Timeout);
@@ -204,7 +209,7 @@ internal static class BuiltinRulesCatalog
         new(
             Key: "BracketEpisode",
             Name: "方括号集号「[01]」（含范围）",
-            Description: "纯数字方括号集号，常见于动漫字幕组、番剧整理目录；支持范围 [08-09] / [08~09] 捕获 episodeEnd。",
+            Description: "纯数字方括号集号（排除 1900-2099 年份），常见于动漫字幕组、番剧整理目录；支持范围 [08-09] / [08~09] 捕获 episodeEnd。",
             Pattern: BracketEpisodePattern,
             Order: 50,
             Samples: new[] { "[字幕组] 某番 [01][1080p].mkv", "[番名][24].mkv", "[番名][08-09].mkv" }),
@@ -224,6 +229,14 @@ internal static class BuiltinRulesCatalog
             Pattern: SeasonOnlyLatinPattern,
             Order: 55,
             Samples: new[] { "Born.with.Luck.S01.2026.2160p", "Some.Show.S05.Complete.WEB-DL" }),
+
+        new(
+            Key: "SeasonOrdinalLatin",
+            Name: "英文序数季号（2nd Season）",
+            Description: "识别完整英文序数加 Season 的季号标记；不从作品名尾部裸数字推断季号。",
+            Pattern: SeasonOrdinalLatinPattern,
+            Order: 55,
+            Samples: new[] { "Example Arc 2nd Season 第10话.mkv", "Example Arc 4th Season" }),
 
         new(
             Key: "SeasonRoman",
@@ -284,7 +297,7 @@ internal static class BuiltinRulesCatalog
         new(
             Key: "ReleaseGroupSuffix",
             Name: "发布组尾缀「-Group」剥离",
-            Description: "剥离文件名 / 目录名末尾的「-发布组名」（ASCII 字母数字，长度 ≤ 20），如 -ColorWEB / -FRDS / -CMCT / -MeM。仅匹配末尾或紧跟分隔符的位置，避免误吞中间的 -。",
+            Description: "剥离文件名 / 目录名末尾的「-发布组名」（ASCII 字母数字，长度 ≤ 20），如 -ColorWEB / -FRDS / -CMCT / -MeM。仅匹配末尾，且执行时要求前方存在技术元数据，避免误吞标题内的 -。",
             Pattern: ReleaseGroupSuffixPattern,
             Order: 85,
             Samples: new[] { "Born.with.Luck.S01.WEB-DL-ColorWEB", "Show.S01.1080p-FRDS.mkv" }),

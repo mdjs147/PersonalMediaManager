@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using PersonalMediaManager.Application.Common;
 using PersonalMediaManager.Application.Contracts;
 using PersonalMediaManager.Application.Services.Tmdb;
+using PersonalMediaManager.Application.Services.Parse;
 using PersonalMediaManager.Domain.Entities;
 
 namespace PersonalMediaManager.Infrastructure.Persistence.Services.Tmdb;
@@ -70,11 +71,28 @@ internal sealed class TmdbSearchService : ITmdbSearchService
         IReadOnlyList<TmdbSearchRequest> attempts = BuildAttemptChain(request, primaryLanguage, fallbackLanguage);
 
         TmdbSearchResult? firstResult = null;
+        List<TmdbCandidate> collected = [];
+        bool allFromCache = true;
         for (int i = 0; i < attempts.Count; i++)
         {
             TmdbSearchResult result = await SearchOnceAsync(ctx, setting, apiKey, attempts[i], ct);
             firstResult ??= result;
-            if (result.Candidates.Count > 0)
+            allFromCache &= result.FromCache;
+            foreach (TmdbCandidate candidate in result.Candidates)
+            {
+                int existing = collected.FindIndex(c => c.Id == candidate.Id && c.MediaType == candidate.MediaType);
+                if (existing < 0) collected.Add(candidate);
+                else
+                {
+                    // 同一实体的回退语言标题可能更相关，不能让首层无关译名遮住后来的有效证据。
+                    double Evidence(TmdbCandidate c) => Math.Max(TitleSimilarity.Ratio(request.Query, c.Title),
+                        TitleSimilarity.Ratio(request.Query, c.OriginalTitle));
+                    if (Evidence(candidate) > Evidence(collected[existing])) collected[existing] = candidate;
+                }
+            }
+            // 有结果不等于相关；沿既有最多四层链继续回退，不增加查询变体。
+            if (TmdbCandidateScorer.Rank(result.Candidates, [request.Query], request.Year,
+                    TmdbScoreWeights.Default).Any(r => r.TitleEvidence >= TmdbCandidateScorer.MinimumTitleEvidence))
             {
                 if (i > 0)
                 {
@@ -82,12 +100,12 @@ internal sealed class TmdbSearchService : ITmdbSearchService
                         "TMDB 回退搜索命中（第 {Layer} 层：language={Language}, year={Year}）：query={Query}，候选={Count}",
                         i + 1, attempts[i].Language, attempts[i].Year?.ToString() ?? "无", request.Query, result.Candidates.Count);
                 }
-                return result;
+                return result with { Candidates = collected, FromCache = allFromCache };
             }
         }
 
         // 全链零结果：返回首层（主语言带年）的空结果，调用方按既有零候选流程处理（如转人工审核）
-        return firstResult!;
+        return firstResult! with { Candidates = collected, FromCache = allFromCache };
     }
 
     /// <summary>构造搜索回退链（去重：无年份跳过去年份层；回退语言与主语言相同或为空时跳过回退层）</summary>

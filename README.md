@@ -2,20 +2,24 @@
 
 # PersonalMediaManager
 
-**本地优先的 Windows 媒体文件自动整理工具**
+**本地优先的媒体文件自动整理工具（Windows / Linux / macOS）**
 
 自动识别落盘的电影 / 剧集文件,调取 TMDB 元数据,按 Plex 规范重命名归档,
 生成 `.nfo` 与海报,供 Plex / Emby / Jellyfin 直接消费。
 
 [![Release](https://img.shields.io/github/v/release/mdjs147/PersonalMediaManager?include_prereleases&sort=semver)](https://github.com/mdjs147/PersonalMediaManager/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows%2010%2B-0078d4.svg)](#环境要求)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-0078d4.svg)](#环境要求)
 [![.NET](https://img.shields.io/badge/.NET-10-512BD4.svg)](#技术栈)
 [![Vue](https://img.shields.io/badge/Vue-3-42b883.svg)](#技术栈)
 
 </div>
 
 ---
+
+## 跨平台运行
+
+Windows 保留原生托盘及单文件 exe；Linux 新增独立 Server；macOS 新增原生菜单栏（运行状态、打开 WebUI、退出）。构建与参数见 [跨平台运行](docs/跨平台运行.md)。macOS 原生运行验收尚须在 Mac 上完成；Linux 测试不能替代该验收。当前正式 Release 工作流仍发布 Windows 包。
 
 ## 这是什么
 
@@ -26,7 +30,7 @@
 剧集库/某某剧 (2024) {tmdb-123456}/Season 01/某某剧 (2024) - S01E07.mkv
 ```
 
-**单文件 exe,双击即用**——无容器、无云服务、无外部数据库,所有数据落本地 SQLite,通过浏览器 WebUI 管理,局域网内手机 / 平板均可访问。
+**Windows 单文件 exe,双击即用**——无容器、无云服务、无外部数据库,所有数据落本地 SQLite,通过浏览器 WebUI 管理,局域网内手机 / 平板均可访问。
 
 ## 功能特性
 
@@ -152,7 +156,7 @@ dotnet publish src/PersonalMediaManager.Launcher -c Release -r win-x64 `
 
 ## 架构概览
 
-7 个 `src/` + 6 个 `tests/` 项目,严格单向引用的分层架构:
+8 个 .NET `src/` + 6 个 `tests/` 项目,严格单向引用的分层架构:
 
 ```
 src/

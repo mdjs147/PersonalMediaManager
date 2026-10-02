@@ -103,7 +103,7 @@ public sealed class DryRunServiceTests
     {
         DryRunService sut = Sut(
             Rule("Spy x Family", "movie", 2022, conf: 0.9),
-            Cand(120089, "movie", "间谍过家家", 2022));
+            Cand(120089, "movie", "间谍过家家", 2022) with { OriginalTitle = "Spy x Family" });
 
         DryRunPreview r = await sut.PreviewAsync("Spy.x.Family.2022.mkv");
 
@@ -175,6 +175,106 @@ public sealed class DryRunServiceTests
     // 由边界声明式校验单测覆盖（见 Application.Tests/Validation/DryRunRequestValidationTests）；
     // service 层不再断言空路径（PreviewAsync 入参为裸 string，边界校验在 DryRunRequest 绑定时触发）。
 
+    [Fact]
+    public async Task ExactDominantWinner_AboveThreshold_UsesRankedCandidateWithoutWritingRecords()
+    {
+        TmdbCandidate[] candidates =
+        [
+            Cand(1, "movie", "ZZZZ", 1980), Cand(2, "movie", "QQQQ", 1981),
+            Cand(3, "movie", "WWWW", 1982), Cand(99, "movie", "Example", 2024),
+        ];
+        TestDbContextFactory factory = Db();
+        DryRunService sut = new(new StubRuleEngine(Rule("Example", "movie", 2024, 0.9)),
+            new StubTmdb(candidates), factory, NullLogger<DryRunService>.Instance);
+        DryRunPreview result = await sut.PreviewAsync("Example.2024.mkv");
+        result.Outcome.Should().Be(DryRunOutcome.WouldArchive);
+        result.Picked!.TmdbId.Should().Be(99);
+        result.OutcomeReason.Should().NotContain("≤");
+        using PmmDbContext check = factory.CreateDbContext();
+        check.MediaItems.Should().BeEmpty();
+        check.ProcessSteps.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task UnrelatedSingletonWithoutYear_WouldReviewWithoutPick()
+    {
+        DryRunService sut = Sut(Rule("AAAA", "movie", null, 0.9), Cand(1, "movie", "ZZZZ", null));
+        DryRunPreview result = await sut.PreviewAsync("AAAA.mkv");
+        result.Outcome.Should().Be(DryRunOutcome.WouldReview);
+        result.Picked.Should().BeNull();
+        result.PreviewRelativePath.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task TiedCandidates_WouldReviewWithoutPick()
+    {
+        DryRunService sut = Sut(Rule("Example", "movie", 2024, 0.9),
+            Cand(1, "movie", "Example", 2024), Cand(2, "movie", "Example", 2024));
+        DryRunPreview result = await sut.PreviewAsync("Example.2024.mkv");
+        result.Outcome.Should().Be(DryRunOutcome.WouldReview);
+        result.Picked.Should().BeNull();
+        result.PreviewRelativePath.Should().BeNull();
+        result.Candidates.Should().HaveCount(2);
+    }
+
+    [Theory]
+    [InlineData("Example.2024.S01E18.[NCOP].mkv")]
+    [InlineData("Example.2024.S01E18 NCOP EP18.mkv")]
+    [InlineData("Example.2024.S01E18【NCOP】.mkv")]
+    [InlineData("Example.2024.S01E18.[CM].mkv")]
+    public async Task ExtrasWithCompleteFieldsPreviewReview(string file)
+    {
+        DryRunService sut = Sut(Rule("Example", "tv", 2024, 0.9, 1, 18), Cand(1001, "tv", "Example", 2024));
+        DryRunPreview result = await sut.PreviewAsync(file);
+        result.Outcome.Should().Be(DryRunOutcome.WouldReview);
+        result.PreviewRelativePath.Should().BeNull();
+        result.PreviewNote.Should().Contain("附加短片");
+    }
+
+    [Fact]
+    public async Task RuleConflict_ReviewsBeforeAnyTmdbRequest()
+    {
+        RuleParseResult rule = Rule("Example", "tv", 2024, 0.9, 3, 2) with { Conflicts = ["season conflict"] };
+        DryRunService sut = new(new StubRuleEngine(rule), new ThrowingTmdb(), Db(), NullLogger<DryRunService>.Instance);
+        DryRunPreview result = await sut.PreviewAsync("Example.S04E02.mkv");
+        result.Outcome.Should().Be(DryRunOutcome.WouldReview);
+        result.TmdbQueried.Should().BeFalse();
+        result.PreviewRelativePath.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(4, 12, true)]
+    [InlineData(3, 12, false)]
+    [InlineData(4, 0, false)]
+    [InlineData(null, 0, false)]
+    public async Task SupplementedLiteralFields_UseSharedCatalogueGuard(int? catalogSeason, int count, bool accepted)
+    {
+        RuleParseResult rule = Rule("Example", "tv", 2024, 0.9, 4, 2) with
+        { FieldEvidence = [new RuleFieldEvidence("season", 4, "FileName", "4th Season")] };
+        StubTmdb tmdb = new(Cand(500, "tv", "Example", 2024))
+        { Details = new TmdbDetailsResult(500, "tv", "Example", "Example", 2024, 4, null, null, null, null, null, "{}",
+            catalogSeason is int season ? [new TmdbSeasonInfo(season, count)] : null) };
+        TestDbContextFactory factory = Db();
+        DryRunService sut = new(new StubRuleEngine(rule), tmdb, factory, NullLogger<DryRunService>.Instance);
+        DryRunPreview result = await sut.PreviewAsync("Example 4th Season E02.mkv");
+        result.Outcome.Should().Be(accepted ? DryRunOutcome.WouldArchive : DryRunOutcome.WouldReview);
+        tmdb.DetailCalls.Should().Be(1);
+        using PmmDbContext check = factory.CreateDbContext();
+        check.MediaItems.Should().BeEmpty();
+        check.ProcessSteps.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task SupplementedCatalogueNetworkError_RemainsBusinessError()
+    {
+        RuleParseResult rule = Rule("Example", "tv", 2024, 0.9, 4, 2) with
+        { FieldEvidence = [new RuleFieldEvidence("season", 4, "FileName", "S04")] };
+        StubTmdb tmdb = new(Cand(500, "tv", "Example", 2024)) { DetailsFailure = true };
+        DryRunService sut = new(new StubRuleEngine(rule), tmdb, Db(), NullLogger<DryRunService>.Instance);
+        Func<Task> preview = () => sut.PreviewAsync("Example.S04E02.mkv");
+        await preview.Should().ThrowAsync<BusinessException>().WithMessage("*TMDB*");
+    }
+
     // ---------- helpers ----------
 
     private static DryRunService Sut(RuleParseResult rule, params TmdbCandidate[] candidates)
@@ -223,12 +323,19 @@ public sealed class DryRunServiceTests
     private sealed class StubTmdb : ITmdbSearchService
     {
         private readonly TmdbSearchResult _result;
+        public TmdbDetailsResult? Details { get; init; }
+        public bool DetailsFailure { get; init; }
+        public int DetailCalls { get; private set; }
         public StubTmdb(params TmdbCandidate[] candidates)
             => _result = new TmdbSearchResult(candidates, null);
         public Task<TmdbSearchResult> SearchAsync(TmdbSearchRequest request, CancellationToken ct = default)
             => Task.FromResult(_result);
         public Task<TmdbDetailsResult> GetDetailsAsync(int tmdbId, string mediaType, CancellationToken ct = default)
-            => throw new NotImplementedException("演练不应调用 GetDetails");
+        {
+            DetailCalls++;
+            if (DetailsFailure) throw new TmdbClientException("测试目录网络错误");
+            return Task.FromResult(Details ?? throw new NotImplementedException("旧字段演练不应新增详情查询"));
+        }
         public Task<TmdbEpisodeGroup> GetEpisodeGroupAsync(string episodeGroupId, CancellationToken ct = default)
             => throw new NotImplementedException("演练不应调用剧集组");
     }

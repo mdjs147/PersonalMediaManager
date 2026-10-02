@@ -44,6 +44,32 @@ public sealed class BackupServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Create_Writes_Private_Backup_Containing_Database()
+    {
+        await using (SqliteConnection source = new(new SqliteConnectionStringBuilder
+        {
+            DataSource = _paths.DbFile,
+            Pooling = false,
+        }.ToString()))
+        {
+            await source.OpenAsync();
+            await using SqliteCommand command = source.CreateCommand();
+            command.CommandText = "CREATE TABLE example (id INTEGER PRIMARY KEY)";
+            await command.ExecuteNonQueryAsync();
+        }
+        BackupResult result = await NewSut(_paths.DbFile).CreateAsync();
+        result.Performed.Should().BeTrue();
+        string backup = Path.Combine(_paths.BackupDir, result.FileName!);
+        using global::System.IO.Compression.ZipArchive archive = global::System.IO.Compression.ZipFile.OpenRead(backup);
+        archive.GetEntry("pmm.db").Should().NotBeNull();
+        if (!OperatingSystem.IsWindows())
+        {
+            File.GetUnixFileMode(backup).Should().Be(PrivateFileSystem.FilePermissions);
+            File.GetUnixFileMode(_paths.BackupDir).Should().Be(PrivateFileSystem.DirectoryPermissions);
+        }
+    }
+
+    [Fact]
     public async Task ScheduledFailure_Emits_BackupFailed_Webhook_When_Enabled_And_Subscribed()
     {
         SeedSetting("Backup_Enabled", "true");

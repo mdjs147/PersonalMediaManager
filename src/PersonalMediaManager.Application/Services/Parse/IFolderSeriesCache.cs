@@ -37,9 +37,11 @@ public interface IFolderSeriesCache
 /// <param name="Title">主标题（中文优先）</param>
 /// <param name="Year">年份</param>
 /// <param name="Confidence">原判定置信度（复用时沿用，仅用于落库展示）</param>
+/// <param name="AlternateTitles">最多两个可信别名，仅用于原有标题复用守门</param>
 public sealed record FolderSeriesEntry(
     int TmdbId,
     string MediaType,
     string? Title,
     int? Year,
-    double? Confidence);
+    double? Confidence,
+    IReadOnlyList<string>? AlternateTitles = null);

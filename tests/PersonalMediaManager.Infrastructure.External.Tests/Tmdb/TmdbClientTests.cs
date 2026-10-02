@@ -90,12 +90,113 @@ public sealed class TmdbClientTests
     public async Task Search_500_ThrowsTmdbClientException()
     {
         StubHttpMessageHandler h = new();
-        h.EnqueueResponse(HttpStatusCode.InternalServerError, """{"status_message":"boom"}""");
+        for (int i = 0; i < 4; i++)
+            h.EnqueueResponse(HttpStatusCode.InternalServerError, """{"status_message":"boom"}""");
 
-        TmdbClient client = NewClient(h);
+        TmdbClient client = NewClientWithDelayRecorder(h).Client;
         Func<Task> act = () => client.SearchAsync(new TmdbSearchRequest("X", "movie"), "key");
         TmdbClientException ex = (await act.Should().ThrowAsync<TmdbClientException>()).Which;
         ex.HttpStatus.Should().Be(500);
+    }
+
+    [Fact]
+    public async Task Search_503ThenSuccess_RetriesOnce()
+    {
+        StubHttpMessageHandler h = new();
+        h.EnqueueResponse(HttpStatusCode.ServiceUnavailable, "{}");
+        h.EnqueueResponse(HttpStatusCode.OK, SearchSingle);
+        (TmdbClient client, List<TimeSpan> delays) = NewClientWithDelayRecorder(h);
+        (await client.SearchAsync(new TmdbSearchRequest("Inception", "movie"), "key")).Candidates.Should().HaveCount(1);
+        h.Requests.Should().HaveCount(2);
+        delays.Should().ContainSingle();
+    }
+
+    [Theory]
+    [InlineData(10, true)]
+    [InlineData(600, false)]
+    public async Task Search_503RetryAfter_RespectsBound(int seconds, bool retry)
+    {
+        StubHttpMessageHandler h = new();
+        h.EnqueueResponse(HttpStatusCode.ServiceUnavailable, "{}", headers =>
+            headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromSeconds(seconds)));
+        h.EnqueueResponse(HttpStatusCode.OK, SearchSingle);
+        (TmdbClient client, List<TimeSpan> delays) = NewClientWithDelayRecorder(h);
+        Func<Task> action = () => client.SearchAsync(new TmdbSearchRequest("Example", "movie"), "key");
+        if (retry)
+        {
+            await action();
+            delays.Should().Equal(TimeSpan.FromSeconds(seconds));
+            h.Requests.Should().HaveCount(2);
+        }
+        else
+        {
+            (await action.Should().ThrowAsync<TmdbClientException>()).Which.HttpStatus.Should().Be(503);
+            delays.Should().BeEmpty();
+            h.Requests.Should().ContainSingle();
+        }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Search_TransientTransportThenSuccess_Retries(bool timeout)
+    {
+        StubHttpMessageHandler h = new();
+        h.EnqueueResponse(_ => throw (timeout ? new TaskCanceledException("超时") : new HttpRequestException("连接中断")));
+        h.EnqueueResponse(HttpStatusCode.OK, SearchSingle);
+        TmdbClient client = NewClientWithDelayRecorder(h).Client;
+        (await client.SearchAsync(new TmdbSearchRequest("Inception", "movie"), "key")).Candidates.Should().HaveCount(1);
+        h.Requests.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task Search_TimeoutExhausted_StopsAfterFourAttempts()
+    {
+        StubHttpMessageHandler h = new();
+        for (int i = 0; i < 4; i++)
+            h.EnqueueResponse(_ => throw new TaskCanceledException("超时"));
+        (TmdbClient client, List<TimeSpan> delays) = NewClientWithDelayRecorder(h);
+        Func<Task> action = () => client.SearchAsync(new TmdbSearchRequest("Example", "movie"), "key");
+        await action.Should().ThrowAsync<TmdbClientException>();
+        h.Requests.Should().HaveCount(4);
+        delays.Should().Equal(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(4));
+    }
+
+    [Fact]
+    public async Task Search_CancellationDuringBackoff_StopsImmediately()
+    {
+        using CancellationTokenSource cts = new();
+        StubHttpMessageHandler h = new();
+        h.EnqueueResponse(HttpStatusCode.ServiceUnavailable, "{}");
+        TmdbClient client = new(new StubHttpClientFactory(h), NullLogger<TmdbClient>.Instance,
+            new TokenBucketRateLimiter(1000, TimeSpan.FromMilliseconds(50)),
+            (_, token) => { cts.Cancel(); token.ThrowIfCancellationRequested(); return Task.CompletedTask; });
+        Func<Task> action = () => client.SearchAsync(new TmdbSearchRequest("Example", "movie"), "key", ct: cts.Token);
+        await action.Should().ThrowAsync<OperationCanceledException>();
+        h.Requests.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task Search_401_DoesNotRetry()
+    {
+        StubHttpMessageHandler h = new();
+        h.EnqueueResponse(HttpStatusCode.Unauthorized, "{}");
+        TmdbClient client = NewClientWithDelayRecorder(h).Client;
+        Func<Task> action = () => client.SearchAsync(new TmdbSearchRequest("Example", "movie"), "key");
+        (await action.Should().ThrowAsync<TmdbClientException>()).Which.HttpStatus.Should().Be(401);
+        h.Requests.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task Search_CallerCancellation_DoesNotRetry()
+    {
+        using CancellationTokenSource cts = new();
+        StubHttpMessageHandler h = new();
+        h.EnqueueResponse(_ => { cts.Cancel(); throw new TaskCanceledException("用户取消"); });
+        TmdbClient client = NewClientWithDelayRecorder(h).Client;
+        Func<Task> action = () => client.SearchAsync(new TmdbSearchRequest("Example", "movie"), "key", ct: cts.Token);
+        await action.Should().ThrowAsync<OperationCanceledException>();
+        h.Requests.Should().ContainSingle();
     }
 
     [Fact]

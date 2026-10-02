@@ -450,6 +450,29 @@ public sealed class FileWatcherWorkerTests : IDisposable
     }
 
     [Fact]
+    public async Task WatcherFaulted_Path_Lookup_Uses_Operating_System_Case_Semantics()
+    {
+        long folderId = SeedFolder(_existingDir, enabled: true);
+        IFileWatcherFactory factory = Substitute.For<IFileWatcherFactory>();
+        factory.Create(Arg.Any<string>()).Returns(_ => NewStubWatcher());
+        IScanService scan = Substitute.For<IScanService>();
+        scan.ScanFolderAsync(folderId, Arg.Any<CancellationToken>())
+            .Returns(new ScanFolderResult("scan-case", folderId, _existingDir, 0));
+        FileWatcherWorker sut = NewWorker(factory, new PendingFileQueue(), scan: scan);
+        await sut.StartAsync(CancellationToken.None);
+        await sut.StartupRegistrationCompleted;
+        try
+        {
+            // Unix 上同名不同大小写的路径不应误重建另一个目录的 watcher。
+            await sut.HandleRebuildSignalAsync(new WatchRebuildItem(
+                WatchChangeKind.WatcherFaulted, FolderId: 0, Path: _existingDir.ToUpperInvariant()), CancellationToken.None);
+            factory.Received(OperatingSystem.IsWindows() ? 2 : 1).Create(_existingDir);
+            await scan.Received(OperatingSystem.IsWindows() ? 1 : 0).ScanFolderAsync(folderId, Arg.Any<CancellationToken>());
+        }
+        finally { await sut.StopAsync(CancellationToken.None); }
+    }
+
+    [Fact]
     public async Task FolderScan_Busy_Retries_Then_Succeeds()
     {
         // 补扫撞「已有扫描在进行中」→ 按重试间隔重试后成功

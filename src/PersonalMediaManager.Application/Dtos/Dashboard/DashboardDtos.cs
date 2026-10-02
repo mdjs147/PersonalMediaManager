@@ -8,7 +8,8 @@ public sealed record DashboardStats(
     DashboardTotalBucket Total,
     DashboardQueueBucket Queue,
     DashboardParseSourceBucket ParseSource,
-    DashboardServiceBucket Service);
+    DashboardServiceBucket Service,
+    CompletionProvenanceStats? CompletionProvenance = null);
 
 public sealed record DashboardTodayBucket(int Processed, int Skipped, int Failed, int Review);
 

@@ -17,7 +17,7 @@ namespace PersonalMediaManager.Infrastructure.Persistence.Services.Scan;
 /// 复用主管线同一批契约（IRuleEngineService / ITmdbSearchService / ParseTask / PlexNamingConventions），
 /// 保证预览结果与真实处理一致；但在决策矩阵走到「触发 AI」时即停，不调用 IAiCallOrchestrator。
 /// 候选阈值 / 四维打分权重与主管线同源（运行时读 Tmdb_Setting，缺行回退种子默认）；
-/// 置信度阈值与得分门槛常量须与 ProcessFileService 保持一致（0.6 / 0.5 / 0.35）。
+/// 置信度阈值与主管线保持一致（0.6）；标题证据和歧义门槛复用同一打分器。
 /// 副作用边界：TmdbSearchService.SearchAsync 会写 Tmdb_SearchCache（幂等、预热缓存，无害）；
 /// 不创建/保存 MediaItem，不调 IArchiveService / IFileMover。
 /// </remarks>
@@ -26,9 +26,6 @@ internal sealed class DryRunService : IDryRunService
     private const double ConfidenceThreshold = 0.6;
     private const int DefaultCandidateThreshold = 3;
     private const string FallbackExtension = "mkv";
-    // 综合得分门槛：与 ProcessFileService.MultiCandidateMinScore / SingleCandidateMinScore 保持一致
-    private const double MultiCandidateMinScore = 0.5;
-    private const double SingleCandidateMinScore = 0.35;
     // 候选过多免 AI 裁决门槛：与 ProcessFileService.CrossCheckDominantScore / CrossCheckDominantGap 保持一致
     private const double CrossCheckDominantScore = 0.7;
     private const double CrossCheckDominantGap = 0.15;
@@ -77,6 +74,11 @@ internal sealed class DryRunService : IDryRunService
         FileParseContext context = FileParseContext.FromFullPath(normalized, watchRoot: null);
         RuleParseResult rule = await _ruleEngine.ParseAsync(context, ct);
 
+        if (rule.Conflicts is { Count: > 0 })
+            return Build(normalized, fileName, rule, DryRunOutcome.WouldReview,
+                "规则与显式季集证据冲突，需人工确认；演练不会覆盖原字段",
+                tmdbQueried: false, candidates: [], picked: null, previewRel: null, previewNote: "解析字段证据冲突");
+
         // 决策一：规则置信度 / 特殊字符
         NextAction first = ParseTask
             .AfterRuleEngine(rule.Confidence, rule.HasSpecialChars, ConfidenceThreshold, candidateThreshold)
@@ -118,7 +120,7 @@ internal sealed class DryRunService : IDryRunService
             IReadOnlyList<TmdbCandidateScore> preRanked = TmdbCandidateScorer.Rank(
                 tmdb.Candidates, [rule.Title], rule.Year, scoreWeights, preferredLanguage);
             double gap = preRanked.Count > 1 ? preRanked[0].Score - preRanked[1].Score : double.MaxValue;
-            if (preRanked[0].Score >= CrossCheckDominantScore && gap >= CrossCheckDominantGap)
+            if (TmdbCandidateScorer.CanAutoSelect(preRanked) && preRanked[0].Score >= CrossCheckDominantScore && gap >= CrossCheckDominantGap)
             {
                 afterTmdb = NextAction.UseTmdb;
             }
@@ -133,7 +135,7 @@ internal sealed class DryRunService : IDryRunService
         }
 
         // 四维加权择优（与主管线 ProcessFileService 同口径）：按 标题相似度/年份差/热度/语言产地 重排候选，
-        // 最佳放首位；最高分低于门槛（多候选 0.5 / 单候选 0.35）→ 实际处理会转人工审核，演练如实预告
+        // 最佳放首位；标题证据不足、低分或近似同分 → 与实际处理一样转人工审核
         IReadOnlyList<TmdbCandidateScore> ranked = TmdbCandidateScorer.Rank(
             tmdb.Candidates, [rule.Title], rule.Year, scoreWeights, preferredLanguage);
         tmdb = tmdb with { Candidates = ranked.Select(r => r.Candidate).ToList() };
@@ -141,15 +143,14 @@ internal sealed class DryRunService : IDryRunService
             .Select(c => new DryRunCandidate(c.Id, c.MediaType, c.Title, c.OriginalTitle, c.Year, c.Popularity))
             .ToList();
         double topScore = ranked[0].Score;
-        double minScore = tmdb.Candidates.Count > 1 ? MultiCandidateMinScore : SingleCandidateMinScore;
-        if (topScore < minScore)
+        if (!TmdbCandidateScorer.CanAutoSelect(ranked))
         {
             return Build(normalized, fileName, rule, DryRunOutcome.WouldReview,
-                $"TMDB 候选最高综合得分 {topScore:F2} 低于门槛 {minScore:F2}（四维加权：标题/年份/热度/语言），实际会转人工审核",
-                tmdbQueried: true, candidates, picked: null, previewRel: null, previewNote: "候选综合得分低于门槛");
+                $"TMDB 候选标题证据不足、综合分不足或候选间存在歧义（最高分 {topScore:F2}），实际会转人工审核",
+                tmdbQueried: true, candidates, picked: null, previewRel: null, previewNote: "候选证据不足或存在歧义");
         }
 
-        // 采纳综合得分最高候选（候选数 ∈ [1, N]）
+        // 采纳通过统一守护的最高分候选
         TmdbCandidate top = tmdb.Candidates[0];
         DryRunCandidate picked = candidates[0];
         bool isTv = string.Equals(top.MediaType, "tv", StringComparison.OrdinalIgnoreCase);
@@ -159,6 +160,11 @@ internal sealed class DryRunService : IDryRunService
         int? year = rule.Year ?? top.Year;  // 剧集常无 rule.year，用 TMDB 候选兜底
         int? season = rule.Season;
         int? episode = rule.Episode;
+
+        if (isTv && MediaExtraClip.HasMarker(fileName, context.DirectParentFolderName))
+            return Build(normalized, fileName, rule, DryRunOutcome.WouldReview,
+                "片头、片尾或宣传短片标记需人工确认映射，不能按正片编号自动归档",
+                tmdbQueried: true, candidates, picked, previewRel: null, previewNote: "附加短片需人工映射");
 
         if (year is null)
         {
@@ -171,6 +177,18 @@ internal sealed class DryRunService : IDryRunService
             return Build(normalized, fileName, rule, DryRunOutcome.WouldReview,
                 $"命中 TMDB 剧集候选，但季 / 集字段不全（season={season?.ToString() ?? "?"} / episode={episode?.ToString() ?? "?"}），实际会转人工补全",
                 tmdbQueried: true, candidates, picked, previewRel: null, previewNote: "剧集季 / 集不全");
+        }
+
+        if (isTv && TmdbEpisodeCatalogueGuard.RequiresValidation(rule))
+        {
+            TmdbDetailsResult details;
+            try { details = await _tmdb.GetDetailsAsync(top.Id, top.MediaType, ct); }
+            catch (TmdbClientException ex) { throw new BusinessException("TMDB 服务异常", ex); }
+            string? catalogueIssue = TmdbEpisodeCatalogueGuard.Validate(details?.Seasons, season!.Value, episode!.Value, rule.EpisodeEnd);
+            if (catalogueIssue is not null)
+                return Build(normalized, fileName, rule, DryRunOutcome.WouldReview,
+                    "已提取字面季集，但 TMDB 季集目录未知或不符，需人工确认编号",
+                    tmdbQueried: true, candidates, picked, previewRel: null, previewNote: catalogueIssue);
         }
 
         string ext = Path.GetExtension(normalized).TrimStart('.');
@@ -203,7 +221,7 @@ internal sealed class DryRunService : IDryRunService
 
         _logger.LogDebug("整理演练：{Path} → {Outcome} ({Preview})", normalized, DryRunOutcome.WouldArchive, previewRel);
         return Build(normalized, fileName, rule, DryRunOutcome.WouldArchive,
-            $"规则 + TMDB 命中候选 {tmdb.Candidates.Count} 个（≤ 阈值 {candidateThreshold}），按四维加权取最高分 {topScore:F2}",
+            $"规则 + TMDB 命中候选 {tmdb.Candidates.Count} 个，通过标题证据和歧义守护后取四维最高分 {topScore:F2}",
             tmdbQueried: true, candidates, picked, previewRel, note);
     }
 

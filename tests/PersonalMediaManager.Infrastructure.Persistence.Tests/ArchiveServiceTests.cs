@@ -50,6 +50,7 @@ public sealed class ArchiveServiceTests : IDisposable
         ctx.Database.EnsureCreated();
 
         _scratch = Path.Combine(Path.GetTempPath(), $"pmm-arch-{Guid.NewGuid():N}");
+        PrivateFileSystem.EnsureDirectory(_scratch);
         _sourceDir = Path.Combine(_scratch, "src");
         _targetRoot = Path.Combine(_scratch, "library");
         Directory.CreateDirectory(_sourceDir);
@@ -605,6 +606,11 @@ public sealed class ArchiveServiceTests : IDisposable
         string poster = Path.Combine(movieFolder, "poster.jpg");
         await File.WriteAllBytesAsync(poster, new byte[10]);
 
+        // 大小写敏感卷上的另一视频伴生文件不得被覆盖清理波及。
+        string siblingSub = Path.Combine(movieFolder, "foo (2020) {tmdb-1}.zh.srt");
+        bool distinctCase = !File.Exists(siblingSub);
+        if (distinctCase) await File.WriteAllTextAsync(siblingSub, "sibling-sub");
+
         string videoPath = WriteFile("Foo.2020.mkv", 5000);
         string newSub = WriteFile("Foo.2020.CHS.srt", 2000);
         await File.WriteAllTextAsync(newSub, "new-timeline-sub");
@@ -623,6 +629,7 @@ public sealed class ArchiveServiceTests : IDisposable
         newNfo.Should().Contain("<movie>", "新 nfo 已重新生成");
         File.Exists(poster).Should().BeTrue("poster.jpg 不属同 stem 伴生文件，不应被清理");
         r.Warnings.Should().BeNullOrEmpty("旧伴生清理后新字幕 / nfo 全部正常落位");
+        if (distinctCase) (await File.ReadAllTextAsync(siblingSub)).Should().Be("sibling-sub");
     }
 
     // ---------- 冲突策略：Ask（询问）/ ForceOverwrite（人工裁定覆盖） ----------

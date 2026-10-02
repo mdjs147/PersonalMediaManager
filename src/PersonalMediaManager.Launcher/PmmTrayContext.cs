@@ -135,23 +135,12 @@ internal sealed class PmmTrayContext : ApplicationContext
             {
                 WebApplication newApp = PmmHost.CreateApp(_initialArgs, _paths);
 
-                // EF Migration + 幂等 Seed
-                // Migrate 走 DatabaseStartupHealer：异常退出残留 WAL 引发的 SQLITE_CORRUPT 误报会自动 checkpoint + 重试一次；
-                // 真损坏（integrity_check 非 ok）原样上抛到外层 catch → tray-crash.log + MessageBox
-                using (IServiceScope scope = newApp.Services.CreateScope())
+                try { await PmmBootstrap.StartAsync(newApp).ConfigureAwait(false); }
+                catch
                 {
-                    IDbContextFactory<PmmDbContext> factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PmmDbContext>>();
-                    using PmmDbContext ctx = factory.CreateDbContext();
-                    ILogger migrateLogger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>()
-                        .CreateLogger("PersonalMediaManager.Launcher.DbStartup");
-                    DatabaseStartupHealer.MigrateWithSelfHeal(ctx, migrateLogger);
-                    scope.ServiceProvider.GetRequiredService<IDataSeeder>().SeedAsync().GetAwaiter().GetResult();
+                    await newApp.DisposeAsync().ConfigureAwait(false);
+                    throw;
                 }
-
-                // 用 StartAsync（而非 fire-and-forget RunAsync）：await 到 Kestrel + 所有 HostedService 启动完成。
-                // 启动失败（如端口 bind 失败）在此抛出**首要异常**（SocketException 等），被外层 catch 拿到真实原因；
-                // 而 RunAsync 是 fire-and-forget，启动失败经 host dispose 后只会在别处冒出次生「Cannot access a disposed object」掩盖真因。
-                await newApp.StartAsync().ConfigureAwait(false);
                 int newPort = newApp.Configuration.GetValue("Web:Port", PmmHost.DefaultPort);
                 return (newApp, newPort);
             }).ConfigureAwait(false);

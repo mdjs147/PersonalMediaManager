@@ -9,7 +9,7 @@ namespace PersonalMediaManager.Infrastructure.External.Ai;
 /// 抽出为静态类（而非塞进 OpenAiCompatibleProviderBase）是因为 OllamaProvider 不走 OpenAI 协议但要复用同一套
 /// system prompt 与 JSON 反解，避免「让 OllamaProvider 继承 OpenAI 基类」造成的强行耦合。
 /// </remarks>
-internal static class AiPromptHelpers
+internal static partial class AiPromptHelpers
 {
     /// <summary>瞬时错误判定阈值：首字节超时 &lt; 5s 视为瞬时（需求文档 §3.3.3）</summary>
     public static readonly TimeSpan TransientFirstByteThreshold = TimeSpan.FromSeconds(5);
@@ -35,6 +35,7 @@ internal static class AiPromptHelpers
     /// </remarks>
     public static string BuildUserPrompt(AiParseRequest request)
     {
+        if (request.Context is not null) return PrepareTaskPrompt(request).UserPrompt;
         List<string> sections = [$"【文件名】\n{request.FileName}"];
 
         // 文件路径组：优先完整相对路径段（外层→内层）；缺省回退旧的单层父目录字段以兼容旧调用方

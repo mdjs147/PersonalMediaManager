@@ -188,27 +188,31 @@ public sealed class ParseRulesTests : IDisposable
     }
 
     [Fact]
-    public async Task Builtin_Endpoint_Returns16StaticRules()
+    public async Task Builtin_Endpoint_Returns17StaticRules()
     {
         await LoginAsAdminAsync();
         JsonElement resp = await GetAsync("/api/settings/parse-rules/builtin");
         resp.GetProperty("code").GetInt32().Should().Be(ApiCode.Success);
 
         JsonElement data = resp.GetProperty("data");
-        data.GetArrayLength().Should().Be(16, "RuleEngineService 内置 16 条静态正则（季识别增强 + 压制代号-集号整串兜底 ReleaseTagEpisode），全部从 BuiltinRulesCatalog 透出");
+        data.GetArrayLength().Should().Be(17, "新增英文序数季号 SeasonOrdinalLatin 后，全部内置正则均从 BuiltinRulesCatalog 透出");
 
         // 每条必备字段 + 升序排序（按 order）
         List<int> orders = data.EnumerateArray().Select(e => e.GetProperty("order").GetInt32()).ToList();
         orders.Should().BeInAscendingOrder();
-        orders.Should().Equal(10, 20, 30, 40, 50, 52, 55, 56, 57, 58, 60, 70, 75, 80, 85, 90);
+        orders.Should().Equal(10, 20, 30, 40, 50, 52, 55, 55, 56, 57, 58, 60, 70, 75, 80, 85, 90);
 
-        // 16 条 key 与 catalog 对齐（含季识别增强的 SeasonRoman + SeasonArc + SeasonWordLatin 与 ReleaseTagEpisode）
+        // 17 条 key 与 catalog 对齐，包含新增的英文序数季号。
         IEnumerable<string?> keys = data.EnumerateArray().Select(e => e.GetProperty("key").GetString());
         keys.Should().BeEquivalentTo(new[]
         {
             "SeasonEpisodeLatin", "SeasonChinese", "EpisodeChinese", "EpisodeOnly",
-            "BracketEpisode", "ReleaseTagEpisode", "SeasonOnlyLatin", "SeasonRoman", "SeasonArc", "SeasonWordLatin", "Year", "Noise", "TotalCountNoise", "GroupBracket", "ReleaseGroupSuffix", "Separator",
+            "BracketEpisode", "ReleaseTagEpisode", "SeasonOnlyLatin", "SeasonOrdinalLatin", "SeasonRoman", "SeasonArc", "SeasonWordLatin", "Year", "Noise", "TotalCountNoise", "GroupBracket", "ReleaseGroupSuffix", "Separator",
         });
+
+        JsonElement ordinal = data.EnumerateArray().Single(e => e.GetProperty("key").GetString() == "SeasonOrdinalLatin");
+        ordinal.GetProperty("pattern").GetString().Should().NotBeNullOrWhiteSpace();
+        ordinal.GetProperty("samples").EnumerateArray().Select(e => e.GetString()).Should().Contain("Example Arc 4th Season");
 
         // 抽查 pattern + samples 非空
         JsonElement first = data.EnumerateArray().First();

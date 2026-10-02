@@ -32,18 +32,163 @@ public sealed class RuleEngineServiceTests : IDisposable
 
     /// <summary>测试 helper：把旧 (fileName, parentFolderName) 入参翻译为 FileParseContext 调用</summary>
     /// <remarks>
-    /// 测试用的「监控根」固定为 C:\watch（跨平台值无所谓，FileParseContext.FromFullPath 内部用
+    /// 测试用的「监控根」固定为 C:\watch（通过 FromNativeTestPath 映射分隔符，FileParseContext 内部用
     /// Path.GetRelativePath 算出 RelativeSegments，与盘符无关）。
     /// parentFolderName=null → FileNameOnly 模式，RelativeSegments=[]，等价于旧的「无父目录」。
     /// </remarks>
+    // 固定样本使用 Windows 分隔符书写；测试时映射为本机路径，避免把整条路径误当文件名。
+    private static FileParseContext FromNativeTestPath(string path, string root)
+        => FileParseContext.FromFullPath(path.Replace('\\', Path.DirectorySeparatorChar),
+            root.Replace('\\', Path.DirectorySeparatorChar));
+
     private Task<RuleParseResult> Parse(string fileName, string? parentFolderName, CancellationToken ct = default)
     {
         FileParseContext ctx = parentFolderName is null
             ? FileParseContext.FileNameOnly(fileName)
-            : FileParseContext.FromFullPath(
+            : FromNativeTestPath(
                 Path.Combine("C:\\watch", parentFolderName, fileName),
                 "C:\\watch");
         return _sut.ParseAsync(ctx, ct);
+    }
+
+    [Theory]
+    [InlineData("35.1080p.HD国语中字无水印.mkv", "Example Programme S01E30-40")]
+    [InlineData("35.2160p.HD国语中字无水印[www.example.com].mkv", "Example Programme S01-35-37.2160p")]
+    public async Task NumericTechnicalFileUsesInformativeParentIdentity(string file, string parent)
+    {
+        RuleParseResult result = await Parse(file, parent);
+        result.Title.Should().Be("Example Programme");
+        result.HasIdentityEvidence.Should().BeTrue();
+        result.Season.Should().Be(1);
+        result.Episode.Should().Be(35);
+        result.EpisodeEnd.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("Downloads")]
+    [InlineData("Movies")]
+    public async Task NumericTechnicalFileWithoutIdentityCannotGainConfidenceFromEpisode(string parent)
+    {
+        RuleParseResult result = await Parse("35.1080p.HD国语中字无水印.mkv", parent);
+        result.HasIdentityEvidence.Should().BeFalse();
+        result.Confidence.Should().BeLessThan(0.5);
+        result.Episode.Should().Be(35);
+    }
+
+    [Fact]
+    public async Task UserTechnicalTitleKeepsEvidenceButPrioritizesMeaningfulParentAlias()
+    {
+        SeedRule(new ParseRule { Name = "synthetic", Enabled = true, Priority = 1, Scope = ParseScope.FileName,
+            Pattern = @"^(?<episode>35)\.1080p\.(?<title>HD国语中字无水印)", DefaultType = "tv", ConfidenceBonus = 1 });
+        RuleParseResult result = await Parse("35.1080p.HD国语中字无水印.mkv", "Example Programme S01E30-40");
+        result.Title.Should().Be("HD国语中字无水印");
+        result.HasIdentityEvidence.Should().BeFalse();
+        result.Confidence.Should().BeLessThan(0.5);
+        result.AlternativeTitles.Should().Contain("Example Programme");
+    }
+
+    [Theory]
+    [InlineData("35 Days in HD")]
+    [InlineData("无水印之城")]
+    [InlineData("国语中字的秘密")]
+    [InlineData("HD Chronicles")]
+    public async Task LegitimateTitleContainingTechnicalSubstringsRetainsIdentity(string title)
+    {
+        RuleParseResult result = await Parse(title + ".S01E03.mkv", "Example Parent");
+        result.Title.Should().Be(title);
+        result.HasIdentityEvidence.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("Example.1920x1080.mkv", null)]
+    [InlineData("Example.1920×1080.mkv", null)]
+    [InlineData("Example.1080x1920.mkv", null)]
+    [InlineData("Example.1920 X 1080.mkv", null)]
+    [InlineData("Example.1920.1920x1080.mkv", 1920)]
+    [InlineData("Example.2024.1920×1080.mkv", 2024)]
+    public async Task Builtin_DimensionsDoNotProvideYear(string file, int? year)
+    {
+        (await Parse(file, null)).Year.Should().Be(year);
+    }
+
+    [Theory]
+    [InlineData("Example 1920x1080.mkv", null)]
+    [InlineData("Example 1920×1080.mkv", null)]
+    [InlineData("Example 1920.mkv", 1920)]
+    public async Task UserRule_YearCaptureRequiresNonDimensionEvidence(string file, int? year)
+    {
+        SeedRule(new ParseRule { Name = "synthetic", Enabled = true, Priority = 1,
+            Scope = ParseScope.FileName, Pattern = @"^(?<title>Example) (?<year>\d{4})" });
+        (await Parse(file, null)).Year.Should().Be(year);
+    }
+
+    [Theory]
+    [InlineData("33.mkv", 33)]
+    [InlineData("33.1080p.HD国语中字无水印.mkv", 33)]
+    [InlineData("unknown.mkv", null)]
+    [InlineData("33.5.1080p.mkv", null)]
+    public async Task Builtin_ParentPackRangeCannotReplaceNumericFile(string file, int? episode)
+    {
+        RuleParseResult result = await Parse(file, "Example Show s01E30-33");
+        result.Season.Should().Be(1);
+        result.Episode.Should().Be(episode);
+        result.EpisodeEnd.Should().BeNull();
+        if (file.StartsWith("33.1080p", StringComparison.Ordinal))
+            TmdbEpisodeCatalogueGuard.RequiresValidation(result).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("33.1080p.S01E30.mkv", 30, null)]
+    [InlineData("33.1080p.S01E30-E31.mkv", 30, 31)]
+    [InlineData("33.1080p.S01E30.5.mkv", null, null)]
+    public async Task Builtin_NumericResolutionPrefixDoesNotOverrideExplicitEpisode(string file, int? episode, int? end)
+    {
+        RuleParseResult result = await Parse(file, "Example Show s01E30-33");
+        result.Episode.Should().Be(episode);
+        result.EpisodeEnd.Should().Be(end);
+    }
+
+    [Theory]
+    [InlineData("Example [X265_Main10p_Flac].mkv")]
+    [InlineData("Example [x264_AAC].mkv")]
+    public async Task Builtin_CodecIsNotRomanSeason(string file)
+    {
+        (await Parse(file, null)).Season.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Builtin_HashOnlyTitleDoesNotAssertIdentity()
+    {
+        RuleParseResult result = await Parse("(C7EE9693).mkv", null);
+        result.HasIdentityEvidence.Should().BeFalse();
+        result.Confidence.Should().BeLessThan(0.5);
+    }
+
+    [Theory]
+    [InlineData("Spider-Man.2002.1080p.mkv", "Spider Man")]
+    [InlineData("X-Men.2000.1080p.mkv", "X Men")]
+    [InlineData("WALL-E.2008.1080p.mkv", "WALL E")]
+    [InlineData("Spider-Man.mkv", "Spider Man")]
+    public async Task Builtin_InternalHyphen_PreservesTitle(string file, string title)
+    {
+        (await Parse(file, null)).Title.Should().Be(title);
+    }
+
+    [Fact]
+    public async Task Builtin_BracketYear_IsNotEpisode()
+    {
+        RuleParseResult result = await Parse("Example [2024].1080p.mkv", null);
+        result.Year.Should().Be(2024);
+        result.Episode.Should().BeNull();
+        result.MediaType.Should().Be("movie");
+    }
+
+    [Fact]
+    public async Task Builtin_ParentRange_DoesNotExpandFileSingleEpisode()
+    {
+        RuleParseResult result = await Parse("Example.S01E03.mkv", "Example.S01E01-E12");
+        result.Episode.Should().Be(3);
+        result.EpisodeEnd.Should().BeNull();
     }
 
     // ---------- 内置规则：电影 ----------
@@ -134,7 +279,7 @@ public sealed class RuleEngineServiceTests : IDisposable
         // 复现真实日志样本：[字幕组][剧名][绝对集数][技术参数] 全方括号命名，整条路径无季号标记。
         // 内置规则的 GroupBracket 会把方括号块全部剥光 → 无有效标题（生产环境由种子规则 P45
         // 「方括号包裹剧集」捕获 title 走直查）→ 标题无效压 0.50 走 AI 兜底，不能拿原始串直查 TMDB。
-        FileParseContext ctx = FileParseContext.FromFullPath(
+        FileParseContext ctx = FromNativeTestPath(
             "F:\\迅雷下载\\[BeanSub&FZSD][Jujutsu_Kaisen][48-59][GB][1080P][MP4]\\[BeanSub&FZSD][Jujutsu_Kaisen][59][GB][1080P][x264_AAC].mp4",
             "F:\\迅雷下载");
         RuleParseResult r = await _sut.ParseAsync(ctx);
@@ -197,6 +342,133 @@ public sealed class RuleEngineServiceTests : IDisposable
         RuleParseResult b = await Parse("绝命毒师 第03集.mkv", parentFolderName: null);
         a.HasSpecialChars.Should().BeFalse();
         b.HasSpecialChars.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("Example Arc S4 - 01.mkv", 4)]
+    [InlineData("Example Arc 2nd Season - 01.mkv", 2)]
+    [InlineData("Example Arc 11th Season - 01.mkv", 11)]
+    [InlineData("Example Arc 21st Season - 01.mkv", 21)]
+    public async Task UserRule_TitleEpisodeOnly_FillsExplicitSeason(string file, int expectedSeason)
+    {
+        long id = SeedRule(new ParseRule { Name = "synthetic", Enabled = true, Priority = 1,
+            Scope = ParseScope.FileName, Pattern = @"^(?<title>.+?) - (?<episode>\d{2})", DefaultType = "tv", ForceType = true });
+        RuleParseResult result = await Parse(file, null);
+        result.Season.Should().Be(expectedSeason);
+        result.Episode.Should().Be(1);
+        result.MatchedRuleId.Should().Be(id);
+        result.Title.Should().Be("Example Arc");
+        result.FieldEvidence.Should().Contain(e => e.Field == "season" && e.Source == "FileName");
+    }
+
+    [Theory]
+    [InlineData("Example Arc 3 - 01.mkv")]
+    [InlineData("Example Arc 11st Season - 01.mkv")]
+    public async Task UserRule_NonSeasonNumbers_DoNotFill(string file)
+    {
+        SeedRule(new ParseRule { Name = "synthetic", Enabled = true, Priority = 1,
+            Scope = ParseScope.FileName, Pattern = @"^(?<title>.+?) - (?<episode>\d{2})", DefaultType = "tv", ForceType = true });
+        (await Parse(file, null)).Season.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task UserRule_ExplicitSeasonWins_ConflictReported()
+    {
+        SeedRule(new ParseRule { Name = "synthetic", Enabled = true, Priority = 1,
+            Scope = ParseScope.FileName, Pattern = @"^(?<title>.+?) \[S(?<season>\d)\]", DefaultType = "tv", ForceType = true });
+        RuleParseResult result = await Parse("Example Arc [S3] S04E02.mkv", null);
+        result.Season.Should().Be(3);
+        result.Episode.Should().Be(2);
+        result.Conflicts.Should().Contain(c => c.StartsWith("season"));
+    }
+
+    [Fact]
+    public async Task UserRule_ForceMovie_RomanSuffixDoesNotChangeType()
+    {
+        SeedRule(new ParseRule { Name = "synthetic", Enabled = true, Priority = 1,
+            Scope = ParseScope.FileName, Pattern = @"^(?<title>.+?)\.(?<year>\d{4})", DefaultType = "movie", ForceType = true });
+        RuleParseResult result = await Parse("Example Saga II.2024.mkv", null);
+        result.MediaType.Should().Be("movie");
+        result.Season.Should().BeNull();
+        result.Title.Should().Be("Example Saga II");
+    }
+
+    [Fact]
+    public async Task UserRule_RejectedFractionalEpisode_IsNotFilledFromParent()
+    {
+        SeedRule(new ParseRule { Name = "synthetic", Enabled = true, Priority = 1,
+            Scope = ParseScope.FileName, Pattern = @"^(?<title>.+?) - (?<episode>\d{2})", DefaultType = "tv", ForceType = true });
+        RuleParseResult result = await Parse("Example Arc - 11.5.mkv", "Example Arc S04E11");
+        result.Season.Should().Be(4);
+        result.Episode.Should().BeNull();
+        result.RejectedFields.Should().Contain("episode");
+    }
+
+    [Fact]
+    public async Task UserRule_FileSingleEpisode_DoesNotInheritParentRange()
+    {
+        SeedRule(new ParseRule { Name = "synthetic", Enabled = true, Priority = 1,
+            Scope = ParseScope.FileName, Pattern = @"^(?<title>.+?) - (?<episode>\d{2})", DefaultType = "tv", ForceType = true });
+        RuleParseResult result = await Parse("Example Arc - 03.mkv", "Example Arc S04E01-E12");
+        result.Season.Should().Be(4);
+        result.Episode.Should().Be(3);
+        result.EpisodeEnd.Should().BeNull();
+        result.Conflicts.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("Example Programme", true)]
+    [InlineData("Downloads", false)]
+    public async Task UserRule_DateOnlyIdentity_DoesNotSuppressParentContext(string parent, bool informative)
+    {
+        SeedRule(new ParseRule { Name = "synthetic", Enabled = true, Priority = 1,
+            Scope = ParseScope.FileName, Pattern = @"^(?<title>2026\.08\.26)", DefaultType = "movie", ForceType = true, ConfidenceBonus = 0.3 });
+        RuleParseResult result = await Parse("2026.08.26.mkv", parent);
+        result.Title.Should().Be("2026 08 26");
+        result.HasIdentityEvidence.Should().BeFalse();
+        result.Confidence.Should().BeLessThan(0.6);
+        if (informative) result.AlternativeTitles.Should().Contain("Example Programme");
+        else result.AlternativeTitles.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("Example.S01E11.5.mkv")]
+    [InlineData("Example.EP11.5.mkv")]
+    public async Task UserRule_TitleOnly_FractionalFileBlocksAncestorEpisode(string file)
+    {
+        SeedRule(new ParseRule { Name = "synthetic", Enabled = true, Priority = 1,
+            Scope = ParseScope.FileName, Pattern = @"^(?<title>Example)", DefaultType = "tv", ForceType = true });
+        RuleParseResult result = await Parse(file, "Example S01E11");
+        result.Episode.Should().BeNull();
+        result.RejectedFields.Should().Contain("episode");
+    }
+
+    [Fact]
+    public async Task UserRule_ConflictingSeasonMarkersInSameLayer_AreReported()
+    {
+        SeedRule(new ParseRule { Name = "synthetic", Enabled = true, Priority = 1,
+            Scope = ParseScope.FileName, Pattern = @"^(?<title>Example)", DefaultType = "tv", ForceType = true });
+        RuleParseResult result = await Parse("Example S02 Season 3 E01.mkv", null);
+        result.Conflicts.Should().Contain(c => c.StartsWith("season"));
+    }
+
+    [Fact]
+    public async Task Builtin_NewOrdinalSeason_CarriesEvidenceForCanonicalValidation()
+    {
+        RuleParseResult result = await Parse("Example 4th Season E03.mkv", null);
+        result.Season.Should().Be(4);
+        result.FieldEvidence.Should().Contain(e => e.Field == "season" && e.Value == 4);
+    }
+
+    [Fact]
+    public async Task UserRule_ParentCapturedEpisode_FractionalFileRejectsEffectiveInteger()
+    {
+        SeedRule(new ParseRule { Name = "synthetic", Enabled = true, Priority = 1,
+            Scope = ParseScope.ParentFolder, Pattern = @"^(?<title>Example) S(?<season>\d{2})E(?<episode>\d{2})", DefaultType = "tv", ForceType = true });
+        RuleParseResult result = await Parse("Example.S01E11.5.mkv", "Example S01E11");
+        result.Episode.Should().BeNull();
+        result.RejectedFields.Should().Contain("episode");
+        result.FieldEvidence.Should().Contain(e => e.Field == "episode" && e.Value == 11 && e.Source == "UserRule");
     }
 
     // ---------- 用户规则 ----------
@@ -482,7 +754,7 @@ public sealed class RuleEngineServiceTests : IDisposable
         // F:\迅雷下载\国务卿女士 6季\第1季\01.mp4
         // 监控根 = F:\迅雷下载，文件名 01.mp4 只能看出第 1 集，第1季 给出季号，
         // **国务卿女士 6季** 才是剧名。当前内置规则应能从祖父目录回填 title
-        FileParseContext ctx = FileParseContext.FromFullPath(
+        FileParseContext ctx = FromNativeTestPath(
             "F:\\迅雷下载\\国务卿女士 6季\\第1季\\01.mp4",
             "F:\\迅雷下载");
         RuleParseResult r = await _sut.ParseAsync(ctx);
@@ -500,7 +772,7 @@ public sealed class RuleEngineServiceTests : IDisposable
     public async Task RealSample_PtSinglePackedDir_ExtractsAllFields()
     {
         // 父目录承载全部元信息，文件本身只剩 SxxExx 双集合并
-        FileParseContext ctx = FileParseContext.FromFullPath(
+        FileParseContext ctx = FromNativeTestPath(
             "F:\\迅雷下载\\【高清剧集网发布 www.PTHDTV.com】低智商犯罪[第08-09集][国语音轨+简繁英字幕].Born.with.Luck.S01.2026.2160p.IQ.WEB-DL.H265.DDP5.1-ColorWEB\\Born.with.Luck.S01E08-E09.mkv",
             "F:\\迅雷下载");
         RuleParseResult r = await _sut.ParseAsync(ctx);
@@ -604,7 +876,7 @@ public sealed class RuleEngineServiceTests : IDisposable
     public async Task Builtin_SingleSeason_NotStrippedAsTotalCount()
     {
         // 「第3季」是单季季号，必须交给季号提取（season=3），不能被总量清洗规则误吞为噪声
-        FileParseContext ctx = FileParseContext.FromFullPath(
+        FileParseContext ctx = FromNativeTestPath(
             "C:\\watch\\庆余年 第3季\\第05集.mkv", "C:\\watch");
         RuleParseResult r = await _sut.ParseAsync(ctx);
 
@@ -620,7 +892,7 @@ public sealed class RuleEngineServiceTests : IDisposable
     public async Task Builtin_SeasonWordDir_StandardLayout_SeasonFromDirEpisodeFromStem()
     {
         // 标准目录布局：Show Name (2020)/Season 02/07.mkv —— 季号只在「Season 02」目录段，文件名只剩集号
-        FileParseContext ctx = FileParseContext.FromFullPath(
+        FileParseContext ctx = FromNativeTestPath(
             "C:\\watch\\Show Name (2020)\\Season 02\\07.mkv", "C:\\watch");
         RuleParseResult r = await _sut.ParseAsync(ctx);
 
@@ -634,7 +906,7 @@ public sealed class RuleEngineServiceTests : IDisposable
     [Fact]
     public async Task Builtin_SeasonWordDir_DotSeparator_SeasonParsed()
     {
-        FileParseContext ctx = FileParseContext.FromFullPath(
+        FileParseContext ctx = FromNativeTestPath(
             "C:\\watch\\Season.03\\EP05.mkv", "C:\\watch");
         RuleParseResult r = await _sut.ParseAsync(ctx);
 
@@ -666,7 +938,7 @@ public sealed class RuleEngineServiceTests : IDisposable
     public async Task Builtin_CjkNoiseDirSegment_NotSelectedAsTitle()
     {
         // 「正片」是下载站常见目录层级，纯噪声不能胜出为标题；真实剧名在更外层目录
-        FileParseContext ctx = FileParseContext.FromFullPath(
+        FileParseContext ctx = FromNativeTestPath(
             "F:\\迅雷下载\\三体.2023.S01.2160p\\正片\\S01E05.mkv", "F:\\迅雷下载");
         RuleParseResult r = await _sut.ParseAsync(ctx);
 
@@ -752,7 +1024,7 @@ public sealed class RuleEngineServiceTests : IDisposable
     public async Task Builtin_FractionalEpisode_PureNumericStem_WithSeasonDir_NotDirectArchive()
     {
         // 纯数字小数文件名「11.5.mkv」：stem「11.5」非纯整数，不得当作第 11 集；组合季目录后不得直通
-        FileParseContext ctx = FileParseContext.FromFullPath(
+        FileParseContext ctx = FromNativeTestPath(
             "C:\\watch\\Show Name (2020)\\Season 01\\11.5.mkv", "C:\\watch");
         RuleParseResult r = await _sut.ParseAsync(ctx);
 
@@ -766,7 +1038,7 @@ public sealed class RuleEngineServiceTests : IDisposable
     {
         // 无扩展名文件「11.5」：GetFileNameWithoutExtension 会把「.5」当扩展名剥掉、stem 截成「11」，
         // 纯数字兜底不得再把它当第 11 集
-        FileParseContext ctx = FileParseContext.FromFullPath(
+        FileParseContext ctx = FromNativeTestPath(
             "C:\\watch\\Show Name (2020)\\Season 01\\11.5", "C:\\watch");
         RuleParseResult r = await _sut.ParseAsync(ctx);
 

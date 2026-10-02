@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Verify Launcher.csproj does not pull in cross-platform UI frameworks forbidden by CLAUDE.md SecVIII.
 
@@ -9,7 +9,7 @@
       - Microsoft.WindowsAppSDK
       - Microsoft.Maui / Microsoft.Maui.*
 
-    Launcher must use Windows native (WinForms NotifyIcon); macOS support removed 2026-06-11.
+    Launcher keeps WinForms NotifyIcon; Server uses a native AppKit helper on macOS, without cross-platform UI frameworks.
     Scans src/PersonalMediaManager.Launcher for PackageReference in .csproj and using directives in .cs;
     any forbidden package/namespace match returns non-zero exit.
 #>

@@ -621,7 +621,7 @@ internal sealed class LibraryService : ILibraryService
             throw new BusinessException("未指定要认领的孤儿文件");
 
         int admitted = 0, skipped = 0;
-        foreach (string path in req.Paths.Distinct(StringComparer.OrdinalIgnoreCase))
+        foreach (string path in req.Paths.Distinct(PlatformPaths.Comparer))
         {
             ct.ThrowIfCancellationRequested();
             if (!File.Exists(path)) { skipped++; continue; }

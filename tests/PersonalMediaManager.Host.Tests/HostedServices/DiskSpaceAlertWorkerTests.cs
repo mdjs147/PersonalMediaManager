@@ -44,7 +44,7 @@ public sealed class DiskSpaceAlertWorkerTests : IDisposable
         int probed = await sut.SweepAsync(CancellationToken.None);
 
         probed.Should().Be(1);
-        await _alert.Received(1).RaiseAsync(@"disk.low:Q:\", "disk.low", Arg.Any<object>(), Arg.Any<CancellationToken>());
+        await _alert.Received(1).RaiseAsync(OperatingSystem.IsWindows() ? @"disk.low:Q:\" : "disk.low:/", "disk.low", Arg.Any<object>(), Arg.Any<CancellationToken>());
         PayloadJson().Should().Contain("\"severity\":\"critical\"").And.Contain("\"thresholdPercent\":5");
     }
 
@@ -57,7 +57,7 @@ public sealed class DiskSpaceAlertWorkerTests : IDisposable
 
         await sut.SweepAsync(CancellationToken.None);
 
-        await _alert.Received(1).RaiseAsync(@"disk.low:Q:\", "disk.low", Arg.Any<object>(), Arg.Any<CancellationToken>());
+        await _alert.Received(1).RaiseAsync(OperatingSystem.IsWindows() ? @"disk.low:Q:\" : "disk.low:/", "disk.low", Arg.Any<object>(), Arg.Any<CancellationToken>());
         PayloadJson().Should().Contain("\"severity\":\"warn\"").And.Contain("\"thresholdPercent\":10");
     }
 
@@ -98,7 +98,7 @@ public sealed class DiskSpaceAlertWorkerTests : IDisposable
 
         await sut.SweepAsync(CancellationToken.None);
 
-        await _alert.Received(1).RaiseAsync(@"disk.low:Q:\", "disk.low", Arg.Any<object>(), Arg.Any<CancellationToken>());
+        await _alert.Received(1).RaiseAsync(OperatingSystem.IsWindows() ? @"disk.low:Q:\" : "disk.low:/", "disk.low", Arg.Any<object>(), Arg.Any<CancellationToken>());
         PayloadJson().Should().Contain("\"severity\":\"warn\"");
     }
 
@@ -156,7 +156,7 @@ public sealed class DiskSpaceAlertWorkerTests : IDisposable
         {
             Name = $"分类-{Guid.NewGuid():N}",
             MediaType = MediaType.Movie,
-            TargetRoot = targetRoot,
+            TargetRoot = OperatingSystem.IsWindows() ? targetRoot : "/" + targetRoot[3..].Replace('\\', '/'),
         });
         ctx.SaveChanges();
     }

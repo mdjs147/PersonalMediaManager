@@ -582,8 +582,8 @@ internal sealed class ParseTestCaseService : IParseTestCaseService
             if (root.Length == 0) continue;
 
             bool hit =
-                samplePath.StartsWith(root + System.IO.Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
-                samplePath.StartsWith(root + System.IO.Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+                samplePath.StartsWith(root + System.IO.Path.DirectorySeparatorChar, PlatformPaths.Comparison) ||
+                samplePath.StartsWith(root + System.IO.Path.AltDirectorySeparatorChar, PlatformPaths.Comparison);
             if (hit && root.Length > bestLen)
             {
                 best = root;

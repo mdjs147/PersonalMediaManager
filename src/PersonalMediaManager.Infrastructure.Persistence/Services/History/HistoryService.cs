@@ -269,7 +269,8 @@ internal sealed class HistoryService : IHistoryService
             item.TmdbId, item.TmdbMediaType, item.CategoryId, categoryName,
             item.TargetPath, item.ErrorMessage, item.AttemptCount, item.LastAttemptAt,
             item.ArchivedAt, item.CreatedAt, item.UpdatedAt,
-            tmdb, aiCalls, steps);
+            tmdb, aiCalls, steps, item.ReviewReason,
+            PersonalMediaManager.Application.Dtos.Dashboard.CompletionProvenanceProjection.Project(item.Status, item.ParseSource, steps));
     }
 
     public async Task<CancelTaskResult> CancelAsync(long mediaItemId, CancellationToken ct = default)
@@ -563,7 +564,7 @@ internal sealed class HistoryService : IHistoryService
                 : MediaItemStatus.Skipped;
             item.Transition(next);
             item.AppendStep(next, now, durMs: 0, next == MediaItemStatus.Completed
-                ? SerializeStep(new { target = arc.TargetPath, manual = true })
+                ? SerializeStep(new { target = arc.TargetPath, manual = true, provenanceVersion = 1, completionRoute = "ManualArchive", actorCategory = "Unknown", entryPoint = "HistoryApi" })
                 : SerializeStep(new { reason = "目标已存在同名文件（手动移动冲突跳过）", manual = true }));
             await db.SaveChangesAsync(ct);
 
@@ -1032,7 +1033,7 @@ internal sealed class HistoryService : IHistoryService
             if (!SubtitleRenamer.SupportedExtensions.Contains(ext) && !SubtitleRenamer.ArchiveExtensions.Contains(ext))
                 continue;
             string fileStem = Path.GetFileNameWithoutExtension(path);
-            if (fileStem.StartsWith(stem, StringComparison.OrdinalIgnoreCase))
+            if (PlatformPaths.MatchesFileStem(fileStem, stem))
                 list.Add(path);
         }
         return list;
@@ -1395,8 +1396,8 @@ internal sealed class HistoryService : IHistoryService
             if (root.Length == 0) continue;
 
             bool hit =
-                sourcePath.StartsWith(root + System.IO.Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
-                sourcePath.StartsWith(root + System.IO.Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+                sourcePath.StartsWith(root + System.IO.Path.DirectorySeparatorChar, PlatformPaths.Comparison) ||
+                sourcePath.StartsWith(root + System.IO.Path.AltDirectorySeparatorChar, PlatformPaths.Comparison);
             if (hit && root.Length > bestLen)
             {
                 bestId = id;

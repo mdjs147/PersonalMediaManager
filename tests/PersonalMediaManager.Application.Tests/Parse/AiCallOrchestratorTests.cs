@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using PersonalMediaManager.Application.Contracts;
 using PersonalMediaManager.Application.Services.Audit;
@@ -31,6 +31,83 @@ namespace PersonalMediaManager.Application.Tests.Parse;
 public sealed class AiCallOrchestratorTests
 {
     private static AiParseResult OkResult(double conf = 0.9) => new("Inception", 2010, "movie", Season: null, Episode: null, EpisodeEnd: null, conf);
+
+    [Fact]
+    public async Task ModelRuntime_OneCallThenFallback_RecordsInfrastructureWithoutFeedback()
+    {
+        FakeProvider primary = new(AiProviderType.Ollama)
+        {
+            AlwaysThrow = new AiProviderModelRuntimeException("synthetic private diagnostic"),
+        };
+        FakeProvider backup = new(AiProviderType.Anthropic) { NextResults = [OkResult()] };
+        IAuditAiCallWriter audit = Substitute.For<IAuditAiCallWriter>();
+        IAiProviderHealthTracker health = Substitute.For<IAiProviderHealthTracker>();
+        AiCallOrchestrator sut = NewSut([primary, backup],
+            [Resolution(1, AiProviderType.Ollama, true), Resolution(2, AiProviderType.Anthropic, false)], audit, health);
+        AiCallOutcome outcome = await sut.ExecuteAsync(SampleRequest() with { Context = new(PreviousFailureCode: "LowConfidence") }, null);
+        primary.CallCount.Should().Be(1);
+        backup.CallCount.Should().Be(1);
+        backup.LastRequest!.Context!.PreviousFailureCode.Should().BeNull();
+        outcome.WinningProviderId.Should().Be(2);
+        outcome.Attempts![0].ErrorType.Should().Be("ModelRuntime");
+        await health.Received(1).EvaluateAsync(1, Arg.Any<CancellationToken>());
+        await audit.Received(1).WriteAsync(Arg.Is<AuditAiCallEntry>(e => e.ErrorType == "ModelRuntime"), Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData(false, "LowConfidence")]
+    [InlineData(true, "UnknownEvidence")]
+    public async Task SemanticFailure_PassesOnlySafeCode_WithoutHealthEvaluation(bool abstained, string code)
+    {
+        FakeProvider primary = new(AiProviderType.Ollama) { NextResults = [OkResult(0.1) with { Abstained = abstained }] };
+        FakeProvider backup = new(AiProviderType.Anthropic) { NextResults = [OkResult()] };
+        IAiProviderHealthTracker health = Substitute.For<IAiProviderHealthTracker>();
+        AiCallOrchestrator sut = NewSut([primary, backup],
+            [Resolution(1, AiProviderType.Ollama, true), Resolution(2, AiProviderType.Anthropic, false)],
+            Substitute.For<IAuditAiCallWriter>(), health);
+        await sut.ExecuteAsync(SampleRequest() with { Context = new() }, null);
+        backup.LastRequest!.Context!.PreviousFailureCode.Should().Be(code);
+        await health.DidNotReceive().EvaluateAsync(Arg.Any<long>(), Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LegacyRequest_FallbackPreservesNullContext(bool runtimeFailure)
+    {
+        FakeProvider primary = new(AiProviderType.Ollama)
+        {
+            AlwaysThrow = runtimeFailure ? new AiProviderModelRuntimeException("runtime") : null,
+            NextResults = [OkResult(0.1)],
+        };
+        FakeProvider backup = new(AiProviderType.Anthropic) { NextResults = [OkResult()] };
+        AiCallOrchestrator sut = NewSut([primary, backup],
+            [Resolution(1, AiProviderType.Ollama, true), Resolution(2, AiProviderType.Anthropic, false)],
+            Substitute.For<IAuditAiCallWriter>());
+        AiCallOutcome outcome = await sut.ExecuteAsync(SampleRequest(), null);
+        outcome.Success.Should().BeTrue();
+        primary.LastRequest!.Context.Should().BeNull();
+        backup.LastRequest!.Context.Should().BeNull();
+        backup.LastRequest.Should().Be(SampleRequest());
+    }
+
+    [Fact]
+    public async Task CancellationDuringRetryDelay_DoesNotRetryOrFallback()
+    {
+        FakeProvider primary = new(AiProviderType.Ollama) { AlwaysThrow = new AiProviderTransientException("temporary") };
+        FakeProvider backup = new(AiProviderType.Anthropic) { NextResults = [OkResult()] };
+        AiCallOrchestrator sut = NewSut([primary, backup],
+            [Resolution(1, AiProviderType.Ollama, true), Resolution(2, AiProviderType.Anthropic, false)], Substitute.For<IAuditAiCallWriter>());
+        using CancellationTokenSource cts = new();
+        // 桩调用同步完成；拿到未完成任务时已进入重试等待，避免两个定时器在 CI 上竞速。
+        Task<AiCallOutcome> pending = sut.ExecuteAsync(SampleRequest(), null, cts.Token);
+        primary.CallCount.Should().Be(1);
+        pending.IsCompleted.Should().BeFalse("取消必须发生在重试等待中");
+        cts.Cancel();
+        await ((Func<Task>)(() => pending)).Should().ThrowAsync<OperationCanceledException>();
+        primary.CallCount.Should().Be(1);
+        backup.CallCount.Should().Be(0);
+    }
 
     [Fact]
     public async Task PrimarySuccess_OneAttempt_AuditSuccess()
@@ -636,12 +713,14 @@ public sealed class AiCallOrchestratorTests
         public FakeProvider(AiProviderType type) { Type = type; }
         public AiProviderType Type { get; }
         public int CallCount { get; private set; }
+        public AiParseRequest? LastRequest { get; private set; }
         public Dictionary<int, Exception> ScriptedExceptions { get; } = new();
         public List<AiParseResult> NextResults { get; init; } = new();
         public Exception? AlwaysThrow { get; init; }
 
         public Task<AiParseResult> ParseAsync(AiProviderEndpoint endpoint, AiParseRequest request, CancellationToken ct = default)
         {
+            LastRequest = request;
             int idx = CallCount;
             CallCount++;
             if (AlwaysThrow is not null)

@@ -11,6 +11,7 @@
     <Project Path="src/PersonalMediaManager.Infrastructure.Persistence/PersonalMediaManager.Infrastructure.Persistence.csproj" />
     <Project Path="src/PersonalMediaManager.Infrastructure.Platform/PersonalMediaManager.Infrastructure.Platform.csproj" />
     <Project Path="src/PersonalMediaManager.Launcher/PersonalMediaManager.Launcher.csproj" />
+    <Project Path="src/PersonalMediaManager.Server/PersonalMediaManager.Server.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/PersonalMediaManager.Application.Tests/PersonalMediaManager.Application.Tests.csproj" />

@@ -131,7 +131,7 @@ public sealed class DiskSpaceAlertWorker : BackgroundService
             .Select(TryDriveRoot)
             .Where(r => !string.IsNullOrEmpty(r))
             .Select(r => r!)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Distinct(PlatformPaths.Comparer)
             .ToList();
 
         int probed = 0;
@@ -211,7 +211,7 @@ public sealed class DiskSpaceAlertWorker : BackgroundService
     /// <summary>取路径所在盘根（失败返 null，口径同 HealthCheckService.TryDriveRoot）</summary>
     private static string? TryDriveRoot(string path)
     {
-        try { return Path.GetPathRoot(Path.GetFullPath(path)); }
+        try { return MountedVolumeResolver.TryResolve(path); }
         catch { return null; }
     }
 

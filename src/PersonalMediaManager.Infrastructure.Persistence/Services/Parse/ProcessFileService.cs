@@ -308,6 +308,9 @@ internal sealed class ProcessFileService : IProcessFileService
         // 3. 规则引擎（基于 FileParseContext 多层路径段）
         string? parentFolderName = parseContext.DirectParentFolderName;
         RuleParseResult rule = await _ruleEngine.ParseAsync(parseContext, ct);
+        if (rule.Year is int parsedYear && !MediaYearEvidence.ContainsYear(
+            new[] { parseContext.FileName }.Concat(parseContext.RelativeSegments), parsedYear))
+            rule = rule with { Year = null };
 
         // 本地优先剧集解析（持久化映射预热）：同一部剧的多个文件通常落在同一专属子目录，series 身份
         // （tmdbId / 类型 / 剧名 / 年份）是共享信息，仅季 / 集逐文件不同。这里把「同文件夹已成功归档兄弟集」
@@ -465,6 +468,26 @@ internal sealed class ProcessFileService : IProcessFileService
             await db.SaveChangesAsync(ct);
         }
 
+        if (rule.Conflicts is { Count: > 0 } && rule.Conflicts.Any(conflict =>
+            !(forced is not null && (!string.IsNullOrWhiteSpace(forced.EpisodeGroupId)
+                || (conflict.StartsWith("season", StringComparison.Ordinal) && forced.Season.HasValue)))))
+        {
+            RecordExit(media.Status, new
+            {
+                extracted = new { rule.Title, rule.Year, rule.MediaType, rule.Season, rule.Episode, rule.EpisodeEnd },
+                rule.MatchedRuleId, rule.FieldEvidence, rule.Conflicts, rule.RejectedFields,
+                decision = "用户规则与显式文件/目录证据冲突，保留规则值并转人工审核",
+            });
+            if (media.Status == MediaItemStatus.Parsing) media.Transition(MediaItemStatus.TmdbMatching);
+            MediaItemStatus oldConflict = media.Status;
+            media.MarkAwaitingReview(ReviewReason.ParseIncomplete);
+            RecordTerminal(MediaItemStatus.AwaitingReview, new { reason = "解析字段证据冲突", conflicts = rule.Conflicts });
+            await db.SaveChangesAsync(ct);
+            await NotifyAsync(media, oldConflict, ct);
+            await EmitReviewCreatedAsync(media, ct);
+            return new ProcessFileOutcome(media.Id, ProcessOutcome.AwaitingReview);
+        }
+
         if (!forcedMatch && firstDecision == NextAction.UseTmdb)
         {
             // 规则直查路径优先复用本地剧集映射：命中（TV + 标题相似）则跳过 TMDB 搜索，直接用已知 tmdbId，
@@ -484,6 +507,9 @@ internal sealed class ProcessFileService : IProcessFileService
                     tmdbId = cachedSeries.TmdbId,
                     decision = "命中同文件夹已归档剧集映射 → 跳过 TMDB 搜索（季 / 集取本文件规则结果）",
                     matchedRuleId = rule.MatchedRuleId,
+                    fieldEvidence = rule.FieldEvidence,
+                    rejectedFields = rule.RejectedFields,
+                    hasIdentityEvidence = rule.HasIdentityEvidence,
                 });
                 media.Transition(MediaItemStatus.TmdbMatching);
                 await db.SaveChangesAsync(ct);
@@ -497,6 +523,9 @@ internal sealed class ProcessFileService : IProcessFileService
                     extracted = new { title = rule.Title, year = rule.Year, type = rule.MediaType, season = rule.Season, episode = rule.Episode, episodeEnd = rule.EpisodeEnd },
                     decision = $"规则置信度 {rule.Confidence:F2} ≥ 阈值 {DefaultConfidenceThreshold:F2} → 走 TMDB 直查",
                     matchedRuleId = rule.MatchedRuleId,
+                    fieldEvidence = rule.FieldEvidence,
+                    rejectedFields = rule.RejectedFields,
+                    hasIdentityEvidence = rule.HasIdentityEvidence,
                 });
                 media.Transition(MediaItemStatus.TmdbMatching);
                 await db.SaveChangesAsync(ct);
@@ -510,6 +539,7 @@ internal sealed class ProcessFileService : IProcessFileService
         }
 
         AiParseResult? aiResult = null;
+        AiParseContext? aiTaskContext = null;
         // 别名兜底命中时记录命中的别名（供成功时间线展示「靠哪个别名搜到」）；null = 未走别名兜底或未命中。
         // aliasFromLocal 区分别名来源：true = 规则引擎本地备选标题（未动用 AI），false = AI 返回的检索别名
         string? matchedSearchAlias = null;
@@ -530,7 +560,7 @@ internal sealed class ProcessFileService : IProcessFileService
                 tmdb.Candidates, [rule.Title], rule.Year, scoreWeights, preferredLanguage);
             // 用户可把候选阈值 N 配到 1 以下（候选 2 个即「过多」），榜首即全部时视为无次名、间距充分
             double gap = preRanked.Count > 1 ? preRanked[0].Score - preRanked[1].Score : double.MaxValue;
-            if (preRanked[0].Score >= CrossCheckDominantScore && gap >= CrossCheckDominantGap)
+            if (TmdbCandidateScorer.CanAutoSelect(preRanked) && preRanked[0].Score >= CrossCheckDominantScore && gap >= CrossCheckDominantGap)
             {
                 tmdb = tmdb with { Candidates = preRanked.Select(r => r.Candidate).ToList() };
                 firstDecision = NextAction.UseTmdb;
@@ -582,7 +612,8 @@ internal sealed class ProcessFileService : IProcessFileService
                 TmdbSearchResult aliasTmdb = await _tmdb.SearchAsync(
                     new TmdbSearchRequest(alias, rule.MediaType, rule.Year), ct);
                 if (aliasTmdb.Candidates.Count > 0) anyCandidateSeen = true;
-                if (ParseTask.DecideAfterAiRetmdb(aliasTmdb.Candidates.Count, candidateThreshold) == NextAction.UseTmdb)
+                if (TmdbCandidateScorer.CanAutoSelect(TmdbCandidateScorer.Rank(
+                    aliasTmdb.Candidates, [alias], rule.Year, scoreWeights, preferredLanguage)))
                 {
                     tmdb = aliasTmdb;
                     firstDecision = NextAction.UseTmdb;
@@ -617,9 +648,11 @@ internal sealed class ProcessFileService : IProcessFileService
                 {
                     (int Id, string Type) winnerKey = winners[0].Key;
                     TmdbCandidate winner = tmdb!.Candidates.First(c => c.Id == winnerKey.Id && c.MediaType == winnerKey.Type);
-                    double winnerScore = TmdbCandidateScorer.Rank(
-                            [winner], [rule.Title, winners[0].Value.FirstAlias], rule.Year, scoreWeights, preferredLanguage)[0].Score;
-                    if (winnerScore >= MultiCandidateMinScore)
+                    IReadOnlyList<TmdbCandidateScore> voteRanked = TmdbCandidateScorer.Rank(
+                            tmdb.Candidates, [rule.Title, winners[0].Value.FirstAlias], rule.Year, scoreWeights, preferredLanguage);
+                    double winnerScore = voteRanked[0].Score;
+                    if (voteRanked[0].Candidate.Id == winner.Id && voteRanked[0].Candidate.MediaType == winner.MediaType
+                        && TmdbCandidateScorer.CanAutoSelect(voteRanked))
                     {
                         tmdb = tmdb with { Candidates = [winner] };
                         firstDecision = NextAction.UseTmdb;
@@ -641,7 +674,7 @@ internal sealed class ProcessFileService : IProcessFileService
         // （新番 / 新剧发布初期）的典型形态，烧 AI 无增量。直接转人工队列，并留给 TmdbZeroResultRetryJob
         // 每日自动重投：TMDB 收录后无人值守自动归档。低置信 / 混排不适用（AI 的标题清洗 + 检索别名有真实增量）。
         if (firstDecision == NextAction.CallAi && !anyCandidateSeen
-            && !rule.HasSpecialChars && rule.Confidence >= DefaultConfidenceThreshold)
+            && rule.HasIdentityEvidence && !rule.HasSpecialChars && rule.Confidence >= DefaultConfidenceThreshold)
         {
             RecordExit(MediaItemStatus.TmdbMatching, new
             {
@@ -668,7 +701,9 @@ internal sealed class ProcessFileService : IProcessFileService
             // 双保险把误判压到最低：HasNoTitleClue(文件名+路径剥离 发布组/季集/画质/hash 后全空) 且 !anyCandidateSeen(主标题+全部备选 TMDB 全零)。
             // 典型：S01E06_4K_60fps.mkv（纯季集+画质、无剧名、无父目录）——换 prompt 也补不出剧名，烧 AI 无增量，直接进人工队列。
             // 有父目录/路径剧名（如"南部档案"）或拉丁文本（拼音缩写）时 HasNoTitleClue=false，照常走 AI，绝不误拦。
-            if (!anyCandidateSeen && MediaTitleClue.HasNoTitleClue(media.FileName, parseContext.RelativeSegments))
+            if (!anyCandidateSeen && (MediaTitleClue.HasNoTitleClue(media.FileName, parseContext.RelativeSegments)
+                || (!rule.HasIdentityEvidence && rule.AlternativeTitles is not { Count: > 0 }
+                    && !MediaTitleClue.HasUntrustedBracketTitleClue(media.FileName, parseContext.RelativeSegments))))
             {
                 if (media.Status == MediaItemStatus.Parsing)
                 {
@@ -770,18 +805,11 @@ internal sealed class ProcessFileService : IProcessFileService
                 else
                 {
                     media.MarkAiInvolved(); // AI 参与度统计：复用路径仍需 AI 补季 / 集，记为 AI 参与
-                    AiCallOutcome ai = await _aiOrchestrator.ExecuteAsync(
-                        new AiParseRequest(
-                            FileName: media.FileName,
-                            ParentFolderName: parentFolderName,
-                            RuleHintTitle: rule.Title,
-                            RuleHintYear: rule.Year,
-                            RelativeSegments: parseContext.RelativeSegments,
-                            RuleHintType: rule.MediaType,
-                            RuleHintSeason: rule.Season,
-                            RuleHintEpisode: rule.Episode,
-                            RuleHintEpisodeEnd: rule.EpisodeEnd),
-                        media.Id, ct);
+                    AiParseRequest aiRequest = BuildAiTaskRequest(media.FileName, parseContext, rule, tmdb,
+                        scoreWeights, preferredLanguage, cachedSeries);
+                    aiTaskContext = aiRequest.Context;
+                    AiCallOutcome ai = ValidateAiOutcome(
+                        await _aiOrchestrator.ExecuteAsync(aiRequest, media.Id, ct), aiRequest, rule);
 
                     // series 身份（tmdbId / 类型 / 剧名 / 年份）以复用绑定为准，AI 只用来补季 / 集；
                     // AI 失败也不转人工——TMDB 绑定仍在，季 / 集留空交由下游守护（单季自动补季 / ParseIncomplete）。
@@ -789,16 +817,20 @@ internal sealed class ProcessFileService : IProcessFileService
                         Title: cachedSeries.Title ?? ai.Result?.Title ?? rule.Title,
                         Year: cachedSeries.Year ?? ai.Result?.Year,
                         MediaType: cachedSeries.MediaType,
-                        Season: ai.Result?.Season,
-                        Episode: ai.Result?.Episode,
-                        EpisodeEnd: ai.Result?.EpisodeEnd,
-                        Confidence: ai.Result?.Confidence ?? cachedSeries.Confidence ?? rule.Confidence);
+                        Season: rule.Season ?? ai.Result?.Season,
+                        Episode: rule.Episode ?? ai.Result?.Episode,
+                        EpisodeEnd: rule.Episode is not null ? rule.EpisodeEnd : ai.Result?.EpisodeEnd,
+                        Confidence: ai.Result?.Confidence ?? cachedSeries.Confidence ?? rule.Confidence,
+                        Validation: ai.Result?.Validation);
                     RecordExit(MediaItemStatus.AiParsing, new
                     {
                         reusedFromFolderCache = true,
                         tmdbId = cachedSeries.TmdbId,
                         title = aiResult.Title,
                         aiSuccess = ai.Success,
+                        aiContext = new { aiRequest.Context!.SchemaVersion, taskType = aiRequest.Context.TaskType.ToString(), aiRequest.Context.InvocationReason, aiRequest.Context.MissingFields },
+                        requestMetadata = ai.RequestMetadata,
+                        validation = ai.Result?.Validation,
                         season = aiResult.Season,
                         episode = aiResult.Episode,
                         decision = ai.Success
@@ -812,24 +844,22 @@ internal sealed class ProcessFileService : IProcessFileService
             else
             {
                 media.MarkAiInvolved(); // AI 参与度统计：发起升级链即记参与（失败转人工也保留过程事实）
-                AiCallOutcome ai = await _aiOrchestrator.ExecuteAsync(
-                    new AiParseRequest(
-                        FileName: media.FileName,
-                        ParentFolderName: parentFolderName,
-                        RuleHintTitle: rule.Title,
-                        RuleHintYear: rule.Year,
-                        RelativeSegments: parseContext.RelativeSegments,
-                        RuleHintType: rule.MediaType,
-                        RuleHintSeason: rule.Season,
-                        RuleHintEpisode: rule.Episode,
-                        RuleHintEpisodeEnd: rule.EpisodeEnd),
-                    media.Id, ct);
+                AiParseRequest aiRequest = BuildAiTaskRequest(media.FileName, parseContext, rule, tmdb,
+                    scoreWeights, preferredLanguage);
+                aiTaskContext = aiRequest.Context;
+                AiCallOutcome ai = ValidateAiOutcome(
+                    await _aiOrchestrator.ExecuteAsync(aiRequest, media.Id, ct), aiRequest, rule);
 
                 RecordExit(MediaItemStatus.AiParsing, new
                 {
                     success = ai.Success,
                     failureSummary = ai.FailureSummary,
-                    output = ai.Result is null ? null : new { title = ai.Result.Title, year = ai.Result.Year, type = ai.Result.MediaType, confidence = ai.Result.Confidence },
+                    aiContext = new { aiRequest.Context!.SchemaVersion, taskType = aiRequest.Context.TaskType.ToString(), aiRequest.Context.InvocationReason, aiRequest.Context.MissingFields },
+                    requestMetadata = ai.RequestMetadata,
+                    validation = ai.Result?.Validation,
+                    output = ai.Result is null ? null : new { title = ai.Result.Title, year = ai.Result.Year, type = ai.Result.MediaType,
+                        season = ai.Result.Season, episode = ai.Result.Episode, episodeEnd = ai.Result.EpisodeEnd,
+                        aliases = ai.Result.SearchAliases, abstained = ai.Result.Abstained, confidence = ai.Result.Confidence },
                     // 逐级升级轨迹（喂给解析详情页 attempts 渲染）：试过哪几级、各级为何升级、最终哪级成功
                     attempts = (ai.Attempts ?? []).Select(a => new
                     {
@@ -871,21 +901,30 @@ internal sealed class ProcessFileService : IProcessFileService
 
                 await db.SaveChangesAsync(ct);
                 aiResult = ai.Result;
-                tmdb = await _tmdb.SearchAsync(
-                    new TmdbSearchRequest(aiResult.Title, aiResult.MediaType, aiResult.Year), ct);
-
-                NextAction afterAi = ParseTask.DecideAfterAiRetmdb(tmdb.Candidates.Count, candidateThreshold);
+                bool closedCandidateTask = aiRequest.Context!.TaskType == AiParseTaskType.DisambiguateCandidates;
+                // 候选消歧是闭集任务：保留原全集及原始标题证据，不通过改词全局重搜逃出短表。
+                if (!closedCandidateTask)
+                    tmdb = await _tmdb.SearchAsync(new TmdbSearchRequest(aiResult.Title, aiResult.MediaType, aiResult.Year), ct);
+                IReadOnlyList<TmdbCandidateScore> rematchRanked = TmdbCandidateScorer.Rank(
+                    tmdb!.Candidates, closedCandidateTask ? [rule.Title] : [aiResult.Title, rule.Title],
+                    aiResult.Year ?? rule.Year, scoreWeights, preferredLanguage);
+                NextAction afterAi = TmdbCandidateScorer.CanAutoSelect(rematchRanked)
+                    && MatchesSelectedCandidate(rematchRanked[0].Candidate, aiResult)
+                    ? NextAction.UseTmdb : NextAction.SendToReview;
 
                 // 第 0 层（国漫/日漫元数据兜底）：中文 title 二次 TMDB 不中（零结果 / 多候选）→ 用 AI 给的检索别名
                 // （原名 / 日文 / 英文官方译名 / 罗马音）逐个兜底重搜。TMDB 上冷门番剧 / 国产剧的主条目常是原名而非
                 // 中文译名，zh-CN 搜索词命中不到 → 别名重搜把这批从人工队列捞回。任一别名得到 [1,N] 候选即采用并停止。
-                if (afterAi == NextAction.SendToReview && aiResult.SearchAliases is { Count: > 0 } searchAliases)
+                if (!closedCandidateTask && afterAi == NextAction.SendToReview && aiResult.SearchAliases is { Count: > 0 } searchAliases)
                 {
                     foreach (string alias in searchAliases.Take(MaxAliasRetry))
                     {
                         TmdbSearchResult aliasTmdb = await _tmdb.SearchAsync(
                             new TmdbSearchRequest(alias, aiResult.MediaType, aiResult.Year), ct);
-                        if (ParseTask.DecideAfterAiRetmdb(aliasTmdb.Candidates.Count, candidateThreshold) == NextAction.UseTmdb)
+                        IReadOnlyList<TmdbCandidateScore> aliasRanked = TmdbCandidateScorer.Rank(
+                            aliasTmdb.Candidates, [alias, aiResult.Title], aiResult.Year, scoreWeights, preferredLanguage);
+                        if (TmdbCandidateScorer.CanAutoSelect(aliasRanked)
+                            && MatchesSelectedCandidate(aliasRanked[0].Candidate, aiResult))
                         {
                             tmdb = aliasTmdb;
                             afterAi = NextAction.UseTmdb;
@@ -939,16 +978,16 @@ internal sealed class ProcessFileService : IProcessFileService
         {
             // 标题比对集合：有效解析标题（AI 优先）+ 规则原始标题 + 命中检索的别名（别名命中时
             // TMDB 主条目常是原名，与中文解析名相似度天然低，必须把真正搜中的词纳入比对取较高者）
-            string?[] parsedTitles = [aiResult?.Title ?? rule.Title, rule.Title, matchedSearchAlias];
+            string?[] parsedTitles = aiTaskContext?.TaskType == AiParseTaskType.DisambiguateCandidates
+                ? [rule.Title] : [aiResult?.Title ?? rule.Title, rule.Title, matchedSearchAlias];
             ranked = TmdbCandidateScorer.Rank(
                 tmdb.Candidates, parsedTitles, aiResult?.Year ?? rule.Year, scoreWeights, preferredLanguage);
             tmdb = tmdb with { Candidates = ranked.Select(r => r.Candidate).ToList() };
             topScore = ranked[0].Score;
 
-            // 综合得分门槛：多候选最高分 < 0.5 视为无法可信取舍；单候选放宽到 0.35（防残缺标题模糊命中
-            // 唯一一条错误结果被直接采纳）。低于门槛 → 候选全集落库转人工审核（复用多候选审核原因与 UX）。
-            double minScore = tmdb.Candidates.Count > 1 ? MultiCandidateMinScore : SingleCandidateMinScore;
-            if (topScore.Value < minScore)
+            // 统一守护：单候选也必须有标题实证，多候选还须领先次名；缺年/热度不能代替标题。
+            if (!TmdbCandidateScorer.CanAutoSelect(ranked)
+                || (aiResult is not null && !MatchesSelectedCandidate(ranked[0].Candidate, aiResult)))
             {
                 RecordExit(media.Status, new
                 {
@@ -956,17 +995,17 @@ internal sealed class ProcessFileService : IProcessFileService
                     source = TmdbSourceLabel(),
                     candidates = ProjectCandidates(tmdb),
                     scores = ranked.Select(r => new { tmdbId = r.Candidate.Id, score = Math.Round(r.Score, 3) }).ToArray(),
-                    decision = $"候选最高综合得分 {topScore.Value:F2} < 门槛 {minScore:F2}（四维加权：标题/年份/热度/语言）→ AwaitingReview",
+                    decision = $"候选标题证据不足、综合得分不足或候选间存在歧义（最高分 {topScore.Value:F2}，标题相似度 {ranked[0].TitleEvidence:F2}）→ AwaitingReview",
                 });
                 MediaItemStatus oldScore = media.Status;
                 media.SetTmdbCandidates(SerializeReviewCandidates(tmdb));
                 media.MarkAwaitingReview(ReviewReason.TmdbMultiCandidate);
-                RecordTerminal(MediaItemStatus.AwaitingReview, new { reason = "TMDB 候选综合得分低于门槛，无法自动取舍" });
+                RecordTerminal(MediaItemStatus.AwaitingReview, new { reason = "TMDB 候选证据不足或存在歧义，无法自动取舍" });
                 await db.SaveChangesAsync(ct);
                 await NotifyAsync(media, oldScore, ct);
                 await EmitReviewCreatedAsync(media, ct);
-                _logger.LogInformation("TMDB 候选最高综合得分 {Score:F2} 低于门槛 {Min:F2} → AwaitingReview：{Path}",
-                    topScore.Value, minScore, media.SourcePath);
+                _logger.LogInformation("TMDB 候选证据不足或存在歧义（最高分 {Score:F2}）→ AwaitingReview：{Path}",
+                    topScore.Value, media.SourcePath);
                 return new ProcessFileOutcome(media.Id, ProcessOutcome.AwaitingReview);
             }
         }
@@ -1004,9 +1043,10 @@ internal sealed class ProcessFileService : IProcessFileService
             _folderCache.Set(folderKey, new FolderSeriesEntry(
                 TmdbId: top.Id,
                 MediaType: top.MediaType,
-                Title: parsedInfo.Title,
-                Year: parsedInfo.Year ?? top.Year,
-                Confidence: aiResult?.Confidence ?? rule.Confidence));
+                Title: string.IsNullOrWhiteSpace(top.Title) ? parsedInfo.Title : top.Title,
+                Year: top.Year ?? parsedInfo.Year,
+                Confidence: aiResult?.Confidence ?? rule.Confidence,
+                AlternateTitles: BuildSeriesAliases(top.Title, top.OriginalTitle, parsedInfo.Title, media.SourcePath)));
         }
 
         // 进 Classifying 之前的 stage 是 TmdbMatching 或 TmdbRematching
@@ -1017,12 +1057,30 @@ internal sealed class ProcessFileService : IProcessFileService
         // 最后一道关卡：不让无法 Plex 命名的剧集继续往 Archive 走，而是转 AwaitingReview 由用户在审核界面补全。
         bool isTvForArchive = string.Equals(top.MediaType, "tv", StringComparison.OrdinalIgnoreCase);
 
+        bool explicitExtraMapping = forcedMatch && forced is not null
+            && (forced.Season.HasValue || !string.IsNullOrWhiteSpace(forced.EpisodeGroupId));
+        bool extraClipRequiresReview = isTvForArchive && !explicitExtraMapping
+            && MediaExtraClip.HasMarker(media.FileName, parseContext.DirectParentFolderName);
+        bool validateCanonicalFields = isTvForArchive && !forcedMatch && !extraClipRequiresReview
+            && TmdbEpisodeCatalogueGuard.RequiresValidation(rule, aiResult);
+        TmdbDetailsResult? matchingDetails = null;
+        bool matchingDetailsLoaded = false;
+        async Task<TmdbDetailsResult?> LoadMatchingDetailsAsync()
+        {
+            if (!matchingDetailsLoaded)
+            {
+                matchingDetails = await _tmdb.GetDetailsAsync(top.Id, top.MediaType, ct);
+                matchingDetailsLoaded = true;
+            }
+            return matchingDetails;
+        }
+
         // 单季自动补季：剧集仅缺季号（集号在）且 TMDB 仅 1 季 → 默认第 1 季继续归档，避免无谓人工兜底。
         // 集号无法靠 TMDB 反推（不知道是第几集），故只在「季缺、集在」时尝试；多季仍交人工选季。
         // 特别篇守护：解析标题 / 文件名带 OVA / SP / 特别篇等标记时禁用自动补季——特别篇在 Plex / TMDB
         // 语义里归 Season 00，补成 S01 会把 OVA / SP 当正片第 1 季归档错位；跳过后交由下方完整性守护转人工审核定季。
-        bool specialEpisodeMarker = isTvForArchive && parsedInfo.Season is null
-            && HasSpecialEpisodeMarker(parsedInfo.Title, rule.Title, media.FileName);
+        bool specialEpisodeMarker = extraClipRequiresReview || (isTvForArchive && parsedInfo.Season is null
+            && HasSpecialEpisodeMarker(parsedInfo.Title, rule.Title, media.FileName));
         if (specialEpisodeMarker)
         {
             _logger.LogInformation("解析标题/文件名含特别篇标记（OVA/SP/特别篇等），禁用单季自动补季：{Path}", media.SourcePath);
@@ -1030,14 +1088,22 @@ internal sealed class ProcessFileService : IProcessFileService
         if (isTvForArchive && parsedInfo.Season is null && parsedInfo.Episode is not null && !specialEpisodeMarker)
         {
             int? totalSeasons = null;
-            try
+            if (validateCanonicalFields)
             {
-                TmdbDetailsResult? details = await _tmdb.GetDetailsAsync(top.Id, top.MediaType, ct);
-                totalSeasons = details?.TotalSeasons;
+                // 新补字段必须核对正典；网络错误走原有失败路径，不能冒充语义缺字段。
+                totalSeasons = (await LoadMatchingDetailsAsync())?.TotalSeasons;
             }
-            catch (Exception ex)
+            else
             {
-                _logger.LogWarning(ex, "查询 TMDB 季数失败 tmdbId={TmdbId}，跳过单季自动补季", top.Id);
+                try
+                {
+                    totalSeasons = (await LoadMatchingDetailsAsync())?.TotalSeasons;
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "查询 TMDB 季数失败 tmdbId={TmdbId}，跳过单季自动补季", top.Id);
+                }
             }
             if (totalSeasons == 1)
             {
@@ -1053,7 +1119,34 @@ internal sealed class ProcessFileService : IProcessFileService
             }
         }
 
-        if (isTvForArchive && (parsedInfo.Season is null || parsedInfo.Episode is null))
+        if (validateCanonicalFields && parsedInfo.Season is int supplementedSeason && parsedInfo.Episode is int supplementedEpisode)
+        {
+            TmdbDetailsResult? details = await LoadMatchingDetailsAsync();
+            string? catalogueIssue = TmdbEpisodeCatalogueGuard.Validate(details?.Seasons,
+                supplementedSeason, supplementedEpisode, parsedInfo.EpisodeEnd);
+            if (catalogueIssue is not null)
+            {
+                RecordExit(tmdbStage, new
+                {
+                    source = TmdbSourceLabel(),
+                    picked = new { tmdbId = top.Id, mediaType = top.MediaType },
+                    extracted = new { season = parsedInfo.Season, episode = parsedInfo.Episode, episodeEnd = parsedInfo.EpisodeEnd },
+                    fieldEvidence = rule.FieldEvidence, validation = aiResult?.Validation,
+                    canonicalValidation = catalogueIssue,
+                    decision = "已提取字面季集，但 TMDB 季集目录未知或不符，保留证据转人工确认编号",
+                });
+                MediaItemStatus beforeCatalogueReview = media.Status;
+                media.SetTmdbCandidates(SerializeReviewCandidates(tmdb));
+                media.MarkAwaitingReview(ReviewReason.ParseIncomplete);
+                RecordTerminal(MediaItemStatus.AwaitingReview, new { reason = "字面季集尚未通过正典目录核对", canonicalValidation = catalogueIssue });
+                await db.SaveChangesAsync(ct);
+                await NotifyAsync(media, beforeCatalogueReview, ct);
+                await EmitReviewCreatedAsync(media, ct);
+                return new ProcessFileOutcome(media.Id, ProcessOutcome.AwaitingReview);
+            }
+        }
+
+        if (isTvForArchive && (extraClipRequiresReview || parsedInfo.Season is null || parsedInfo.Episode is null))
         {
             RecordExit(tmdbStage, new
             {
@@ -1062,13 +1155,16 @@ internal sealed class ProcessFileService : IProcessFileService
                 candidates = ProjectCandidates(tmdb),
                 picked = new { tmdbId = top.Id, title = top.Title, year = top.Year, mediaType = top.MediaType },
                 extracted = new { title = parsedInfo.Title, year = parsedInfo.Year, season = parsedInfo.Season, episode = parsedInfo.Episode },
-                decision = $"剧集解析字段不全 season={parsedInfo.Season?.ToString() ?? "null"} / episode={parsedInfo.Episode?.ToString() ?? "null"} → AwaitingReview",
+                extraClipRequiresReview,
+                decision = extraClipRequiresReview ? "片头、片尾或宣传短片标记需人工映射，不能按正片编号自动归档"
+                    : $"剧集解析字段不全 season={parsedInfo.Season?.ToString() ?? "null"} / episode={parsedInfo.Episode?.ToString() ?? "null"} → AwaitingReview",
             });
             MediaItemStatus oldGuard = media.Status;
             // 剧集字段不全：候选全集落库（已取 top 匹配，但保留全集便于用户换选）
             media.SetTmdbCandidates(SerializeReviewCandidates(tmdb));
             media.MarkAwaitingReview(ReviewReason.ParseIncomplete);
-            RecordTerminal(MediaItemStatus.AwaitingReview, new { reason = "剧集字段不全，需用户补全 season / episode" });
+            RecordTerminal(MediaItemStatus.AwaitingReview, new { reason = extraClipRequiresReview
+                ? "附加短片需人工确认映射" : "剧集字段不全，需用户补全 season / episode", extraClipRequiresReview });
             await db.SaveChangesAsync(ct);
             await NotifyAsync(media, oldGuard, ct);
             await EmitReviewCreatedAsync(media, ct);
@@ -1089,11 +1185,11 @@ internal sealed class ProcessFileService : IProcessFileService
                 ? crossCheckNote
                 : matchedSearchAlias is not null
                     ? (aliasFromLocal
-                        ? $"主标题搜索不中，本地备选标题「{matchedSearchAlias}」命中（未动用 AI；候选 {tmdb.Candidates.Count} ≤ N={candidateThreshold}，综合得分 {topScore:F2}）"
-                        : $"中文名二次搜索不中，AI 别名「{matchedSearchAlias}」命中（候选 {tmdb.Candidates.Count} ≤ N={candidateThreshold}，综合得分 {topScore:F2}）")
+                        ? $"主标题搜索不中，本地备选标题「{matchedSearchAlias}」命中（未动用 AI；候选 {tmdb.Candidates.Count} 个，综合得分 {topScore:F2}）"
+                        : $"中文名二次搜索不中，AI 别名「{matchedSearchAlias}」命中（候选 {tmdb.Candidates.Count} 个，综合得分 {topScore:F2}）")
                     : reusedFromCache
                         ? "复用本地剧集映射合成单候选，直接采用"
-                        : $"候选 {tmdb.Candidates.Count} ≤ N (={candidateThreshold})，按四维加权打分（标题/年份/热度/语言）取最高分 {topScore:F2}",
+                        : $"候选 {tmdb.Candidates.Count} 个，通过标题证据和歧义守护后取四维最高分 {topScore:F2}",
         });
         media.Transition(MediaItemStatus.Classifying);
         await db.SaveChangesAsync(ct);
@@ -1196,7 +1292,17 @@ internal sealed class ProcessFileService : IProcessFileService
         });
         MediaItemStatus oldCmp = media.Status;
         media.Transition(MediaItemStatus.Completed);
-        RecordTerminal(MediaItemStatus.Completed, new { target = media.TargetPath });
+        RecordTerminal(MediaItemStatus.Completed, new
+        {
+            target = media.TargetPath,
+            provenanceVersion = 1,
+            completionRoute = "AutomaticPipeline",
+            actorCategory = "System",
+            // 仅证明本次自动管线完成；触发者与历史人工介入不能由队列 Source 推断。
+            triggerCategory = "Unknown",
+            forcedAnchor = forcedMatch,
+            folderReuse = reusedFromCache,
+        });
         await db.SaveChangesAsync(ct);
         await NotifyAsync(media, oldCmp, ct);
         if (metadataPending)
@@ -1303,6 +1409,71 @@ internal sealed class ProcessFileService : IProcessFileService
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
+    /// <summary>候选消歧不能借后续全局搜索越出已验证选择</summary>
+    private static bool MatchesSelectedCandidate(TmdbCandidate candidate, AiParseResult result) =>
+        result.SelectedCandidateId is not int selected || (candidate.Id == selected
+            && string.Equals(candidate.MediaType, result.MediaType, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>按身份识别、补缺或候选消歧构造最小上下文</summary>
+    private static AiParseRequest BuildAiTaskRequest(string fileName, FileParseContext source, RuleParseResult rule,
+        TmdbSearchResult? tmdb, TmdbScoreWeights weights, string language, FolderSeriesEntry? binding = null)
+    {
+        AiParseTaskType taskType = binding is not null ? AiParseTaskType.FillMissingFields
+            : tmdb is { Candidates.Count: > 1 } ? AiParseTaskType.DisambiguateCandidates : AiParseTaskType.IdentifyWork;
+        List<string> missing = [];
+        if (rule.Season is null) missing.Add("season");
+        if (rule.Episode is null) missing.Add("episode");
+        List<AiFieldEvidence> evidence = (rule.FieldEvidence ?? []).Select(e =>
+        {
+            int? segment = e.Source.StartsWith("RelativeSegment:", StringComparison.Ordinal)
+                && int.TryParse(e.Source[16..], out int index) ? index : null;
+            return new AiFieldEvidence(e.Field, e.Value, segment.HasValue ? "RelativeSegment" : e.Source, segment);
+        }).ToList();
+        evidence.AddRange((rule.RejectedFields ?? []).Select(f => new AiFieldEvidence(f, null, "RuleRejected", Rejected: true)));
+        IReadOnlyList<AiCandidateEvidence>? candidates = tmdb is null ? null
+            : TmdbCandidateScorer.Rank(tmdb.Candidates, [rule.Title], rule.Year, weights, language).Take(5)
+                .Select(r => new AiCandidateEvidence(r.Candidate.Id, r.Candidate.MediaType, r.Candidate.Title ?? string.Empty,
+                    r.Candidate.OriginalTitle, r.Candidate.Year, r.Score)).ToArray();
+        AiLockedBinding? locked = binding is null ? null : new(binding.TmdbId, binding.MediaType,
+            binding.Title ?? rule.Title, binding.Year ?? rule.Year, rule.Season, rule.Episode, rule.EpisodeEnd);
+        string reason = binding is not null ? "KnownSeriesMissingFields" : !rule.HasIdentityEvidence ? "WeakIdentityTitle"
+            : taskType == AiParseTaskType.DisambiguateCandidates ? "AmbiguousCandidates"
+            : rule.HasSpecialChars ? "MixedTitle" : rule.Confidence < DefaultConfidenceThreshold ? "LowRuleConfidence" : "NoSearchMatch";
+        return new AiParseRequest(fileName, source.DirectParentFolderName, rule.Title, rule.Year, source.RelativeSegments,
+            rule.MediaType, rule.Season, rule.Episode, rule.EpisodeEnd,
+            new AiParseContext(TaskType: taskType, InvocationReason: reason, RuleId: rule.MatchedRuleId,
+                RuleConfidence: rule.Confidence, MissingFields: missing, LockedBinding: locked,
+                Candidates: candidates, RuleProvenance: evidence));
+    }
+
+    /// <summary>主管线再验证输出，避免替代编排实现绕过身份和字段守护</summary>
+    private static AiCallOutcome ValidateAiOutcome(AiCallOutcome outcome, AiParseRequest request, RuleParseResult rule)
+    {
+        if (!outcome.Success || outcome.Result is null) return outcome;
+        try
+        {
+            AiParseResult validated = AiParseResultGuard.Validate(outcome.Result, request);
+            if (request.Context?.TaskType == AiParseTaskType.DisambiguateCandidates)
+            {
+                AiCandidateEvidence? selected = request.Context.Candidates?.FirstOrDefault(c =>
+                    c.TmdbId == validated.SelectedCandidateId && c.MediaType == validated.MediaType);
+                if (selected is null)
+                    return outcome with { Success = false, Result = null, FailureSummary = "AI 未提供可验证的闭集候选选择" };
+                validated = validated with { Title = selected.Title, MediaType = selected.MediaType, SearchAliases = null };
+            }
+            // 用户强制类型保持；年份只采用守护验证后的来源，不能重新引入无依据的规则年份。
+            validated = validated with { MediaType = rule.ForceType ? rule.MediaType : validated.MediaType,
+                Year = request.Context?.LockedBinding?.Year ?? validated.Year };
+            if (validated.MediaType == "movie") validated = validated with { Season = null, Episode = null, EpisodeEnd = null };
+            return outcome with { Result = validated, Success = !validated.Abstained,
+                FailureSummary = validated.Abstained ? "AI 明确弃权，缺少可验证的作品证据" : outcome.FailureSummary };
+        }
+        catch (AiProviderLogicalException)
+        {
+            return outcome with { Success = false, Result = null, FailureSummary = "AI 输出未通过任务证据校验" };
+        }
+    }
+
     /// <summary>把 TmdbCandidate 数组投影成精简对象用于 Step.Detail（避免落入海量字段）</summary>
     private static object[] ProjectCandidates(TmdbSearchResult? tmdb)
     {
@@ -1402,7 +1573,8 @@ internal sealed class ProcessFileService : IProcessFileService
     /// </remarks>
     private static bool CanReuseFolderSeries(FolderSeriesEntry cached, RuleParseResult rule) =>
         string.Equals(cached.MediaType, "tv", StringComparison.OrdinalIgnoreCase)
-        && TitleMatchesForReuse(rule.Title, cached.Title);
+        && (TitleMatchesForReuse(rule.Title, cached.Title)
+            || (cached.AlternateTitles ?? []).Any(alias => TitleMatchesForReuse(rule.Title, alias)));
 
     /// <summary>复用守门标题匹配：相似度达标 OR 归一化后互为子串（双语混排名兜底）</summary>
     /// <remarks>
@@ -1410,7 +1582,7 @@ internal sealed class ProcessFileService : IProcessFileService
     /// 缓存剧名（「国王排名」）相似度仅 ≈ 0.22 → 复用恒不命中、同剧每集都白烧一次 AI。
     /// 兜底规则：归一化（去空白 + 小写）后任一方为另一方子串（含前缀）即视为同剧——双向比对，
     /// 覆盖「规则名混排含缓存名」与「缓存名混排含规则名」两个方向；双方长度均须 ≥ 2，
-    /// 防「A」这类碎片标题误中一切。不改 FolderSeriesCache 结构。
+    /// 防「A」这类碎片标题误中一切。可信别名逐个使用同一守门，不放宽阈值。
     /// </remarks>
     private static bool TitleMatchesForReuse(string? ruleTitle, string? cachedTitle)
     {
@@ -1566,18 +1738,13 @@ internal sealed class ProcessFileService : IProcessFileService
                      && (m.Status == MediaItemStatus.Completed || m.Status == MediaItemStatus.Skipped)
                      && m.SourcePath.StartsWith(prefix))
             .OrderByDescending(m => m.ArchivedAt)
-            .Select(m => new { m.TmdbId, Type = m.TmdbMediaType!, ParsedJson = m.ParsedInfo, m.Confidence })
+            .Select(m => new { m.SourcePath, m.TmdbId, Type = m.TmdbMediaType!, ParsedJson = m.ParsedInfo, m.Confidence })
             .FirstOrDefaultAsync(ct);
 
         if (sibling?.TmdbId is not null)
         {
-            ParsedInfo? pi = ParsedInfo.FromJson(sibling.ParsedJson);
-            return new FolderSeriesEntry(
-                TmdbId: sibling.TmdbId.Value,
-                MediaType: sibling.Type,
-                Title: pi?.Title,
-                Year: pi?.Year,
-                Confidence: sibling.Confidence);
+            return await HydrateSeriesIdentityAsync(db, sibling.TmdbId.Value, sibling.Type,
+                sibling.ParsedJson, sibling.SourcePath, sibling.Confidence, ct);
         }
 
         // 本目录无已归档兄弟集 → 兄弟目录兜底：追更下载器常「每集单开一个目录」
@@ -1642,18 +1809,55 @@ internal sealed class ProcessFileService : IProcessFileService
             if (!string.Equals(NormalizeFolderNameForSiblingMatch(siblingTopDir), normalizedSelf, StringComparison.Ordinal))
                 continue;
 
-            ParsedInfo? pi = ParsedInfo.FromJson(row.ParsedJson);
             _logger.LogInformation(
                 "兄弟目录同剧映射命中（分集目录模式）→ 复用 series 身份跳过搜索/AI：{Folder} ≈ {Sibling}，tmdbId={TmdbId}",
                 folderKey, siblingTopDir, row.TmdbId);
-            return new FolderSeriesEntry(
-                TmdbId: row.TmdbId!.Value,
-                MediaType: row.Type,
-                Title: pi?.Title,
-                Year: pi?.Year,
-                Confidence: row.Confidence);
+            return await HydrateSeriesIdentityAsync(db, row.TmdbId!.Value, row.Type,
+                row.ParsedJson, row.SourcePath, row.Confidence, ct);
         }
         return null;
+    }
+
+    /// <summary>只读本地元数据恢复正典身份；无缓存时丢弃技术残渣，不改写历史解析记录</summary>
+    private static async Task<FolderSeriesEntry> HydrateSeriesIdentityAsync(PmmDbContext db, int id, string type,
+        string? parsedJson, string sourcePath, double? confidence, CancellationToken ct)
+    {
+        TmdbMetadataCache? metadata = await db.TmdbMetadataCaches.AsNoTracking()
+            .FirstOrDefaultAsync(m => m.TmdbId == id && m.MediaType == type, ct);
+        ParsedInfo? parsed = ParsedInfo.FromJson(parsedJson);
+        string? canonicalTitle = !string.IsNullOrWhiteSpace(metadata?.Title) ? metadata.Title
+            : !string.IsNullOrWhiteSpace(metadata?.OriginalTitle) ? metadata.OriginalTitle : null;
+        string? title = canonicalTitle ?? parsed?.Title;
+        if (canonicalTitle is null && IsUnsafeCacheTitle(title)) title = null;
+        string[] sources = [Path.GetFileName(sourcePath), Path.GetFileName(Path.GetDirectoryName(sourcePath)) ?? ""];
+        int? year = metadata?.Year ?? (parsed?.Year is int parsedYear && MediaYearEvidence.ContainsYear(sources, parsedYear) ? parsedYear : null);
+        return new FolderSeriesEntry(id, type, title, year, confidence,
+            BuildSeriesAliases(title, metadata?.OriginalTitle, parsed?.Title, sourcePath));
+    }
+
+    private static bool IsUnsafeCacheTitle(string? title) => string.IsNullOrWhiteSpace(title)
+        || RuleEngineService.IsNonIdentityTitle(title)
+        || string.IsNullOrWhiteSpace(MediaYearEvidence.WithoutDimensions(title))
+        || Regex.IsMatch(MediaYearEvidence.WithoutDimensions(title),
+            @"^(?:[\s._()\[\]-]|BluRay|BDRip|WEB[ .-]?DL|1080[pi]|2160p|720p|4K|UHD|HDR|HEVC|x26[45]|AAC|FLAC|DDP)+$|^[\[(]?(?:[A-Fa-f0-9]{8}|[A-Fa-f0-9]{32}|[A-Fa-f0-9]{40}|[A-Fa-f0-9]{64})[\])]?$|^(?:Downloads?|Movies?|TV|Videos?|Media|下载|电影|剧集|动漫)$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(500));
+
+    private static IReadOnlyList<string>? BuildSeriesAliases(string? canonical, string? original, string? parsed, string sourcePath)
+    {
+        List<string> aliases = [];
+        void Add(string? value)
+        {
+            if (IsUnsafeCacheTitle(value) || string.Equals(value, canonical, StringComparison.OrdinalIgnoreCase)
+                || aliases.Contains(value!, StringComparer.OrdinalIgnoreCase)) return;
+            aliases.Add(value!);
+        }
+        Add(original);
+        // 历史解析标签只有在源文件或直接父目录有字面证据时才可作别名，不能沿用任意 AI 别名。
+        string source = Path.GetFileName(sourcePath) + " " + Path.GetFileName(Path.GetDirectoryName(sourcePath));
+        string NormalizeEvidence(string value) => Regex.Replace(value, @"[^\p{L}0-9]", "").ToLowerInvariant();
+        string normalized = NormalizeEvidence(parsed ?? "");
+        if (normalized.Length >= 2 && NormalizeEvidence(source).Contains(normalized, StringComparison.Ordinal)) Add(parsed);
+        return aliases.Count == 0 ? null : aliases.Take(2).ToArray();
     }
 
     /// <summary>写入完成检测失败（源消失 / 写入超时）时把登记行终态化为 Failed，防止僵尸行滞留</summary>

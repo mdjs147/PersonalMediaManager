@@ -1,3 +1,4 @@
+using PersonalMediaManager.Application.Common;
 using Microsoft.Extensions.Logging;
 using PersonalMediaManager.Application.Contracts;
 
@@ -12,7 +13,7 @@ namespace PersonalMediaManager.Infrastructure.Platform.FileSystem;
 /// - 一旦遇到含真实内容的目录立即停止上溯（它非空，其祖先更不可能空）。
 /// - 起点不在 boundary 之下 / 枚举失败 / 删除失败：一律保守跳过或停止，绝不误删 boundary 外或含内容的目录。
 ///
-/// 路径比较按 Windows 语义（OrdinalIgnoreCase + 规范化去尾分隔符）；产品仅支持 Windows。
+/// 路径比较使用平台语义；任何符号链接子树均保守跳过。
 /// 单进程串行处理（TaskProcessorWorker 全局 SemaphoreSlim(1,1)）下不存在并发清理同一子树的竞争。
 /// </remarks>
 internal sealed class EmptyDirectoryCleaner : IEmptyDirectoryCleaner
@@ -38,7 +39,7 @@ internal sealed class EmptyDirectoryCleaner : IEmptyDirectoryCleaner
         string? current = Normalize(startDirectory);
 
         // 起点必须严格位于 boundary 之下：防越界删到监控根外，亦防把监控根自身当空目录删
-        if (!IsStrictlyUnder(current, boundaryFull))
+        if (!IsStrictlyUnder(current, boundaryFull) || HasLinkedAncestor(current, boundaryFull))
         {
             _logger.LogDebug("源目录不在监控根之下，跳过空目录清理：{Start}（根 {Boundary}）", startDirectory, boundary);
             return deleted;
@@ -85,8 +86,10 @@ internal sealed class EmptyDirectoryCleaner : IEmptyDirectoryCleaner
     {
         try
         {
+            if ((File.GetAttributes(dir) & FileAttributes.ReparsePoint) != 0) return false;
             foreach (string file in Directory.EnumerateFiles(dir))
             {
+                if ((File.GetAttributes(file) & FileAttributes.ReparsePoint) != 0) return false;
                 string ext = Path.GetExtension(file);
                 if (ext.Length == 0 || !ignoreExtensions.Contains(ext))
                     return false; // 无扩展名 / 不可忽略 = 真实内容文件
@@ -104,13 +107,29 @@ internal sealed class EmptyDirectoryCleaner : IEmptyDirectoryCleaner
         }
     }
 
+    // 词法前缀不足以保护链接跳转；从起点到根的任一级链接都不能参与递归删除。
+    private static bool HasLinkedAncestor(string start, string boundary)
+    {
+        try
+        {
+            for (string? path = start; path is not null; path = Path.GetDirectoryName(path))
+            {
+                if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0) return true;
+                if (PathEquals(path, boundary)) return false;
+            }
+        }
+        catch (IOException) { return true; }
+        catch (UnauthorizedAccessException) { return true; }
+        return true;
+    }
+
     private static string Normalize(string path)
         => Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
 
     private static bool PathEquals(string a, string b)
-        => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+        => string.Equals(a, b, PlatformPaths.Comparison);
 
     /// <summary>child 是否严格位于 parent 之下（不含 parent 自身）；两者均须已规范化</summary>
     private static bool IsStrictlyUnder(string child, string parent)
-        => child.StartsWith(parent + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+        => child.StartsWith(parent + Path.DirectorySeparatorChar, PlatformPaths.Comparison);
 }

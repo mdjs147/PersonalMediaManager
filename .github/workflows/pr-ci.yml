@@ -82,3 +82,41 @@ jobs:
           path: artifacts/test-results/**
           retention-days: 7
           if-no-files-found: warn
+
+  portable:
+    name: Portable (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm --prefix src/PersonalMediaManager.Frontend ci
+      - name: Portable tests
+        run: bash scripts/test-portable.sh
+      - name: Build server
+        run: dotnet build src/PersonalMediaManager.Server -c Release -m:1
+      - name: Compile native macOS tray
+        if: runner.os == 'macOS'
+        run: |
+          bash scripts/build-macos-tray.sh artifacts/mac-tray
+          xcrun swiftc src/PersonalMediaManager.MacTray/TrayOptions.swift src/PersonalMediaManager.MacTray/tests/main.swift -o artifacts/mac-tray/argument-tests
+          artifacts/mac-tray/argument-tests
+      - name: Isolated server smoke
+        run: bash scripts/smoke-portable.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: portable-tests-${{ matrix.os }}
+          path: artifacts/test-results/**
+          retention-days: 7

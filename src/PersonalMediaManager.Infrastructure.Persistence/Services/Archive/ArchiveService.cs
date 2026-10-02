@@ -167,7 +167,7 @@ internal sealed class ArchiveService : IArchiveService
         // 3.5 源已在规范目标位（典型：孤儿文件重新入库——文件本就在分类目录下，解析出的规范路径恰好等于其自身）：
         //     视为「已就位」直接登记成功，绝不移动、也不进同名冲突分支（否则会把文件搬到自己头上或被自冲突 Skip）。
         //     正常归档源在监控/下载目录，与目标必不相等，此分支只对「孤儿认领」生效，对常规流程零影响。
-        if (string.Equals(Path.GetFullPath(item.SourcePath), Path.GetFullPath(absoluteTarget), StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(Path.GetFullPath(item.SourcePath), Path.GetFullPath(absoluteTarget), PlatformPaths.Comparison))
         {
             _logger.LogInformation("源文件已在规范目标位，登记为已归档（不移动）：{Target}", absoluteTarget);
             return new ArchiveResult(absoluteTarget, ArchiveOutcome.Completed);
@@ -379,8 +379,8 @@ internal sealed class ArchiveService : IArchiveService
         {
             if (string.IsNullOrWhiteSpace(root)) continue;
             string normRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
-            bool isAncestorOrSelf = string.Equals(normSource, normRoot, StringComparison.OrdinalIgnoreCase)
-                || normSource.StartsWith(normRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+            bool isAncestorOrSelf = string.Equals(normSource, normRoot, PlatformPaths.Comparison)
+                || normSource.StartsWith(normRoot + Path.DirectorySeparatorChar, PlatformPaths.Comparison);
             if (isAncestorOrSelf && normRoot.Length > bestLen)
             {
                 best = normRoot;
@@ -558,9 +558,7 @@ internal sealed class ArchiveService : IArchiveService
     /// </remarks>
     private static bool MatchesStemPrefix(string fileStem, string sourceStem)
     {
-        if (!fileStem.StartsWith(sourceStem, StringComparison.OrdinalIgnoreCase)) return false;
-        return fileStem.Length == sourceStem.Length
-            || fileStem[sourceStem.Length] is '.' or '-' or '_';
+        return PlatformPaths.MatchesFileStem(fileStem, sourceStem);
     }
 
     /// <summary>源目录树内（含子目录，限深）是否存在本视频之外的其它视频文件</summary>
@@ -571,7 +569,7 @@ internal sealed class ArchiveService : IArchiveService
         foreach (string path in Directory.EnumerateFiles(sourceDir, "*", LimitedRecursionEnumeration))
         {
             if (!MediaFileExtensions.IsVideo(path)) continue;
-            if (string.Equals(Path.GetFullPath(path), self, StringComparison.OrdinalIgnoreCase)) continue;
+            if (string.Equals(Path.GetFullPath(path), self, PlatformPaths.Comparison)) continue;
             return true;
         }
         return false;
@@ -609,7 +607,7 @@ internal sealed class ArchiveService : IArchiveService
             foreach (string path in Directory.EnumerateFiles(dir))
             {
                 string fileName = Path.GetFileName(path);
-                if (!fileName.StartsWith(stemPrefix, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!fileName.StartsWith(stemPrefix, PlatformPaths.Comparison)) continue;
                 string ext = Path.GetExtension(fileName);
                 bool isCompanion = string.Equals(ext, ".nfo", StringComparison.OrdinalIgnoreCase)
                     || SubtitleRenamer.SupportedExtensions.Contains(ext);
@@ -882,7 +880,7 @@ internal sealed class ArchiveService : IArchiveService
 
         try
         {
-            string? root = Path.GetPathRoot(Path.GetFullPath(targetPath));
+            string? root = MountedVolumeResolver.TryResolve(targetPath);
             if (string.IsNullOrEmpty(root)) return;
             DriveInfo drive = new(root);
             if (!drive.IsReady) return;

@@ -64,53 +64,67 @@ internal sealed class TmdbZeroResultRetrySweeper : ITmdbZeroResultRetrySweeper
         DateTimeOffset staleBefore = now.AddHours(-MinIntervalHours);
         DateTimeOffset windowStart = now.AddDays(-windowDays);
 
-        List<MediaItem> due = await db.MediaItems
+        // 先做轻量快照，再按页加载实体；缺失文件不消耗重投额度，避免排头占满批次饿死后续文件。
+        List<long> dueIds = await db.MediaItems.AsNoTracking()
             .Where(m => m.Status == MediaItemStatus.AwaitingReview
                      && m.ReviewReason == ReviewReason.TmdbZeroResult
                      && !m.AiInvolved
                      && m.CreatedAt >= windowStart
                      && m.UpdatedAt <= staleBefore)
-            .OrderBy(m => m.UpdatedAt)
-            .Take(MaxBatchPerSweep)
+            .OrderBy(m => m.UpdatedAt).ThenBy(m => m.Id)
+            .Select(m => m.Id)
             .ToListAsync(ct);
-        if (due.Count == 0) return 0;
+        if (dueIds.Count == 0) return 0;
 
         IReadOnlyList<(long Id, string Path)> watchRoots = await LoadWatchFolderRootsAsync(db, ct);
 
         int requeued = 0;
-        foreach (MediaItem item in due)
+        int attempted = 0;
+        foreach (long[] page in dueIds.Chunk(MaxBatchPerSweep))
         {
-            ct.ThrowIfCancellationRequested();
-            if (!File.Exists(item.SourcePath))
+            List<MediaItem> due = await db.MediaItems.Where(m => page.Contains(m.Id)
+                    && m.Status == MediaItemStatus.AwaitingReview && m.ReviewReason == ReviewReason.TmdbZeroResult
+                    && !m.AiInvolved && m.CreatedAt >= windowStart && m.UpdatedAt <= staleBefore)
+                .OrderBy(m => m.UpdatedAt).ThenBy(m => m.Id).ToListAsync(ct);
+            foreach (MediaItem item in due)
             {
-                // 源文件已不在（被删 / 移走）：跳过本轮，交由 FileMissing 巡检 / 人工处置，不在 Job 里做删改决策
-                continue;
+                ct.ThrowIfCancellationRequested();
+                if (attempted >= MaxBatchPerSweep) break;
+                if (!File.Exists(item.SourcePath))
+                {
+                    // 源文件已不在（被删 / 移走）：跳过本轮，交由 FileMissing 巡检 / 人工处置，不在 Job 里做删改决策
+                    continue;
+                }
+
+                attempted++;
+                int ageDays = Math.Max(1, (int)Math.Ceiling((now - item.CreatedAt).TotalDays));
+                item.AppendStep(MediaItemStatus.AwaitingReview, now, durMs: 0, JsonSerializer.Serialize(new
+                {
+                    decision = $"TMDB 未收录每日自动重试（入库第 {ageDays} 天 / 窗口 {windowDays} 天）→ 重新排队全流程",
+                    autoRetry = true,
+                }, StepJsonOptions));
+                item.Transition(MediaItemStatus.Queued);
+                item.ClearError();
+                await db.SaveChangesAsync(ct);
+
+                long watchFolderId = ResolveWatchFolderIdInMemory(item.SourcePath, watchRoots);
+                try
+                {
+                    await _queue.EnqueueAsync(new PendingFileItem(item.SourcePath, watchFolderId, PendingFileSource.Manual), ct);
+                    requeued++;
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "TMDB 未收录自动重试入队失败（记录已转 Queued，待全量扫描兜底）：MediaItemId={Id}", item.Id);
+                }
             }
 
-            int ageDays = Math.Max(1, (int)Math.Ceiling((now - item.CreatedAt).TotalDays));
-            item.AppendStep(MediaItemStatus.AwaitingReview, now, durMs: 0, JsonSerializer.Serialize(new
-            {
-                decision = $"TMDB 未收录每日自动重试（入库第 {ageDays} 天 / 窗口 {windowDays} 天）→ 重新排队全流程",
-                autoRetry = true,
-            }, StepJsonOptions));
-            item.Transition(MediaItemStatus.Queued);
-            item.ClearError();
-            await db.SaveChangesAsync(ct);
-
-            long watchFolderId = ResolveWatchFolderIdInMemory(item.SourcePath, watchRoots);
-            try
-            {
-                await _queue.EnqueueAsync(new PendingFileItem(item.SourcePath, watchFolderId, PendingFileSource.Manual), ct);
-                requeued++;
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "TMDB 未收录自动重试入队失败（记录已转 Queued，待全量扫描兜底）：MediaItemId={Id}", item.Id);
-            }
+            db.ChangeTracker.Clear();
+            if (attempted >= MaxBatchPerSweep) break;
         }
 
         if (requeued > 0)
@@ -157,8 +171,8 @@ internal sealed class TmdbZeroResultRetrySweeper : ITmdbZeroResultRetrySweeper
         {
             string root = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             if (root.Length == 0) continue;
-            bool hit = sourcePath.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
-                    || sourcePath.StartsWith(root + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+            bool hit = sourcePath.StartsWith(root + Path.DirectorySeparatorChar, PlatformPaths.Comparison)
+                    || sourcePath.StartsWith(root + Path.AltDirectorySeparatorChar, PlatformPaths.Comparison);
             if (hit && root.Length > bestLen)
             {
                 bestId = id;

@@ -86,10 +86,12 @@ internal sealed class BackupService : IBackupService
 
     public async Task<BackupResult> CreateAsync(CancellationToken ct = default)
     {
-        Directory.CreateDirectory(_paths.BackupDir);
+        PrivateFileSystem.EnsureDirectory(_paths.BackupDir);
         string fileName = $"{BackupFilePrefix}{DateTimeOffset.UtcNow:yyyyMMddHHmmss}.zip";
         string targetZip = Path.Combine(_paths.BackupDir, fileName);
-        string tempDbCopy = Path.Combine(Path.GetTempPath(), $"pmm-backup-{Guid.NewGuid():N}.db");
+        string tempDirectory = PrivateFileSystem.CreateTemporaryDirectory("pmm-backup-");
+        string tempDbCopy = Path.Combine(tempDirectory, DbEntryName);
+        bool createdZip = false;
         try
         {
             // 1. VACUUM INTO 在线快照（不锁主库，干净紧凑副本）；源库取生效路径（托盘可 override，override 感知）
@@ -101,18 +103,22 @@ internal sealed class BackupService : IBackupService
                 cmd.Parameters.AddWithValue("@target", tempDbCopy);
                 await cmd.ExecuteNonQueryAsync(ct);
             }
+            PrivateFileSystem.RestrictFile(tempDbCopy);
 
             // 2. 打 zip：pmm.db + keys/*（密钥环一并打包，否则恢复到新数据根后加密字段解不开）
-            await using (FileStream zipFs = new(targetZip, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-            using (ZipArchive archive = new(zipFs, ZipArchiveMode.Create))
+            await using (FileStream zipFs = PrivateFileSystem.CreateNew(targetZip))
             {
-                archive.CreateEntryFromFile(tempDbCopy, DbEntryName, CompressionLevel.Optimal);
-                if (Directory.Exists(_paths.KeyRingDir))
+                createdZip = true;
+                using (ZipArchive archive = new(zipFs, ZipArchiveMode.Create))
                 {
-                    foreach (string file in Directory.EnumerateFiles(_paths.KeyRingDir, "*", SearchOption.AllDirectories))
+                    archive.CreateEntryFromFile(tempDbCopy, DbEntryName, CompressionLevel.Optimal);
+                    if (Directory.Exists(_paths.KeyRingDir))
                     {
-                        string relative = Path.GetRelativePath(_paths.KeyRingDir, file).Replace('\\', '/');
-                        archive.CreateEntryFromFile(file, KeysDirPrefix + relative, CompressionLevel.Optimal);
+                        foreach (string file in Directory.EnumerateFiles(_paths.KeyRingDir, "*", SearchOption.AllDirectories))
+                        {
+                            string relative = Path.GetRelativePath(_paths.KeyRingDir, file).Replace('\\', '/');
+                            archive.CreateEntryFromFile(file, KeysDirPrefix + relative, CompressionLevel.Optimal);
+                        }
                     }
                 }
             }
@@ -128,12 +134,12 @@ internal sealed class BackupService : IBackupService
         catch
         {
             // 失败清理半成品 zip，避免残留损坏备份污染保留计数
-            try { if (File.Exists(targetZip)) File.Delete(targetZip); } catch { /* 吞 — 主异常更重要 */ }
+            try { if (createdZip && File.Exists(targetZip)) File.Delete(targetZip); } catch { /* 吞 — 主异常更重要 */ }
             throw;
         }
         finally
         {
-            try { if (File.Exists(tempDbCopy)) File.Delete(tempDbCopy); } catch { /* 临时副本清理失败仅泄漏一个临时文件 */ }
+            try { Directory.Delete(tempDirectory, recursive: true); } catch { /* 私有目录内残留不暴露给其它用户 */ }
         }
     }
 

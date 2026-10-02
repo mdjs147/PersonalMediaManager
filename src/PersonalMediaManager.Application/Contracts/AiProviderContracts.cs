@@ -38,7 +38,44 @@ public sealed record AiParseRequest(
     string? RuleHintType = null,
     int? RuleHintSeason = null,
     int? RuleHintEpisode = null,
-    int? RuleHintEpisodeEnd = null);
+    int? RuleHintEpisodeEnd = null,
+    AiParseContext? Context = null);
+
+/// <summary>有界识别任务类型</summary>
+public enum AiParseTaskType { IdentifyWork, FillMissingFields, DisambiguateCandidates }
+
+/// <summary>应用构造的版本化任务上下文</summary>
+public sealed record AiParseContext(
+    int SchemaVersion = 1,
+    AiParseTaskType TaskType = AiParseTaskType.IdentifyWork,
+    string? InvocationReason = null,
+    long? RuleId = null,
+    double? RuleConfidence = null,
+    IReadOnlyList<string>? MissingFields = null,
+    AiLockedBinding? LockedBinding = null,
+    IReadOnlyList<AiCandidateEvidence>? Candidates = null,
+    IReadOnlyList<AiFieldEvidence>? RuleProvenance = null,
+    string? PreviousFailureCode = null);
+
+/// <summary>不可被模型替换的已知绑定</summary>
+public sealed record AiLockedBinding(int TmdbId, string MediaType, string Title,
+    int? Year = null, int? Season = null, int? Episode = null, int? EpisodeEnd = null);
+
+/// <summary>候选短表证据，不含简介或原始响应</summary>
+public sealed record AiCandidateEvidence(int TmdbId, string MediaType, string Title,
+    string? OriginalTitle = null, int? Year = null, double? Score = null);
+
+/// <summary>字段值及安全来源代码</summary>
+public sealed record AiFieldEvidence(string Field, int? Value, string Source,
+    int? SegmentIndex = null, bool Rejected = false);
+
+/// <summary>仅含安全代码的字段验证结果</summary>
+public sealed record AiParseValidation(IReadOnlyList<string> AcceptedFields, IReadOnlyList<string> RejectedFields,
+    IReadOnlyList<string> ReasonCodes, IReadOnlyList<string>? OutputFields = null);
+
+/// <summary>不含路径、标题及供应商错误的请求观测</summary>
+public sealed record AiRequestMetadata(int SchemaVersion, string TaskType, int Utf8Bytes,
+    bool Truncated, int ParentSegmentCount, int CandidateCount, IReadOnlyList<string> MissingFields);
 
 /// <summary>AI 解析结果（与 ParseTask 决策矩阵对齐）</summary>
 /// <param name="Title">主标题（中文优先，英文回退）</param>
@@ -57,7 +94,10 @@ public sealed record AiParseResult(
     int? Episode,
     int? EpisodeEnd,
     double Confidence,
-    IReadOnlyList<string>? SearchAliases = null)
+    IReadOnlyList<string>? SearchAliases = null,
+    int? SelectedCandidateId = null,
+    bool Abstained = false,
+    AiParseValidation? Validation = null)
 {
     /// <summary>结果是否达到可接受质量（置信度达标 + 标题非空）</summary>
     /// <remarks>
@@ -68,7 +108,7 @@ public sealed record AiParseResult(
     /// 不在升级层重复（缺季集多半是文件名本身没信息，换更高级 AI 也补不出，升级是浪费）。
     /// </remarks>
     public bool IsAcceptable(double threshold) =>
-        Confidence >= threshold && !string.IsNullOrWhiteSpace(Title);
+        !Abstained && Confidence >= threshold && !string.IsNullOrWhiteSpace(Title);
 }
 
 /// <summary>AI 解析门面单次调用结果（结构化结果 + 诊断原文 + token 用量）</summary>
@@ -82,7 +122,8 @@ public sealed record AiParseOutcome(
     string? RequestText = null,
     string? ResponseText = null,
     int? PromptTokens = null,
-    int? CompletionTokens = null);
+    int? CompletionTokens = null,
+    AiRequestMetadata? RequestMetadata = null);
 
 /// <summary>瞬时错误：不消耗级数额度，允许 AiCallChain.RecordTransientError 后内部短重试 1 次</summary>
 public sealed class AiProviderTransientException : Exception
@@ -110,4 +151,10 @@ public sealed class AiProviderLogicalException : Exception
     }
 
     public int? HttpStatus { get; }
+}
+
+/// <summary>确定性模型运行失败，不对同模型短重试</summary>
+public sealed class AiProviderModelRuntimeException : Exception
+{
+    public AiProviderModelRuntimeException(string message, Exception? inner = null) : base(message, inner) { }
 }

@@ -62,7 +62,8 @@ public sealed class TmdbSearchServiceTests : IDisposable
                 TmdbSearchRequest req = ci.Arg<TmdbSearchRequest>();
                 _seenRequests.Add(req);
                 _seenRates.Add(ci.ArgAt<int?>(2));
-                return BuildResult(candidateCountFor(req));
+                TmdbSearchResult result = BuildResult(candidateCountFor(req));
+                return result with { Candidates = result.Candidates.Select(c => c with { Title = req.Query }).ToList() };
             });
     }
 
@@ -80,6 +81,46 @@ public sealed class TmdbSearchServiceTests : IDisposable
         TmdbSetting setting = ctx.TmdbSettings.Find(1L)!;
         mutate(setting);
         ctx.SaveChanges();
+    }
+
+    [Fact]
+    public async Task IrrelevantNonemptyResult_ContinuesBoundedFallback()
+    {
+        _client.SearchAsync(Arg.Any<TmdbSearchRequest>(), Arg.Any<string>(), Arg.Any<int?>(), Arg.Any<CancellationToken>())
+            .Returns(ci =>
+            {
+                TmdbSearchRequest request = ci.Arg<TmdbSearchRequest>();
+                _seenRequests.Add(request);
+                return new TmdbSearchResult([new TmdbCandidate(request.Year is null ? 2 : 1, "tv",
+                    request.Year is null ? "Example" : "ZZZZ", null, 2023, 10, null, null, null, null)], null);
+            });
+        TmdbSearchResult result = await _sut.SearchAsync(new TmdbSearchRequest("Example", "tv", 2024));
+        _seenRequests.Should().HaveCount(2);
+        result.Candidates.Should().Contain(c => c.Id == 2);
+    }
+
+    [Fact]
+    public async Task FallbackSameEntity_PreservesRelevantLocalizedTitle()
+    {
+        _client.SearchAsync(Arg.Any<TmdbSearchRequest>(), Arg.Any<string>(), Arg.Any<int?>(), Arg.Any<CancellationToken>())
+            .Returns(ci =>
+            {
+                TmdbSearchRequest request = ci.Arg<TmdbSearchRequest>();
+                return new TmdbSearchResult([new TmdbCandidate(1, "tv",
+                    request.Year is null ? "Example" : "ZZZZ", null, 2023, 10, null, null, null, null)], null);
+            });
+        TmdbSearchResult result = await _sut.SearchAsync(new TmdbSearchRequest("Example", "tv", 2024));
+        result.Candidates.Should().ContainSingle().Which.Title.Should().Be("Example");
+    }
+
+    [Fact]
+    public async Task AllIrrelevantResults_StopAtExistingFourLayerBudget()
+    {
+        _client.SearchAsync(Arg.Any<TmdbSearchRequest>(), Arg.Any<string>(), Arg.Any<int?>(), Arg.Any<CancellationToken>())
+            .Returns(ci => { _seenRequests.Add(ci.Arg<TmdbSearchRequest>()); return BuildResult(1); });
+        TmdbSearchResult result = await _sut.SearchAsync(new TmdbSearchRequest("Example", "tv", 2024));
+        _seenRequests.Should().HaveCount(4);
+        result.Candidates.Should().ContainSingle();
     }
 
     // ── 修复 1：年份精确过滤零结果 → 透明去年份重搜 ──

@@ -30,7 +30,6 @@ public sealed class LogRetentionJobTests : IDisposable
     public LogRetentionJobTests()
     {
         _root = Path.Combine(Path.GetTempPath(), $"pmm-logret-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(_root);
         _paths = AppPaths.ForRoot(_root);
     }
 
@@ -136,8 +135,8 @@ public sealed class LogRetentionJobTests : IDisposable
 
         int deleted = job.PurgeOlderThan(_paths.LogDir, TimeSpan.FromDays(30));
 
-        deleted.Should().Be(1, "被占用文件跳过，其他过期文件照删");
-        File.Exists(locked).Should().BeTrue();
+        deleted.Should().Be(OperatingSystem.IsWindows() ? 1 : 2, "Windows 拒绝删除占用文件，Unix 允许解除目录项");
+        File.Exists(locked).Should().Be(OperatingSystem.IsWindows());
         File.Exists(alsoOld).Should().BeFalse();
     }
 

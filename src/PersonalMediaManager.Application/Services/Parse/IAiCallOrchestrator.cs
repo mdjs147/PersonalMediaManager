@@ -39,7 +39,8 @@ public sealed record AiCallOutcome(
     long? WinningProviderId,
     int ProvidersAttempted,
     string? FailureSummary,
-    IReadOnlyList<AiCallAttempt>? Attempts = null);
+    IReadOnlyList<AiCallAttempt>? Attempts = null,
+    AiRequestMetadata? RequestMetadata = null);
 
 /// <summary>单级 AI 调用的轨迹记录（一条对应升级链里的一级）</summary>
 /// <param name="Level">第几级（1-based，1=主提供商/Ollama，2=升级到的下一级，以此类推）</param>

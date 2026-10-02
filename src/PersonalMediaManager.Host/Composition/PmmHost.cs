@@ -56,7 +56,8 @@ public static class PmmHost
 
     public static WebApplication CreateApp(string[] args, AppPaths paths,
         Action<IWebHostBuilder>? webHostOverride = null,
-        Action<IServiceCollection>? servicesOverride = null)
+        Action<IServiceCollection>? servicesOverride = null,
+        bool portableServer = false)
     {
         // r3 P3-r3.20：防御性 paths 验证（Launcher 调用前已保证；这里兜底单测 / 直调）
         // 启动期目录缺失会让 Serilog.File / DataProtection PersistKeysToFileSystem 在运行时迟到爆炸，
@@ -91,6 +92,9 @@ public static class PmmHost
 
         string localConfigPath = Path.Combine(paths.Root, "local.json");
         builder.Configuration.AddJsonFile(localConfigPath, optional: true, reloadOnChange: false);
+        // 恢复声明的优先级：local.json 不能盖过部署环境和显式命令行。
+        builder.Configuration.AddEnvironmentVariables();
+        if (args.Length > 0) builder.Configuration.AddCommandLine(args);
 
         if (webHostOverride is not null)
         {
@@ -103,14 +107,22 @@ public static class PmmHost
             // 绑定前探测可用性：撞占用 / 系统 TCP 保留段（SocketException 10013/10048）时自动回退备用端口 → 最终 OS 自动分配，
             // 避免整机因单个端口不可用而彻底启动失败（历史事故：默认端口落入 Hyper-V/WSL 动态保留段 → Kestrel bind 10013 → 启动失败）
             int preferred = builder.Configuration.GetValue("Web:Port", DefaultPort);
-            int port = ResolveBindablePort(preferred);
+            if (preferred is < 1 or > 65535) throw new ArgumentOutOfRangeException("Web:Port", "端口必须在 1–65535 之间");
+            int port = portableServer ? preferred : ResolveBindablePort(preferred);
             if (port != preferred)
             {
                 // 写回内存配置（最高优先级覆盖）：让托盘 / 其它读 Web:Port 处拿到实际生效端口
                 builder.Configuration["Web:Port"] = port.ToString(CultureInfo.InvariantCulture);
                 portFallbackFrom = preferred;
             }
-            builder.WebHost.ConfigureKestrel(opts => opts.ListenAnyIP(port));
+            if (portableServer)
+            {
+                string bind = builder.Configuration["Web:BindAddress"] ?? "127.0.0.1";
+                if (!IPAddress.TryParse(bind, out IPAddress? address))
+                    throw new ArgumentException("Web:BindAddress 必须是 IP 地址");
+                builder.WebHost.ConfigureKestrel(opts => opts.Listen(address, port));
+            }
+            else builder.WebHost.ConfigureKestrel(opts => opts.ListenAnyIP(port));
         }
 
         // Serilog：Console + File（按天 + 10MB 切割 + 30 天保留）+ SignalRSink（B3.2）
@@ -136,6 +148,9 @@ public static class PmmHost
         // 回退 $"Data Source={paths.DbFile}" 默认值。让 Launcher「配置数据库位置…」菜单切换 db 后重启即生效（规范 §6.4）
         string connectionString = builder.Configuration.GetConnectionString("Default")
             ?? $"Data Source={paths.DbFile}";
+        // 无头入口以数据根锁保护数据库；禁止多个数据根指向同一外置库。
+        if (portableServer && builder.Configuration.GetConnectionString("Default") is not null)
+            throw new InvalidOperationException("Server 不支持 ConnectionStrings:Default 覆盖；请用 --data-dir 指定独立数据目录");
         builder.Services.AddInfrastructurePersistence(connectionString);
 
         // 运行时生效的主库路径（override 感知）：从最终连接串解析，供导出 / 导入暂存 / 容量统计共用，

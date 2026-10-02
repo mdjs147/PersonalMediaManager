@@ -5,6 +5,43 @@ namespace PersonalMediaManager.Domain.Tests.Aggregates;
 /// <summary>MediaTitleClue.HasNoTitleClue — 文件名/路径剥离技术噪音后是否全无剧名线索（保守优先，宁走 AI 不误判）</summary>
 public sealed class MediaTitleClueTests
 {
+    [Theory]
+    [InlineData("[Group][Example_Show][X264_Hi10p_AAC][720P][BluRay][06](26DC4D40).mkv")]
+    [InlineData("[Example][1080p].mkv")]
+    [InlineData("[A Proper Story][1080p].mkv")]
+    [InlineData("[Repackaged Dreams][WEB.DL].mkv")]
+    [InlineData("[Dolby Visionaries][DDP5.1].mkv")]
+    [InlineData("[Example Show Dolby Vision DDP5.1][06].mkv")]
+    public void MeaningfulLatinBracketRemainsUntrustedClue(string file)
+    {
+        MediaTitleClue.HasUntrustedBracketTitleClue(file, null).Should().BeTrue();
+        MediaTitleClue.HasNoTitleClue(file, null).Should().BeFalse();
+    }
+
+    [Fact]
+    public void ParentBracketCanCarryLatinClue()
+    {
+        MediaTitleClue.HasUntrustedBracketTitleClue("06.mkv",
+            ["[Group][Example_Show][01-07][X264_Hi10p][720p+1080p][MKV]"]).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("[Group][X264_Hi10p_AAC][720P][BluRay][06](26DC4D40).mkv")]
+    [InlineData("[Example-Raws][HEVC][1080p][01-07][MKV].mkv")]
+    [InlineData("[Downloads][X265_Main10p][NCED_EP22][26DC4D40].mkv")]
+    [InlineData("[www.example.com][720P].mkv")]
+    [InlineData("[DDP5.1][1080p][06].mkv")]
+    [InlineData("[WEB.DL][1080p][06].mkv")]
+    [InlineData("[Dolby Vision][1080p][06].mkv")]
+    [InlineData("[DolbyVision][REPACK][PROPER][06].mkv")]
+    [InlineData("[DTS-HD.MA.5.1][TrueHD7.1][DD+5.1][06].mkv")]
+    [InlineData("[AAC2.0][E-AC3][Dolby Atmos][MP3][06].mkv")]
+    public void TechnicalReleaseGroupAndGenericBracketsAreNotTitleClues(string file)
+    {
+        MediaTitleClue.HasUntrustedBracketTitleClue(file, null).Should().BeFalse();
+        MediaTitleClue.HasNoTitleClue(file, null).Should().BeTrue();
+    }
+
     // ---- 判为「无剧名线索」(true)：文件名 + 路径剥离后全空，应前置转人工 ----
 
     [Theory]

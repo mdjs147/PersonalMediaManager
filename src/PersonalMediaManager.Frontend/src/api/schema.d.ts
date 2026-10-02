@@ -12471,6 +12471,40 @@ export interface components {
             /** Format: int32 */
             metadataRowsDeleted: number | string;
         };
+        CompletionProvenance: {
+            category: string;
+            everReviewed: boolean;
+            everConfirmed: boolean;
+            explicitCorrection: boolean;
+            manualArchive: boolean;
+            forcedAnchor: boolean;
+            folderReuse: boolean;
+            automaticRetry: boolean;
+        };
+        CompletionProvenanceStats: {
+            /** Format: int32 */
+            completed: number | string;
+            /** Format: int32 */
+            confirmed: number | string;
+            /** Format: int32 */
+            manualArchive: number | string;
+            /** Format: int32 */
+            automaticPipeline: number | string;
+            /** Format: int32 */
+            unknown: number | string;
+            /** Format: int32 */
+            everReviewed: number | string;
+            /** Format: int32 */
+            everConfirmed: number | string;
+            /** Format: int32 */
+            explicitCorrection: number | string;
+            /** Format: int32 */
+            forcedAnchor: number | string;
+            /** Format: int32 */
+            folderReuse: number | string;
+            /** Format: int32 */
+            automaticRetry: number | string;
+        };
         ConfirmRequest: {
             /** Format: int32 */
             tmdbId: number | string;
@@ -12708,6 +12742,7 @@ export interface components {
             queue: components["schemas"]["DashboardQueueBucket"];
             parseSource: components["schemas"]["DashboardParseSourceBucket"];
             service: components["schemas"]["DashboardServiceBucket"];
+            completionProvenance?: null | components["schemas"]["CompletionProvenanceStats"];
         };
         DashboardTasksResponse: {
             items: components["schemas"]["ScheduledTaskRunEntry"][];
@@ -13303,6 +13338,10 @@ export interface components {
             tmdb: null | components["schemas"]["TmdbMetadataSummary"];
             aiCalls: components["schemas"]["AiCallEntryResponse"][];
             steps: components["schemas"]["ProcessStepEntry"][];
+            historicalReviewReason?: null | components["schemas"]["ReviewReason"];
+            completionProvenance?: null | components["schemas"]["CompletionProvenance"];
+            currentBlockingReason?: null | string;
+            historicalErrorMessage?: null | string;
         };
         /** @enum {string} */
         MediaItemStatus: "Detected" | "Queued" | "Parsing" | "TmdbMatching" | "AiParsing" | "TmdbRematching" | "Classifying" | "AwaitingReview" | "Archiving" | "Completed" | "Skipped" | "Ignored" | "Cancelled" | "Failed";

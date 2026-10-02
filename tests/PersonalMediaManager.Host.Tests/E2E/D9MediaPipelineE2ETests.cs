@@ -1,4 +1,6 @@
+using System.Net;
 using System.Net.Http.Headers;
+using PersonalMediaManager.Host.HostedServices;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
@@ -56,6 +58,8 @@ public sealed class D9MediaPipelineE2ETests : IDisposable
         {
             ConfigureTestServices = services =>
             {
+                services.AddHttpClient(WebhookOutboxWorker.HttpClientName)
+                    .ConfigurePrimaryHttpMessageHandler(() => new SyntheticWebhookHandler());
                 services.RemoveAll<ITmdbSearchService>();
                 services.AddScoped(_ => _tmdbStub);
                 services.RemoveAll<IAiCallOrchestrator>();
@@ -72,6 +76,17 @@ public sealed class D9MediaPipelineE2ETests : IDisposable
         _scratchTargetRoot = Path.Combine(Path.GetTempPath(), $"pmm-e2e-tgt-{NewAlphabeticToken()}");
         Directory.CreateDirectory(_scratchSourceDir);
         Directory.CreateDirectory(_scratchTargetRoot);
+    }
+
+    // 端到端仅验证合成投递落库，网络传输由 WebhookOutboxWorkerTests 的记录桩单独覆盖。
+    private sealed class SyntheticWebhookHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            if (request.RequestUri?.Host != "hook.test")
+                throw new InvalidOperationException("E2E Webhook 只能访问指定的内存测试地址");
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+        }
     }
 
     public void Dispose()
