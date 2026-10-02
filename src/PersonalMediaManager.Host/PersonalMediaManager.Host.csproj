@@ -66,7 +66,7 @@
     实测：dotnet build PersonalMediaManager.slnx 只对 .esproj 跑 restore 图、不调它的 Build target；
     项目级 dotnet build Host.csproj 经 ProjectReference 又会触发 —— 行为不一致。
     故在此显式 <MSBuild> 调 .esproj 的 Build。Debug/Release 均触发，但用 Inputs/Outputs 做增量：
-    仅当前端源码（src / public / index.html / package.json / vite.config.js）比 wwwroot/index.html 新时才重跑 build:host。
+    前端源码、主版本源与生成脚本发生变化时重跑 build:host，避免版本升级后仍嵌入旧页面。
     收益：F5 启动 Launcher 即拿到最新前端；未改前端时增量短路、几乎零耗时（不启动 vite）。
     前端 HMR / 源码调试另走 vite dev server(5173)，与本构建解耦，不在此处。
     增量 Inputs 必须排除 vite 生成物 auto-imports.d.ts / components.d.ts —— 它们随每次构建刷新时间戳，
@@ -83,6 +83,9 @@
     <_PmmFrontendInputs Include="..\PersonalMediaManager.Frontend\public\**\*" />
     <_PmmFrontendInputs Include="..\PersonalMediaManager.Frontend\index.html" />
     <_PmmFrontendInputs Include="..\PersonalMediaManager.Frontend\package.json" />
+    <_PmmFrontendInputs Include="..\PersonalMediaManager.Frontend\package-lock.json" />
+    <_PmmFrontendInputs Include="..\PersonalMediaManager.Frontend\scripts\**\*" />
+    <_PmmFrontendInputs Include="..\..\Directory.Build.props" />
     <_PmmFrontendInputs Include="..\PersonalMediaManager.Frontend\vite.config.js" />
   </ItemGroup>
   <Target Name="_PmmBuildFrontend" BeforeTargets="_CalculateEmbeddedFilesManifestInputs;BeforeCompile"

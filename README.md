@@ -142,6 +142,17 @@ dotnet publish src/PersonalMediaManager.Launcher -c Release -r win-x64 `
 
 前端产物与 `appsettings.json` 一并嵌入程序集,发布产物只有一个 exe。
 
+## 版本号体系
+
+PMM 只维护一个产品版本，唯一人工修改入口是根目录 `Directory.Build.props` 的 `PmmProductVersion`。当前开发目标为 **0.4.0**；源码中的目标版本不表示已发布或已部署。
+
+- WebUI、托盘、API、更新检查、Release tag 与发布文件名使用同一产品版本
+- .NET `VersionPrefix` 自动取产品版本；`AssemblyVersion` / `FileVersion` 固定派生为产品版本加 `.0`（如 `0.4.0.0`），提交哈希与 dirty 标记仅用于定位构建
+- 前端 `package.json` 与 `package-lock.json` 的项目版本是自动同步的 npm 兼容元数据，不单独升版；改产品版本后执行前端的 `npm run version:sync`，CI 以 `npm run version:check` 检查是否同步
+- 数据库只报告 EF migration ID、已应用/待迁移状态，不再维护或发布独立 schema SemVer；旧 `db/version-map.json` 和历史日志保留作历史资料
+
+合并、发版与部署核对一个产品版本、对应 commit 及数据库迁移状态即可。现有工作流会在新产品版本首次进入 `main` 时自动创建 tag 与 Release，因此该合并必须包含发布授权。步骤与当前发布边界见 [发版流程](docs/发版流程.md)。
+
 ## 技术栈
 
 | 层 | 选型 |

@@ -26,6 +26,7 @@ const routes = [
       { path: 'settings/forced-match', name: 'SettingsForcedMatch', component: () => import('@/views/settings/ForcedMatch.vue') },
       { path: 'settings/parse-testcases', name: 'SettingsParseTestCases', component: () => import('@/views/settings/ParseTestCases.vue') },
       { path: 'settings/parse-ai-providers', name: 'SettingsAiProviders', component: () => import('@/views/settings/AiProviders.vue') },
+      { path: 'settings/local-ai', name: 'SettingsLocalAi', component: () => import('@/views/settings/LocalAiSettings.vue') },
       { path: 'settings/parse-ai-providers/:id', name: 'AiMonitor', component: () => import('@/views/settings/AiMonitor.vue'), props: true },
       { path: 'settings/tmdb', name: 'SettingsTmdb', component: () => import('@/views/settings/Tmdb.vue') },
       { path: 'settings/subtitles', name: 'SettingsSubtitles', component: () => import('@/views/settings/Subtitles.vue') },

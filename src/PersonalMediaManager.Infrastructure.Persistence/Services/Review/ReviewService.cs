@@ -1,3 +1,4 @@
+using PersonalMediaManager.Application.Common.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
@@ -47,6 +48,7 @@ internal sealed class ReviewService : IReviewService
     private readonly IFolderSeriesCache _folderCache;
     private readonly IWebhookEmitter _webhook;
     private readonly ILogger<ReviewService> _logger;
+    private readonly IParseDiagnosticSink? _diagnostics;
 
     public ReviewService(
         IDbContextFactory<PmmDbContext> dbFactory,
@@ -55,7 +57,7 @@ internal sealed class ReviewService : IReviewService
         IFileProbe fileProbe,
         IFolderSeriesCache folderCache,
         IWebhookEmitter webhook,
-        ILogger<ReviewService> logger)
+        ILogger<ReviewService> logger, IParseDiagnosticSink? diagnostics = null)
     {
         _dbFactory = dbFactory;
         _tmdb = tmdb;
@@ -64,6 +66,7 @@ internal sealed class ReviewService : IReviewService
         _folderCache = folderCache;
         _webhook = webhook;
         _logger = logger;
+        _diagnostics = diagnostics;
     }
 
     /// <summary>时间线步骤 JSON 配置（camelCase、省 null、CJK 不转义，与 ProcessFileService / HistoryService 一致）</summary>
@@ -142,6 +145,8 @@ internal sealed class ReviewService : IReviewService
 
     public async Task<ConfirmResult> ConfirmAsync(long mediaItemId, ConfirmRequest req, CancellationToken ct = default)
     {
+        using IDisposable trace = ParseDiagnostics.Begin("manual_review", mediaItemId: mediaItemId, sink: _diagnostics);
+        ParseDiagnostics.Emit("manual.requested", new { action = "Confirm", source = "ReviewApi", actor = "unknown", groundTruth = false });
         ValidateMediaType(req.MediaType);
 
         await using PmmDbContext db = await _dbFactory.CreateDbContextAsync(ct);
@@ -198,9 +203,11 @@ internal sealed class ReviewService : IReviewService
             "Confirm", req.Season is not null, effectiveSeason != req.Season);
         item.ApplyManualMatch(req.TmdbId, req.MediaType.ToLowerInvariant(), req.CategoryId, merged);
         item.AppendStep(MediaItemStatus.AwaitingReview, DateTimeOffset.UtcNow, 0, SerializeStep(evidence));
+        ParseDiagnostics.Emit("manual.change_prepared", new { evidence, source = "ReviewApi", groundTruth = false });
 
         item.Transition(MediaItemStatus.Archiving);
         await db.SaveChangesAsync(ct);
+        ParseDiagnostics.Emit("manual.change_committed", new { evidence, source = "ReviewApi", groundTruth = false });
         long rowAfterConfirm = item.RowVersion;
 
         // 确认即用户对 TMDB 绑定的最终裁决：先失效同目录 series 复用缓存（L1）防旧错误条目残留，
@@ -437,6 +444,8 @@ internal sealed class ReviewService : IReviewService
 
     public async Task<BindTmdbResult> BindTmdbAsync(long mediaItemId, BindTmdbRequest req, CancellationToken ct = default)
     {
+        using IDisposable trace = ParseDiagnostics.Begin("manual_review", mediaItemId: mediaItemId, sink: _diagnostics);
+        ParseDiagnostics.Emit("manual.requested", new { action = "BindTmdb", source = "ReviewApi", actor = "unknown", groundTruth = false });
         ValidateMediaType(req.MediaType);
         await using PmmDbContext db = await _dbFactory.CreateDbContextAsync(ct);
         MediaItem item = await LoadAwaitingReviewWithConcurrencyAsync(db, mediaItemId, req.RowVersion, ct);
@@ -462,7 +471,9 @@ internal sealed class ReviewService : IReviewService
         object evidence = BuildReviewEvidence(item, req.TmdbId, req.MediaType, item.CategoryId, rebound, "BindTmdb", false, false);
         item.RebindTmdb(req.TmdbId, req.MediaType.ToLowerInvariant(), rebound);
         item.AppendStep(MediaItemStatus.AwaitingReview, DateTimeOffset.UtcNow, 0, SerializeStep(evidence));
+        ParseDiagnostics.Emit("manual.change_prepared", new { evidence, source = "ReviewApi", groundTruth = false });
         await db.SaveChangesAsync(ct);
+        ParseDiagnostics.Emit("manual.change_committed", new { evidence, source = "ReviewApi", groundTruth = false });
 
         // 用户改绑 TMDB：先失效同目录 series 复用缓存（防旧 tmdbId 残留），再沉淀改绑后的新绑定（仅 TV），
         // 同目录后续文件直接复用人工改绑结果；标题是 TMDB 规范名，与文件名域可能失配时由复用侧标题守门兜底
@@ -695,9 +706,9 @@ internal sealed class ReviewService : IReviewService
                 || (episodeEndChanged && before?.EpisodeEnd is null),
             idChanged, typeChanged, seasonChanged, episodeChanged, episodeEndChanged, automaticSeasonFilled, automaticEpisodeCleanup,
             categoryChanged = item.CategoryId != categoryId,
-            before = new { tmdbId = item.TmdbId, mediaType = item.TmdbMediaType, season = before?.Season,
+            before = new { title = before?.Title, year = before?.Year, tmdbId = item.TmdbId, mediaType = item.TmdbMediaType, season = before?.Season,
                 episode = before?.Episode, episodeEnd = before?.EpisodeEnd, categoryId = item.CategoryId },
-            after = new { tmdbId, mediaType = mediaType.ToLowerInvariant(), season = after.Season,
+            after = new { title = after.Title, year = after.Year, tmdbId, mediaType = mediaType.ToLowerInvariant(), season = after.Season,
                 episode = after.Episode, episodeEnd = after.EpisodeEnd, categoryId },
         };
     }

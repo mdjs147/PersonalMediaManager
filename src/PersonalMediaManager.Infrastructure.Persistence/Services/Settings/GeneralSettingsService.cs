@@ -165,7 +165,8 @@ internal sealed class GeneralSettingsService : IGeneralSettingsService
         // DB 已有项填元数据；再合并 DB 缺失的已知配置默认项（如归档策略），让设置页总能看到并编辑
         Dictionary<string, GeneralSettingItem> merged = new(StringComparer.Ordinal);
         foreach (SystemSetting s in rows)
-            merged[s.Key] = ToItem(s.Key, s.Value, s.Category, s.Description);
+            if (!s.Key.StartsWith("LocalAi_", StringComparison.OrdinalIgnoreCase))
+                merged[s.Key] = ToItem(s.Key, s.Value, s.Category, s.Description);
         foreach ((string key, SettingMeta meta) in KnownSettings)
         {
             if (!merged.ContainsKey(key))
@@ -202,7 +203,7 @@ internal sealed class GeneralSettingsService : IGeneralSettingsService
 
         foreach (UpdateGeneralItem item in req.Items)
         {
-            if (ProtectedKeys.Contains(item.Key))
+            if (ProtectedKeys.Contains(item.Key) || item.Key.StartsWith("LocalAi_", StringComparison.OrdinalIgnoreCase))
                 throw new BusinessException($"配置项 {item.Key} 受保护，不能修改");
 
             if (item.Key.StartsWith("Proxy_", StringComparison.Ordinal))

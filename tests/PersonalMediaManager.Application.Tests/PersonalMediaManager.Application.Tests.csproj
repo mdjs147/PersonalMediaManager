@@ -29,4 +29,7 @@
     <Using Include="FluentAssertions" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Parse/Fixtures/LocalSpanProtocolInputs.json" />
+  </ItemGroup>
 </Project>

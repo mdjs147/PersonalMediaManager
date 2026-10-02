@@ -6,6 +6,7 @@ case "$rid" in linux-x64|linux-arm64|osx-x64|osx-arm64) ;; *) echo '用法：bas
 if [[ "$rid" == osx-* && "$(uname -s)" != Darwin ]]; then
   echo 'macOS 完整包必须在 macOS 构建，以编译 AppKit 菜单栏组件' >&2; exit 2
 fi
+npm --prefix src/PersonalMediaManager.Frontend run version:check
 npm --prefix src/PersonalMediaManager.Frontend ci
 out="$PWD/artifacts/publish/$rid"
 dotnet publish src/PersonalMediaManager.Server -c Release -r "$rid" --self-contained true -m:1 -o "$out"

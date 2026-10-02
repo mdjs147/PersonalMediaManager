@@ -183,31 +183,34 @@ public sealed class F2EndToEndBaselineTests : IDisposable
         await SeedMovieCategoryAsync(_scratchTargetRoot);
         ConfigureTmdbForMovie(tmdbId: 27205, title: "盗梦空间", originalTitle: "Inception", year: 2010);
 
-        // 投放 100 个唯一命名文件（同 TMDB 候选但 SourcePath 各异；归档目标会冲突 → 第 2+ 个走 ConflictSkipped 早返）
+        // 用独立目录提供 100 个唯一路径，避免 Batch 前缀污染作品身份；归档目标仍相同。
         // 这里测的是「管线吞吐」，归档冲突跳过也属于真实生产路径（防覆盖语义）
         const int totalFiles = 100;
         List<string> sources = new(totalFiles);
         for (int i = 0; i < totalFiles; i++)
         {
-            string p = Path.Combine(_scratchSourceDir, $"Batch.{i:D3}.Inception.2010.mkv");
+            string directory = Path.Combine(_scratchSourceDir, $"batch-{i:D3}");
+            Directory.CreateDirectory(directory);
+            string p = Path.Combine(directory, "Inception.2010.mkv");
             await File.WriteAllBytesAsync(p, new byte[256]);
             sources.Add(p);
         }
 
         Stopwatch sw = Stopwatch.StartNew();
         int completedCount = 0;
-        int conflictOrOtherCount = 0;
+        int skippedCount = 0;
         foreach (string src in sources)
         {
             ProcessFileOutcome r = await ProcessFileAsync(src);
+            r.Outcome.Should().BeOneOf(ProcessOutcome.Completed, ProcessOutcome.Skipped);
             if (r.Outcome == ProcessOutcome.Completed) completedCount++;
-            else conflictOrOtherCount++;
+            else skippedCount++;
         }
         sw.Stop();
 
         // 至少首个 Completed；后续 99 个目标命名相同会走 ConflictSkipped → Skipped（同样代表管线 fully 跑完）
-        completedCount.Should().BeGreaterThanOrEqualTo(1, "首个文件应正常归档");
-        (completedCount + conflictOrOtherCount).Should().Be(totalFiles);
+        completedCount.Should().Be(1, "同一作品目标只能首次归档，不能把后续失败或待确认算作吞吐成功");
+        skippedCount.Should().Be(totalFiles - 1);
 
         long avgMs = sw.ElapsedMilliseconds / totalFiles;
         sw.ElapsedMilliseconds.Should().BeLessThan(30_000,

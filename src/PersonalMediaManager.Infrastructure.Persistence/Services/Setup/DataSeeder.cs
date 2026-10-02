@@ -35,9 +35,9 @@ internal sealed class DataSeeder : IDataSeeder
     private const string FullPackDescription = "整季合集「全N集」命名（如扫毒.全30集），识别为 tv 并清洗标题；总集数不作集号，交 AI / 人工审核定集";
     private const string LegacyFullPackDescription = "整季合集「全N集」命名（如扫毒.全30集），识别为 tv；episode 抓总集数仅作展示";
 
-    // ----- 「OVA SP 特别篇」种子值（同批仅 Description 补充特别篇 Season 0 约定，Pattern 未变） -----
+    // ----- 「OVA SP 特别篇」种子值（种类及来源编号须核验，Pattern 保留兼容） -----
     private const string OvaPattern = @"^(?:\[[^\]]{1,40}\]\s*)*(?<title>[^\[\]]+?)[\s\._\-]+(?:OVA|SP|NCED|NCOP|番外|特典|映画|剧场版)[\s\._\-]?(?<episode>\d{1,3})(?![\d])";
-    private const string OvaDescription = "OVA / SP / 番外 / 特典 等动漫特别篇标记，集号 1-3 位；季号留空交 AI 按特别篇约定归 Season 0";
+    private const string OvaDescription = "OVA / SP / 番外 / 特典 等内容种类标记，编号 1-3 位；保留来源候选，不默认映射 Season 0 或正片集号";
     private const string LegacyOvaDescription = "OVA / SP / 番外 / 特典 等动漫特别篇标记，集号 1-3 位";
 
     private readonly IDbContextFactory<PmmDbContext> _dbFactory;
@@ -208,28 +208,28 @@ internal sealed class DataSeeder : IDataSeeder
             },
             new ParseRule
             {
-                Name = "综艺第N季 + 日期作集",
+                Name = "综艺第N季 + 播出日期",
                 Scope = ParseScope.FileName,
                 // 形如：极限挑战.第7季.20210501.1080p.mkv / Running.Man.第N季.20230101.mkv
-                // year + episode(MMDD)：episode 用 4 位月日，便于排序 0501 < 0815；同时年份独立抓出
-                // 优先级高于「综艺日期作集」基础版（要先尝试匹配带季号变体）
-                Pattern = @"^(?<title>.+?)[\s\._\-]+第(?<season>\d{1,2})季[\s\._\-]+(?<year>20\d{2})(?<episode>\d{4})(?:[\s\._\-]|$)",
+                // 播出日期只保留来源候选；共享安全门核验日历，不伪造作品年份或季内集号
+                // 优先级高于「综艺播出日期候选」基础版（先尝试带季号变体）
+                Pattern = @"^(?<title>.+?)[\s\._\-]+第(?<season>\d{1,2})季[\s\._\-]+(?<airDate>20\d{6})(?:[\s\._\-]|$)",
                 DefaultType = "tv",
                 Priority = 22,
                 ConfidenceBonus = 0.05,
-                Description = "综艺命名「节目名 第N季 YYYYMMDD」：season 抓季号，year 抓年份，episode 抓 MMDD（按时间顺序排序）",
+                Description = "综艺命名「节目名 第N季 YYYYMMDD」：season 抓季号，airDate 留作日期候选，集序须由目录核验",
             },
             new ParseRule
             {
-                Name = "综艺日期作集",
+                Name = "综艺播出日期候选",
                 Scope = ParseScope.FileName,
                 // 形如：极限挑战.20210501.1080p.mkv / 奔跑吧兄弟.20230101.mkv / Running.Man.20230101.HDTV.mkv
                 // 综艺真人秀按播出日期作集是行业惯例；TMDB 端有的会按 air_date 反查 episode
-                Pattern = @"^(?<title>.+?)[\s\._\-]+(?<year>20\d{2})(?<episode>\d{4})(?:[\s\._\-]|$)",
+                Pattern = @"^(?<title>.+?)[\s\._\-]+(?<airDate>20\d{6})(?:[\s\._\-]|$)",
                 DefaultType = "tv",
                 Priority = 28,
                 ConfidenceBonus = 0.05,
-                Description = "综艺 / 真人秀「节目名 YYYYMMDD」：year 抓年份，episode 抓 MMDD（按时间顺序排序）",
+                Description = "综艺 / 真人秀「节目名 YYYYMMDD」：airDate 留作日期候选，不推断作品年份或季内集号",
             },
             new ParseRule
             {
@@ -347,15 +347,15 @@ internal sealed class DataSeeder : IDataSeeder
             },
             new ParseRule
             {
-                Name = "动漫 Vol / Volume 卷集号",
+                Name = "动漫 Vol / Volume 卷号候选",
                 Scope = ParseScope.FileName,
                 // 形如：[VCB-Studio] 进击的巨人 Vol.01 [BDRip].mkv / Some Show Volume 3 BDBox.mkv
-                // BD/BDBox 命名常用 Vol 标记，集号通常 1-3 位（一卷 ≤ 几集）
-                Pattern = @"^(?:\[[^\]]{1,40}\]\s*)*(?<title>[^\[\]]+?)[\s\._\-]+Vol(?:ume)?\.?[\s\._\-]?(?<episode>\d{1,3})(?:[\s\._\-\[]|$)",
+                // BD/BDBox 卷号仅是发行编号，不能推断一卷包含哪一集
+                Pattern = @"^(?:\[[^\]]{1,40}\]\s*)*(?<title>[^\[\]]+?)[\s\._\-]+Vol(?:ume)?\.?[\s\._\-]?(?<volume>\d{1,3})(?:[\s\._\-\[]|$)",
                 DefaultType = "tv",
                 Priority = 52,
                 ConfidenceBonus = 0.0,
-                Description = "动漫 BD/BDBox 卷标记「Vol.01」「Volume 3」，集号 1-3 位（一卷代表数集）",
+                Description = "动漫 BD/BDBox 卷标记「Vol.01」「Volume 3」，卷号 1-3 位，仅作候选，不生成季内集号",
             },
             new ParseRule
             {
@@ -363,11 +363,11 @@ internal sealed class DataSeeder : IDataSeeder
                 Scope = ParseScope.FileName,
                 // 形如：One Piece #1000.mkv / 海贼王 No.1100.mkv / 名侦探柯南 #1234.mkv
                 // 长篇番剧（海贼王 / 名侦探柯南 / 火影）无季号、用绝对集号标记，#或No.前缀
-                Pattern = @"^(?<title>.+?)[\s\._\-]+(?:#|No\.)[\s\._]?(?<episode>\d{1,4})(?:[\s\._\-]|$)",
+                Pattern = @"^(?<title>.+?)[\s\._\-]+(?:#|No\.)[\s\._]?(?<absolute>\d{1,4})(?:[\s\._\-]|$)",
                 DefaultType = "tv",
                 Priority = 82,
                 ConfidenceBonus = 0.0,
-                Description = "长篇番剧绝对集号「Show #N」「Show No.N」（如 One Piece #1000），无季号 + 大集号",
+                Description = "长篇番剧绝对集号「Show #N」「Show No.N」（如 One Piece #1000），保留 absolute 候选，未经目录映射不补季内集号",
             },
             new ParseRule
             {
@@ -384,16 +384,16 @@ internal sealed class DataSeeder : IDataSeeder
             },
             new ParseRule
             {
-                Name = "综艺 YYMMDD 短日期作集",
+                Name = "综艺 YYMMDD 短日期候选",
                 Scope = ParseScope.FileName,
                 // 形如：Running.Man.210501.HDTV.mkv / Knowing.Bros.231215.mkv
                 // 韩综 / 日综常用 6 位短日期（年份取后 2 位）；严格限 [12] 开头避免误吞其它 6 位数字
-                // episode 存 YYMMDD 整数，便于排序（210501 < 231215）
-                Pattern = @"^(?<title>.+?)[\s\._\-]+(?<episode>[12]\d{5})(?:[\s\._\-]|$)",
+                // airDate 保留 YYMMDD 原文；世纪未知，不生成 episode
+                Pattern = @"^(?<title>.+?)[\s\._\-]+(?<airDate>[12]\d{5})(?:[\s\._\-]|$)",
                 DefaultType = "tv",
                 Priority = 85,
                 ConfidenceBonus = 0.0,
-                Description = "韩综 / 日综短日期「节目名 YYMMDD」，6 位日期（10-29 年范围）作 episode 排序",
+                Description = "韩综 / 日综短日期「节目名 YYMMDD」，6 位日期只作世纪待核验的 airDate 候选",
             });
         await ctx.SaveChangesAsync(ct);
 
@@ -442,7 +442,7 @@ internal sealed class DataSeeder : IDataSeeder
             rule.Description = OvaDescription;
             updated++;
             _logger.LogInformation(
-                "存量种子规则修正：「{Name}」(Id={Id}) Description 补充特别篇 Season 0 约定说明",
+                "存量种子规则修正：「{Name}」(Id={Id}) Description 说明特别篇编号须经目录核验",
                 rule.Name, rule.Id);
         }
 

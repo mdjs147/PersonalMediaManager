@@ -5,10 +5,10 @@ import { api } from '@/api';
 import { useAuthStore } from '@/stores/auth';
 
 /**
- * 关于对话框：展示 4 套版本号 + commit + buildTime + 数据库 target vs applied 对比 + 升级提示
+ * 关于对话框：展示唯一主版本号、构建诊断信息与升级提示。
  * 数据三源：
  *   1. 构建期常量 __APP_*__（vite define 注入）— 离线 fallback
- *   2. 运行时 GET /api/system/version（匿名）— 真实生效版本号
+ *   2. 运行时 GET /api/system/version（匿名）— 真实生效的主版本号
  *   3. 运行时 GET /api/system/update-check（Admin）— 升级状态（仅 Admin 登录后可用）
  */
 
@@ -31,9 +31,6 @@ watch(visible, (v) => {
 // 构建期常量（离线 fallback）
 const buildtime = {
   product: __APP_PRODUCT_VERSION__,
-  backend: __APP_BACKEND_VERSION__,
-  frontend: __APP_FRONTEND_VERSION__,
-  dbTarget: __APP_DB_VERSION__,
   commit: __APP_COMMIT__,
   buildTime: __APP_BUILD_TIME__,
 };
@@ -155,25 +152,6 @@ function close() { visible.value = false; }
       </el-alert>
 
       <div class="kvs">
-        <div class="row">
-          <span class="k">后端版本</span>
-          <span class="v font-mono">{{ runtime?.backend || buildtime.backend }}</span>
-        </div>
-        <div class="row">
-          <span class="k">前端版本</span>
-          <span class="v font-mono">{{ runtime?.frontend || buildtime.frontend }}</span>
-        </div>
-        <div class="row">
-          <span class="k">数据库目标</span>
-          <span class="v font-mono">{{ runtime?.database?.target || buildtime.dbTarget }}</span>
-        </div>
-        <div class="row">
-          <span class="k">数据库实际</span>
-          <span class="v font-mono">
-            {{ runtime?.database?.applied || '加载中…' }}
-            <el-tag v-if="runtime?.database?.needsMigration" type="warning" size="small" effect="dark">需要迁移</el-tag>
-          </span>
-        </div>
         <div class="row">
           <span class="k">Commit</span>
           <span class="v font-mono">

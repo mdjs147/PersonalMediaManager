@@ -18,7 +18,6 @@ namespace PersonalMediaManager.Infrastructure.Persistence.Services.Parse;
 /// </remarks>
 internal sealed class ParseRuleService : IParseRuleService
 {
-    private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(500);
     private static readonly HashSet<string> AllowedDefaultTypes = new(StringComparer.OrdinalIgnoreCase)
     {
         "movie", "tv",
@@ -125,11 +124,12 @@ internal sealed class ParseRuleService : IParseRuleService
             throw new BusinessException("Pattern 不能为空");
         if (req.Sample is null)
             throw new BusinessException("Sample 不能为 null");
+        if (req.Sample.Length > 32768) throw new BusinessException("正则测试样本超过安全长度上限");
 
         Regex regex;
         try
         {
-            regex = new Regex(req.Pattern, RegexOptions.Compiled, RegexTimeout);
+            regex = RuleRegexExecution.Get(req.Pattern);
         }
         catch (ArgumentException ex)
         {
@@ -140,6 +140,7 @@ internal sealed class ParseRuleService : IParseRuleService
         try
         {
             Match match = regex.Match(req.Sample);
+            ct.ThrowIfCancellationRequested();
             sw.Stop();
             if (!match.Success)
                 return Task.FromResult(new TestParseRuleResponse(false, new Dictionary<string, string>(), sw.Elapsed.TotalMilliseconds, null));
@@ -157,6 +158,7 @@ internal sealed class ParseRuleService : IParseRuleService
         }
         catch (RegexMatchTimeoutException)
         {
+            ct.ThrowIfCancellationRequested();
             sw.Stop();
             return Task.FromResult(new TestParseRuleResponse(false, new Dictionary<string, string>(), sw.Elapsed.TotalMilliseconds, "正则匹配超过 500ms 超时"));
         }
@@ -274,7 +276,7 @@ internal sealed class ParseRuleService : IParseRuleService
         try
         {
             // 试编译：Compiled + 500ms Timeout，与执行时一致，把恶意 / 错误正则拦在保存前
-            _ = new Regex(raw, RegexOptions.Compiled, RegexTimeout);
+            _ = RuleRegexExecution.Get(raw);
         }
         catch (ArgumentException ex)
         {

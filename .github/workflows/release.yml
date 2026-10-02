@@ -12,7 +12,7 @@
 #   1. 解析 ref 类型（tag / branch）与版本号；main 根据产品版本 tag 是否存在决定正式发版或开发构建
 #   2. 正式发版：校验 tag (vX.Y.Z) 与 Directory.Build.props:PmmProductVersion 完全一致（防版本漂移）
 #   3. 装 .NET 10 + Node 22
-#   4. 前端 npm ci（vite build 由 .esproj 随 dotnet publish 自动触发）
+#   4. 先只读校验前端元数据与唯一产品版本一致，再 npm ci（vite build 由 .esproj 随 dotnet publish 自动触发）
 #   5. dotnet publish Launcher 单文件 self-contained win-x64（前端 + appsettings 嵌入，产物仅一个 exe）
 #   6. 校验 publish 输出确为单一 exe + 重命名为带版本号文件名（不再打 zip）
 #   7. 正式发版走 gh release create + upload；已发版本的 main push 走 upload-artifact
@@ -46,7 +46,7 @@ jobs:
       - name: 1. Checkout 源码
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # StampGitVersion 要数 commit count + 取 short sha
+          fetch-depth: 0  # 版本分流须完整 tag 历史；StampGitVersion 读取 short sha
 
       - name: 2. 解析 ref 与版本号
         id: ver
@@ -140,6 +140,9 @@ jobs:
           node-version: '22'
           cache: 'npm'
           cache-dependency-path: src/PersonalMediaManager.Frontend/package-lock.json
+
+      - name: 5a. 校验单一产品版本的前端元数据
+        run: npm --prefix src/PersonalMediaManager.Frontend run version:check
 
       - name: 6. 前端依赖安装（npm ci）
         working-directory: src/PersonalMediaManager.Frontend

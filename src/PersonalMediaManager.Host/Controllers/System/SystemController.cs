@@ -13,7 +13,7 @@ namespace PersonalMediaManager.Host.Controllers.System;
 /// <summary>System / 系统模块</summary>
 /// <remarks>
 /// 十四端点：
-/// - GET /system/version 匿名 → 4 套版本号 + commit + buildTime，登录前显示版本号 / 巡检脚本拉取用
+/// - GET /system/version 匿名 → 主版本 + 构建诊断，不查询或公开数据库迁移状态
 /// - GET /system/info  → 仪表盘 + 设置「关于」展示（含完整版本号 + 数据库 target/applied 对比 + 最近备份时间）
 /// - POST /system/export → 直接返 zip 流（Content-Disposition: attachment）
 /// - POST /system/import → multipart/form-data 上传 zip；成功返 RequiresRestart=true 让前端弹窗
@@ -57,22 +57,35 @@ public sealed class SystemController : ApiControllerBase
     /// <summary>Version / 版本号</summary>
     /// <remarks>
     /// 匿名访问：登录页 footer / 巡检脚本 / 前后端对齐校验用，不暴露任何敏感字段（路径 / 磁盘大小不返）。
-    /// 返完整 VersionInfoResponse：4 套版本号 + commit + dirty + buildTime + 数据库 target/applied/needsMigration。
+    /// product 为唯一产品版本，backend/frontend 是同值兼容字段。
+    /// 保留 database 对象形状，但不查数据库：status=notChecked，迁移标识和列表为空。
+    /// 完整迁移诊断仅由管理员 GET /system/info 的 versionInfo 返回。
     ///
     /// 成功响应：
     /// ```json
-    /// { "code":0, "message":"ok", "data":{ "product":"0.1.0", "backend":"0.1.0+a1b2c3d4", "frontend":"1.0.0", "database":{"target":"0.1.0","applied":"0.1.0","appliedMigrationId":"20260526...","needsMigration":false}, "commit":"a1b2c3d4", "dirty":false, "buildTime":"2026-05-27T01:33:32Z", "framework":".NET 10.0" }, "requestId":"..." }
+    /// { "code":0, "message":"ok", "data":{ "product":"0.4.0", "backend":"0.4.0", "frontend":"0.4.0", "database":{"target":"","applied":"unknown","appliedMigrationId":null,"needsMigration":false,"historyAvailable":false,"status":"notChecked","pendingMigrationIds":[],"unknownMigrationIds":[]}, "commit":"a1b2c3d4", "dirty":false, "buildTime":"2026-10-02T01:33:32Z", "framework":".NET 10.0" }, "requestId":"..." }
     /// ```
     /// 错误码：
-    /// - 9000 ServerError — 反射 / db 查询失败（兜底返 unknown 而非抛错；仅严重场景命中）
+    /// - 9000 ServerError — 读取程序集元数据失败
     /// </remarks>
     /// <response code="200">版本号</response>
     [HttpGet("version")]
     [AllowAnonymous]
     [ProducesResponseType<ApiResponse<VersionInfoResponse>>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Version(CancellationToken ct)
+    public IActionResult Version()
     {
-        VersionInfoResponse data = await _versionInfo.GetFullAsync(ct);
+        StaticVersionInfo version = _versionInfo.GetStatic();
+        VersionInfoResponse data = new()
+        {
+            Product = version.Product,
+            Backend = version.Product,
+            Frontend = version.Product,
+            Database = new DbVersionStatus { Applied = "unknown", Status = "notChecked" },
+            Commit = version.Commit,
+            Dirty = version.Dirty,
+            BuildTime = version.BuildTime,
+            Framework = version.Framework,
+        };
         return Ok(Wrap(data));
     }
 

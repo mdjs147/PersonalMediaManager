@@ -691,44 +691,35 @@ internal sealed class PmmTrayContext : ApplicationContext
         {
             int plus = info.IndexOf('+');
             if (plus > 0) info = info[..plus];
-            int dash = info.IndexOf('-');
-            if (dash > 0) info = info[..dash];
             return "v" + info;
         }
         Version? v = asm.GetName().Version;
         return v is not null ? "v" + v : "v0.0.0";
     }
 
-    /// <summary>「关于…」菜单回调：MessageBox 展示 4 套版本号 + commit + buildTime</summary>
-    /// <remarks>
-    /// 4 套版本号 + buildTime 全部来自 Directory.Build.targets InjectVersionMetadata 注入的 AssemblyMetadataAttribute；
-    /// Backend / commit / dirty 来自 AssemblyInformationalVersion（含 +sha[.dirty] 后缀）。
-    /// 仅本地 MessageBox 不调 API：托盘进程可能在 Kestrel 启动失败状态下访问"关于"，必须能离线展示。
-    /// </remarks>
+    /// <summary>「关于…」离线展示主版本与构建诊断</summary>
     private void ShowAboutDialog()
     {
+        MessageBox.Show(BuildAboutText(), "关于 PersonalMediaManager", MessageBoxButtons.OK, MessageBoxIcon.Information);
+    }
+
+    /// <summary>生成托盘关于文案，无需启动 Web 服务</summary>
+    private static string BuildAboutText()
+    {
         Assembly asm = typeof(PmmTrayContext).Assembly;
-        Dictionary<string, string> meta = asm.GetCustomAttributes<AssemblyMetadataAttribute>()
-            .Where(a => !string.IsNullOrEmpty(a.Key))
-            .ToDictionary(a => a.Key!, a => a.Value ?? string.Empty, StringComparer.Ordinal);
+        string buildTime = asm.GetCustomAttributes<AssemblyMetadataAttribute>()
+            .FirstOrDefault(a => a.Key == "BuildTimeUtc")?.Value ?? "未知";
+        string informational = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+            ?? string.Empty;
+        int plus = informational.IndexOf('+');
+        string commit = plus >= 0 && plus < informational.Length - 1 ? informational[(plus + 1)..] : "未知";
+        bool dirty = commit.EndsWith(".dirty", StringComparison.Ordinal);
+        if (dirty) commit = commit[..^6];
 
-        string product = meta.GetValueOrDefault("ProductVersion", "0.0.0");
-        string dbTarget = meta.GetValueOrDefault("DbVersion", "0.0.0");
-        string frontend = meta.GetValueOrDefault("FrontendVersion", "0.0.0");
-        string buildTime = meta.GetValueOrDefault("BuildTimeUtc", "未知");
-
-        string backend = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
-            ?? asm.GetName().Version?.ToString() ?? "0.0.0";
-
-        string body = $"PersonalMediaManager v{product}\r\n\r\n"
-            + $"后端：{backend}\r\n"
-            + $"前端：{frontend}\r\n"
-            + $"数据库目标：{dbTarget}\r\n"
+        return $"PersonalMediaManager {GetAssemblyInfoVersion()}\r\n\r\n"
+            + $"提交：{commit}{(dirty ? "（含未提交改动）" : string.Empty)}\r\n"
             + $"构建时间：{buildTime}\r\n"
-            + $".NET：{Environment.Version}\r\n"
-            + $"\r\n（数据库实际版本与 needsMigration 状态请在 WebUI 设置 → 关于查看）";
-
-        MessageBox.Show(body, "关于 PersonalMediaManager", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            + $"运行时：.NET {Environment.Version}";
     }
 
     /// <summary>切回 UI 线程执行 action；marshal 失败不升级（避免 UI 线程已死时 crash）</summary>

@@ -8,7 +8,7 @@ public sealed record SystemInfoResponse
     /// <summary>主版本号（对外展示值，等同 VersionInfo.Product）；向后兼容前端老字段</summary>
     public string Version { get; init; } = string.Empty;
 
-    /// <summary>完整版本号信息：4 套版本号 + commit + buildTime + 数据库 target/applied 对比</summary>
+    /// <summary>统一主版本、构建诊断与完整数据库迁移状态（管理员可见）</summary>
     public VersionInfoResponse VersionInfo { get; init; } = new();
 
     public string Os { get; init; } = string.Empty;

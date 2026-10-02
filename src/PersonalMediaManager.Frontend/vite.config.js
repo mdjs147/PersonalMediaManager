@@ -4,8 +4,8 @@ import AutoImport from 'unplugin-auto-import/vite';
 import Components from 'unplugin-vue-components/vite';
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers';
 import path from 'path';
-import { readFileSync, existsSync } from 'fs';
 import { execSync } from 'child_process';
+import { readProductVersion } from './scripts/product-version.js';
 
 /**
  * Vite 配置（E3.1 脚手架）
@@ -18,60 +18,30 @@ import { execSync } from 'child_process';
 
 /**
  * 解析构建期版本号：
- *   __APP_FRONTEND_VERSION__   = package.json:version（前端自身版本号）
- *   __APP_PRODUCT_VERSION__    = Directory.Build.props:PmmProductVersion（主版本号，对外展示）
- *   __APP_BACKEND_VERSION__    = Directory.Build.props:VersionPrefix（后端版本号，仅供登录前 footer 参考）
- *   __APP_DB_VERSION__         = Directory.Build.props:PmmDbVersion（数据库目标版本号）
+ *   __APP_PRODUCT_VERSION__    = Directory.Build.props:PmmProductVersion（唯一主版本号）
  *   __APP_COMMIT__             = git rev-parse --short=8 HEAD（无 git 时 'unknown'）
  *   __APP_BUILD_TIME__         = ISO 8601 UTC
  *
- * 运行时实际值仍以 /system/version 返回为准（登录后调一次校验前后端是否同步）。
+ * npm 清单中的版本仅为自动同步副本，不作为构建输入。
+ * 关于对话框使用 /system/version 返回的主版本及构建诊断信息。
  */
 function resolveVersionInfo() {
-  const pkgPath = path.resolve(import.meta.dirname, 'package.json');
-  const propsPath = path.resolve(import.meta.dirname, '..', '..', 'Directory.Build.props');
-
-  // 前端版本号
-  let frontendVersion = '0.0.0';
-  try {
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
-    frontendVersion = pkg.version || frontendVersion;
-  } catch (e) {
-    console.warn('[vite] 读取 package.json:version 失败，前端版本号置为 0.0.0', e);
-  }
-
-  // 后端 / 数据库 / 主版本号 — 从 Directory.Build.props 解析（正则提取避免引入 XML 解析依赖）
-  let productVersion = '0.0.0';
-  let backendVersion = '0.0.0';
-  let dbVersion = '0.0.0';
-  if (existsSync(propsPath)) {
-    try {
-      const propsText = readFileSync(propsPath, 'utf8');
-      const m1 = propsText.match(/<PmmProductVersion>([^<]+)<\/PmmProductVersion>/);
-      const m2 = propsText.match(/<VersionPrefix>([^<]+)<\/VersionPrefix>/);
-      const m3 = propsText.match(/<PmmDbVersion>([^<]+)<\/PmmDbVersion>/);
-      if (m1) productVersion = m1[1];
-      if (m2) backendVersion = m2[1];
-      if (m3) dbVersion = m3[1];
-    } catch (e) {
-      console.warn('[vite] 解析 Directory.Build.props 失败，相关版本号置为 0.0.0', e);
-    }
-  }
+  const productVersion = readProductVersion();
 
   // commit
   let commit = 'unknown';
   try {
-    commit = execSync('git rev-parse --short=8 HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
+    commit = execSync('git rev-parse --short=8 HEAD', {
+      cwd: import.meta.dirname,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
       .toString().trim() || 'unknown';
   } catch {
     // 无 git 环境（如 docker build）忽略
   }
 
   return {
-    frontendVersion,
     productVersion,
-    backendVersion,
-    dbVersion,
     commit,
     buildTime: new Date().toISOString(),
   };
@@ -82,9 +52,6 @@ const versionInfo = resolveVersionInfo();
 export default defineConfig({
   define: {
     __APP_PRODUCT_VERSION__: JSON.stringify(versionInfo.productVersion),
-    __APP_BACKEND_VERSION__: JSON.stringify(versionInfo.backendVersion),
-    __APP_FRONTEND_VERSION__: JSON.stringify(versionInfo.frontendVersion),
-    __APP_DB_VERSION__: JSON.stringify(versionInfo.dbVersion),
     __APP_COMMIT__: JSON.stringify(versionInfo.commit),
     __APP_BUILD_TIME__: JSON.stringify(versionInfo.buildTime),
   },

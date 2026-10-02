@@ -13,6 +13,8 @@ public static class ServiceCollectionExtensions
     {
         services.AddSingleton<IClock, SystemClock>();
         services.AddScoped<IAiCallOrchestrator, AiCallOrchestrator>();
+        services.AddSingleton<LocalMediaSuggestionCache>();
+        services.AddScoped<ILocalMediaAssistService, LocalMediaAssistService>();
         // 文件夹级 series 复用缓存：同目录首个文件锁定 TMDB 后，后续文件跳过 AI 兜底（进程级单例，重启清空）
         services.AddSingleton<IFolderSeriesCache, FolderSeriesCache>();
         // 测试集 AI 顾问（Triage / 后续 SuggestRule）：依赖 IAiChatClient（由 External 注入）

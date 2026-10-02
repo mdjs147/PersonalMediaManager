@@ -21,7 +21,7 @@
 
 | 资源 / 端点 | 用途 |
 |---|---|
-| `GET /api/system/version` | 极简版本号查询（供前端「关于」与快速探活） |
+| `GET /api/system/version` | 匿名查询单一产品版本与构建信息；完整迁移诊断仅在 Admin `/api/system/info` 返回 |
 | `GET /api/system/update-check`、`POST /api/system/update-check/run` / `/test` / `/skip` | 客户端检查更新（读 GitHub Releases latest），v0.1.0 起的升级检查能力 |
 | `POST /api/system/clear-history`、`POST /api/system/reset-config` | 清空处理历史 / 重置配置（高危维护操作） |
 | `GET /api/dashboard/health` / `/tasks` / `/heatmap` / `/watch-folder-activity` | 仪表盘扩展：健康卡片 / 任务卡片 / 处理热力图 / 目录活跃度 |
@@ -2045,23 +2045,48 @@ manifest.json           # 版本、平台、导出时间
 
 #### 2.17.3 `GET /api/system/info` — 版本、运行时间、平台
 
-- **鉴权：** 否
+- **鉴权：** Admin
+- `version` 为产品版本，与 `versionInfo.product` 相同
+- `versionInfo` 返回单一产品版本、构建信息及完整数据库迁移诊断；迁移字段解释见下节
 
-**成功响应：**
+**成功响应示例：**
 
 ```json
 {
   "code": 0,
   "message": "ok",
   "data": {
-    "version": "0.1.0",
-    "platform": "Windows",
+    "version": "0.4.0",
+    "versionInfo": {
+      "product": "0.4.0",
+      "backend": "0.4.0",
+      "frontend": "0.4.0",
+      "database": {
+        "target": "20260722141057_AddAiProviderRpmLimit",
+        "applied": "20260722141057_AddAiProviderRpmLimit",
+        "appliedMigrationId": "20260722141057_AddAiProviderRpmLimit",
+        "needsMigration": false,
+        "historyAvailable": true,
+        "status": "upToDate",
+        "pendingMigrationIds": [],
+        "unknownMigrationIds": []
+      },
+      "commit": "a1b2c3d4",
+      "dirty": false,
+      "buildTime": "2026-10-02T00:00:00Z",
+      "framework": ".NET 10.0.0"
+    },
+    "os": "Windows",
     "osVersion": "10.0.26200",
-    "runtime": ".NET 10.0.0",
-    "startedAt": "2026-05-16T00:00:00Z",
-    "uptimeSeconds": 7200,
-    "port": 7288,
-    "dbPath": "C:/Users/.../AppData/Local/PersonalMediaManager/pmm.db"
+    "architecture": "X64",
+    "runtimeVersion": ".NET 10.0.0",
+    "startedAt": "2026-10-02T00:00:00Z",
+    "uptime": "02:00:00",
+    "dataRoot": "C:/PMM/data",
+    "dbSizeBytes": 12345,
+    "logDirSizeBytes": 2345,
+    "postersCacheSizeBytes": 1234,
+    "lastSuccessfulBackupAt": null
   },
   "requestId": "..."
 }
@@ -2070,6 +2095,58 @@ manifest.json           # 版本、平台、导出时间
 **可能的错误 message：**
 
 - `9000` `"系统信息读取失败"`
+
+---
+
+#### 2.17.3a `GET /api/system/version` — 匿名产品版本查询
+
+- **鉴权：** 否
+- `product` 是唯一产品版本，来自根 `Directory.Build.props:PmmProductVersion`；`backend` 与 `frontend` 只为旧客户端保留，值均与 `product` 相同
+- `commit`、`dirty`、`buildTime`、`framework` 用于定位构建与运行环境，不是独立发布版本
+- 匿名端点不查询数据库，不公开 MigrationId；`database` 仅保留兼容形状，状态为 `notChecked`，不能当作数据库已对齐
+
+**成功响应示例：**
+
+```json
+{
+  "code": 0,
+  "message": "ok",
+  "data": {
+    "product": "0.4.0",
+    "backend": "0.4.0",
+    "frontend": "0.4.0",
+    "database": {
+      "target": "",
+      "applied": "unknown",
+      "appliedMigrationId": null,
+      "needsMigration": false,
+      "historyAvailable": false,
+      "status": "notChecked",
+      "pendingMigrationIds": [],
+      "unknownMigrationIds": []
+    },
+    "commit": "a1b2c3d4",
+    "dirty": false,
+    "buildTime": "2026-10-02T00:00:00Z",
+    "framework": ".NET 10.0.0"
+  },
+  "requestId": "..."
+}
+```
+
+**管理员迁移诊断：** 完整诊断在 `GET /api/system/info` 的 `data.versionInfo.database` 中，查询不执行迁移，也不读取旧 schema SemVer 映射。
+
+`target` 是当前代码中最新的 EF MigrationId；`applied` 和 `appliedMigrationId` 表示数据库已记录的最大 MigrationId。没有已应用记录或历史读取失败时，`applied` 为 `unknown`，`appliedMigrationId` 为 `null`。`pendingMigrationIds` 为代码中存在、库内尚未记录的迁移；`unknownMigrationIds` 为库内存在、当前代码不认识的迁移。
+
+| `database.status` | 含义 |
+|---|---|
+| `upToDate` | 已成功读取历史，全部代码迁移已应用，且没有未知迁移 |
+| `pending` | 已成功读取历史，有正常顺序待应用的代码迁移 |
+| `incompatible` | 出现未知迁移或已应用迁移链中间缺口，不能只看最后一个 MigrationId 判断对齐 |
+| `unknown` | 迁移历史读取失败，无法判断是否对齐 |
+| `notChecked` | 匿名版本查询的占位值，未检查数据库 |
+
+`historyAvailable` 表示读取是否成功；管理员诊断读取尚未创建的历史表时视为可读空历史（`true`），不等同读取失败。`needsMigration` 仅在历史可读且待迁移集合非空时为 `true`，必须结合 `status` 使用；它为 `false` 不保证数据库已对齐。EF 历史表中的 `ProductVersion` 是 EF 工具版本，不参与 PMM 产品号判定。
 
 ---
 

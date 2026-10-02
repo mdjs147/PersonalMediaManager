@@ -28,7 +28,7 @@ namespace PersonalMediaManager.Application.Tests.Parse;
 ///  15. 升级轨迹 Attempts 完整记录（级号 + 升级原因）
 ///  16. 全部低置信 → 升级链耗尽失败
 /// </remarks>
-public sealed class AiCallOrchestratorTests
+public sealed partial class AiCallOrchestratorTests
 {
     private static AiParseResult OkResult(double conf = 0.9) => new("Inception", 2010, "movie", Season: null, Episode: null, EpisodeEnd: null, conf);
 

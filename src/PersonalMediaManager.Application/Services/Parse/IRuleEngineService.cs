@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace PersonalMediaManager.Application.Services.Parse;
 
 /// <summary>规则引擎服务契约（D7.2 实现）</summary>
@@ -30,7 +32,7 @@ public interface IRuleEngineService
 /// <param name="Confidence">综合置信度 0~1（基础分 + ConfidenceBonus，上限 1.0）</param>
 /// <param name="HasSpecialChars">命中特殊字符规则（中日韩混杂 / 罕见符号）→ 强制走 AI</param>
 /// <param name="MatchedRuleId">命中的 Parse_Rule 主键；未命中任何规则为 null</param>
-/// <param name="SeasonTitle">季的篇章标题（如「锻刀村篇」），以篇章名标识季的番剧用；无则 null。供人工 / 自动与 TMDB 季名对照</param>
+/// <param name="SeasonTitle">篇章原文候选；不能独立证明季号、类型或系列身份，供目录核验或人工对照</param>
 /// <param name="AlternativeTitles">
 /// 本地备选搜索标题（主标题之外的候选，按命中希望降序，CJK 段优先）：主标题的混排拆分子段
 /// （CJK 段 / 拉丁词组段）+ 其余路径层提取出的标题及其拆分段。供 ProcessFileService 在
@@ -53,7 +55,52 @@ public sealed record RuleParseResult(
     IReadOnlyList<string>? Conflicts = null,
     IReadOnlyList<string>? RejectedFields = null,
     bool ForceType = false,
-    bool HasIdentityEvidence = true);
+    bool HasIdentityEvidence = true,
+    RuleNamingEvidence? NamingEvidence = null,
+    IReadOnlyList<RuleNumberingEvidence>? NumberingEvidence = null,
+    RuleExecutionDiagnostics? Diagnostics = null);
 
 /// <summary>规则字段的可复核局部证据（不含绝对路径）</summary>
 public sealed record RuleFieldEvidence(string Field, int Value, string Source, string Token);
+
+/// <summary>保留命名原文、版本信息及尚待核验的解释</summary>
+public sealed record RuleNamingEvidence(string OriginalTitle, IReadOnlyList<string> EditionTags,
+    int? SeasonCandidate = null, string? SeasonMappingSource = null,
+    IReadOnlyList<string>? Uncertainties = null,
+    IReadOnlyList<RuleTitleVariant>? TitleVariants = null,
+    RuleSourceNumberCandidate? NumberingCandidate = null,
+    IReadOnlyList<RuleTitleCandidateDecision>? TitleCandidateDecisions = null);
+
+/// <summary>标题候选的采纳或保留原因</summary>
+public sealed record RuleTitleCandidateDecision(string Candidate, string Decision, string Reason,
+    string? Source = null, int? SegmentIndex = null, int? Start = null, int? Length = null,
+    string? Token = null);
+
+/// <summary>原文可核查的完整标题片段，不将文字脚本猜作语言</summary>
+/// <remarks>Start / Length 为 Source 所指完整原始字符串的 UTF-16 索引；Token 必须与该区间完全相等。AliasOf 仅关联同处命名的候选，不证明已核实译名或同一作品；Language 无独立证据时为空。</remarks>
+public sealed record RuleTitleVariant(string Title, string ScriptHint, string? Language,
+    string Source, int? SegmentIndex, int Start, int Length, string Token, string? AliasOf);
+
+/// <summary>可核查的来源编号候选，不等于当前集或官方集序</summary>
+public sealed record RuleSourceNumberCandidate(int Value, string Source, int Start, int Length,
+    string Token, string Interpretation);
+
+/// <summary>来源编号的语义空间，不隐含官方集序映射</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum RuleNumberingKind
+{
+    Season, LocalEpisode, InclusiveRange, ExplicitList, FractionalEpisode,
+    AirDate, ShortAirDate, Volume, Disc, Part, Cour, Issue, Absolute,
+    ReleaseRevision, ContentKind, InvalidNumber, TechnicalNumber,
+}
+
+/// <summary>局部证据的采纳状态</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum RuleEvidenceState { Missing, Accepted, Candidate, Rejected, Conflict }
+
+/// <summary>具有原文区间的编号、日期及内容种类证据</summary>
+/// <remarks>局部 Source 为 FileName 或 RelativeSegment；SegmentIndex 是外到内目录数组的实际位置。跨段用户捕获只能为拒绝候选：RelativePath 区间针对斜杠拼接的所有目录及文件名，FullPath 区间针对旧规则作用域的直接父目录与文件名拼接，均不指绝对路径。Start/Length 为完整原文 UTF-16 区间，Token 必须等于反取结果。RuleKey 是稳定的语义规则家族标识，不宣称精确正则身份。Accepted 只证明本地语法，不证明官方集序。</remarks>
+public sealed record RuleNumberingEvidence(RuleNumberingKind Kind, RuleEvidenceState State,
+    string Field, string Source, int? SegmentIndex, int Start, int Length, string Token,
+    int? Value = null, int? End = null, IReadOnlyList<int>? Values = null,
+    string? TextValue = null, string? Reason = null, string? RuleKey = null);

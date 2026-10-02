@@ -55,7 +55,7 @@ public sealed class DataSeederTests : IDisposable
         rules.Select(r => r.Name).Should().BeEquivalentTo(new[]
         {
             // V2 优先级 22
-            "综艺第N季 + 日期作集",
+            "综艺第N季 + 播出日期",
             // V1 优先级 25
             "国产剧第N季第N集",
             // V3 优先级 26
@@ -63,7 +63,7 @@ public sealed class DataSeederTests : IDisposable
             // V3 优先级 27
             "方括号双段季集 [Sxx][Eyy]",
             // V2 优先级 28
-            "综艺日期作集",
+            "综艺播出日期候选",
             // V3 优先级 29
             "综艺「第N期」",
             // V1 优先级 30
@@ -81,7 +81,7 @@ public sealed class DataSeederTests : IDisposable
             // V1 优先级 50
             "动漫字幕组单集",
             // V3 优先级 52
-            "动漫 Vol / Volume 卷集号",
+            "动漫 Vol / Volume 卷号候选",
             // V1 优先级 55
             "OVA SP 特别篇",
             // V1 优先级 60
@@ -99,7 +99,7 @@ public sealed class DataSeederTests : IDisposable
             // V3 优先级 83
             "无季号「第N集」中文兜底",
             // V3 优先级 85
-            "综艺 YYMMDD 短日期作集",
+            "综艺 YYMMDD 短日期候选",
         }, options => options.WithStrictOrdering());
 
         rules.Select(r => r.Priority).Should().Equal(
@@ -184,7 +184,7 @@ public sealed class DataSeederTests : IDisposable
     private const string NewFullPackDescription = "整季合集「全N集」命名（如扫毒.全30集），识别为 tv 并清洗标题；总集数不作集号，交 AI / 人工审核定集";
     private const string OvaSeedPattern = @"^(?:\[[^\]]{1,40}\]\s*)*(?<title>[^\[\]]+?)[\s\._\-]+(?:OVA|SP|NCED|NCOP|番外|特典|映画|剧场版)[\s\._\-]?(?<episode>\d{1,3})(?![\d])";
     private const string LegacyOvaDescription = "OVA / SP / 番外 / 特典 等动漫特别篇标记，集号 1-3 位";
-    private const string NewOvaDescription = "OVA / SP / 番外 / 特典 等动漫特别篇标记，集号 1-3 位；季号留空交 AI 按特别篇约定归 Season 0";
+    private const string NewOvaDescription = "OVA / SP / 番外 / 特典 等内容种类标记，编号 1-3 位；保留来源候选，不默认映射 Season 0 或正片集号";
 
     [Fact]
     public async Task SeedAsync_LegacyFullPackSeedRow_PatternAndDescriptionAutoFixed()
@@ -277,7 +277,7 @@ public sealed class DataSeederTests : IDisposable
         using PmmDbContext ctx = _dbFactory.CreateDbContext();
         ParseRule rule = await ctx.ParseRules.SingleAsync(r => r.Id == id);
         rule.Pattern.Should().Be(OvaSeedPattern, "OVA 的 Pattern 本就未变");
-        rule.Description.Should().Be(NewOvaDescription, "旧种子描述应补充特别篇 Season 0 约定说明");
+        rule.Description.Should().Be(NewOvaDescription, "旧种子描述应说明特别篇编号需目录核验");
     }
 
     [Fact]

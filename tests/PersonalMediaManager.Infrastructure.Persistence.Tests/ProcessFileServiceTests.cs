@@ -37,7 +37,7 @@ namespace PersonalMediaManager.Infrastructure.Persistence.Tests;
 ///  12. 异常路径 → Failed（MarkFailed）
 ///  13. 失败状态 MediaItem 重入 → 幂等 Skipped
 /// </remarks>
-public sealed class ProcessFileServiceTests : IDisposable
+public sealed partial class ProcessFileServiceTests : IDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly TestDbContextFactory _dbFactory;
@@ -478,13 +478,14 @@ public sealed class ProcessFileServiceTests : IDisposable
     [Fact]
     public async Task Tv_MissingSeason_But_SingleSeason_Tmdb_AutoFills_S01_And_Archives()
     {
-        // 剧集缺季号但集号在；TMDB 仅 1 季 → 自动定为 S01 继续归档，不进 AwaitingReview
+        // 合成目录 fixture：单季与集数范围均提供，不能只凭 TotalSeasons 自动补季。
         _ruleEngine.ParseAsync(Arg.Any<FileParseContext>(), Arg.Any<CancellationToken>())
             .Returns(new RuleParseResult("Jujutsu Kaisen", null, "tv", null, 59, null, 0.9, false, 1));
         _tmdb.SearchAsync(Arg.Any<TmdbSearchRequest>(), Arg.Any<CancellationToken>())
             .Returns(new TmdbSearchResult([NewCandidate(95479, "tv", "Jujutsu Kaisen")], null));
         _tmdb.GetDetailsAsync(95479, "tv", Arg.Any<CancellationToken>())
-            .Returns(new TmdbDetailsResult(95479, "tv", "Jujutsu Kaisen", "呪術廻戦", 2020, 1, null, ["JP"], "ja", null, null, "{}"));
+            .Returns(new TmdbDetailsResult(95479, "tv", "Jujutsu Kaisen", "呪術廻戦", 2020, 1, null, ["JP"], "ja", null, null, "{}",
+                [new TmdbSeasonInfo(1, 60)]));
         ConfigureClassify(ClassifyDecision.Matched, 1);
         ConfigureArchive(ArchiveOutcome.Completed, "/Tv/JJK/Season 01/S01E59.mkv");
 
@@ -1770,7 +1771,8 @@ public sealed class ProcessFileServiceTests : IDisposable
         _tmdb.SearchAsync(Arg.Any<TmdbSearchRequest>(), Arg.Any<CancellationToken>())
             .Returns(new TmdbSearchResult([NewCandidate(888, "tv", "Spy Family", year: null)], null));
         _tmdb.GetDetailsAsync(888, "tv", Arg.Any<CancellationToken>())
-            .Returns(new TmdbDetailsResult(888, "tv", "Spy Family", "Spy Family", 2022, 1, null, ["JP"], "ja", null, null, "{}"));
+            .Returns(new TmdbDetailsResult(888, "tv", "Spy Family", "Spy Family", 2022, 1, null, ["JP"], "ja", null, null, "{}",
+                [new TmdbSeasonInfo(1, 12)]));
         ConfigureClassify(ClassifyDecision.Matched, 1);
         ConfigureArchive(ArchiveOutcome.Completed, "/Tv/SpyFamily/S01E05.mkv");
 
@@ -1818,7 +1820,9 @@ public sealed class ProcessFileServiceTests : IDisposable
         _ruleEngine.ParseAsync(Arg.Any<FileParseContext>(), Arg.Any<CancellationToken>())
             .Returns(new RuleParseResult("Example Group", 2024, "tv", null, 1, null, 0.9, false, 1,
                 FieldEvidence: [new RuleFieldEvidence("episode", 1, "FileName", "E01")],
-                Conflicts: ["season：源编号冲突，由显式剧集组映射解决"]));
+                Conflicts: ["season：源编号冲突，由显式剧集组映射解决"],
+                NamingEvidence: new("Example Group HD Remaster", ["HD Remaster"],
+                    Uncertainties: ["EditionNeedsCatalogueVerification"])));
         _tmdb.GetDetailsAsync(20111, "tv", Arg.Any<CancellationToken>())
             .Returns(new TmdbDetailsResult(20111, "tv", "机动战士高达SEED", "Gundam SEED", 2002, 1, null, ["JP"], "ja", null, null, "{}"));
         // 剧集组：编组内第 1 位(order 0)→ 正典 S01E02，第 2 位(order 1)→ S01E01

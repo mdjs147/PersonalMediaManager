@@ -1,3 +1,4 @@
+using System.Data.Common;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
@@ -23,21 +24,47 @@ namespace PersonalMediaManager.Host.Tests.HostedServices;
 /// </remarks>
 public sealed class WebhookOutboxWorkerTests : IDisposable
 {
-    private readonly SqliteConnection _connection;
+    private readonly SqliteConnection _keepAliveConnection;
     private readonly TestDbContextFactory _dbFactory;
     private readonly FakeProtector _protector = new();
     private readonly FakeClock _clock = new();
 
     public WebhookOutboxWorkerTests()
     {
-        _connection = new SqliteConnection("DataSource=:memory:");
-        _connection.Open();
-        _dbFactory = new TestDbContextFactory(_connection);
+        string connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = $"pmm-webhook-{Guid.NewGuid():N}",
+            Mode = SqliteOpenMode.Memory,
+            Cache = SqliteCacheMode.Shared,
+            Pooling = false,
+        }.ToString();
+        // 仅保活命名内存库；Worker 和轮询各用独立连接，避免 EF 初始化与活跃语句争用同一连接。
+        _keepAliveConnection = new SqliteConnection(connectionString);
+        _keepAliveConnection.Open();
+        _dbFactory = new TestDbContextFactory(connectionString);
         using PmmDbContext ctx = _dbFactory.CreateDbContext();
         ctx.Database.EnsureCreated();
     }
 
-    public void Dispose() => _connection.Dispose();
+    public void Dispose() => _keepAliveConnection.Dispose();
+
+    [Fact]
+    public void DbContextFactory_Uses_Independent_Connections_To_Same_Database()
+    {
+        long subId = SeedSubscription(url: "https://hook/isolation");
+        long deliveryId = SeedDelivery(subId, payload: "{}");
+        using PmmDbContext first = _dbFactory.CreateDbContext();
+        using PmmDbContext second = _dbFactory.CreateDbContext();
+
+        first.Database.OpenConnection();
+        using DbCommand command = first.Database.GetDbConnection().CreateCommand();
+        command.CommandText = "SELECT Id FROM Webhook_Delivery";
+        using DbDataReader reader = command.ExecuteReader();
+        reader.Read().Should().BeTrue();
+        // 一个连接仍有活跃语句时，另一个 DbContext 必须能初始化并读取同一条已提交记录。
+        first.Database.GetDbConnection().Should().NotBeSameAs(second.Database.GetDbConnection());
+        second.WebhookDeliveries.AsNoTracking().Single(d => d.Id == deliveryId).SubscriptionId.Should().Be(subId);
+    }
 
     // ---------- WebhookRetryPolicy 纯函数 ----------
 
@@ -262,7 +289,7 @@ public sealed class WebhookOutboxWorkerTests : IDisposable
 
     private void DeleteSubscriptionBypassingFk(long subId)
     {
-        using SqliteCommand cmd = _connection.CreateCommand();
+        using SqliteCommand cmd = _keepAliveConnection.CreateCommand();
         cmd.CommandText = "PRAGMA foreign_keys=OFF; DELETE FROM Webhook_Subscription WHERE Id=$id; PRAGMA foreign_keys=ON;";
         cmd.Parameters.AddWithValue("$id", subId);
         cmd.ExecuteNonQuery();
@@ -383,12 +410,12 @@ public sealed class WebhookOutboxWorkerTests : IDisposable
 
     private sealed class TestDbContextFactory : IDbContextFactory<PmmDbContext>
     {
-        private readonly SqliteConnection _connection;
-        public TestDbContextFactory(SqliteConnection c) { _connection = c; }
+        private readonly string _connectionString;
+        public TestDbContextFactory(string connectionString) { _connectionString = connectionString; }
         public PmmDbContext CreateDbContext()
         {
             DbContextOptionsBuilder<PmmDbContext> opts = new();
-            opts.UseSqlite(_connection);
+            opts.UseSqlite(_connectionString);
             return new PmmDbContext(opts.Options);
         }
     }

@@ -43,6 +43,9 @@ stages:
               versionSpec: '22.x'
             displayName: 'Install Node 22'
 
+          - script: npm --prefix src/PersonalMediaManager.Frontend run version:check
+            displayName: 'Check product version metadata'
+
           - script: dotnet restore PersonalMediaManager.slnx
             displayName: 'Restore'
 
@@ -111,6 +114,9 @@ stages:
             inputs:
               versionSpec: '20.x'
             displayName: 'Install Node 20'
+
+          - script: npm --prefix src/PersonalMediaManager.Frontend run version:check
+            displayName: 'Check product version metadata'
 
           - powershell: |
               & powershell -NoProfile -File scripts/check-schema-drift.ps1

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using PersonalMediaManager.Application.Common;
+using PersonalMediaManager.Application.Common.Diagnostics;
 using PersonalMediaManager.Application.Contracts;
 using PersonalMediaManager.Application.Services.Audit;
 using PersonalMediaManager.Application.Services.Webhook;
@@ -98,7 +99,38 @@ internal sealed class AiCallOrchestrator : IAiCallOrchestrator
 
     public async Task<AiCallOutcome> ExecuteAsync(AiParseRequest request, long? mediaItemId, CancellationToken ct = default)
     {
+        using IDisposable? diagnosticScope = ParseDiagnostics.CurrentRunId is null ? ParseDiagnostics.Begin("ai_chain", mediaItemId: mediaItemId) : null;
+        Stopwatch elapsed = Stopwatch.StartNew();
+        try
+        {
+            AiCallOutcome outcome = await ExecuteCoreAsync(request, mediaItemId, ct);
+            ParseDiagnostics.Emit("ai.chain_completed", new
+            {
+                outcome.Success, outcome.WinningProviderId, outcome.ProvidersAttempted,
+                ElapsedMs = elapsed.ElapsedMilliseconds,
+            });
+            return outcome;
+        }
+        catch (Exception ex)
+        {
+            ParseDiagnostics.Emit(ex is OperationCanceledException ? "ai.chain_cancelled" : "ai.chain_failed", new
+            {
+                ElapsedMs = elapsed.ElapsedMilliseconds, ExceptionType = ex.GetType().Name,
+                CallerCancelled = ct.IsCancellationRequested,
+            });
+            throw;
+        }
+    }
+
+    private async Task<AiCallOutcome> ExecuteCoreAsync(AiParseRequest request, long? mediaItemId, CancellationToken ct)
+    {
         IReadOnlyList<AiProviderResolution> ordered = await _resolver.ResolveOrderedAsync(ct);
+        ParseDiagnostics.Emit("ai.chain_resolved", new
+        {
+            ProviderCount = ordered.Count,
+            Providers = ordered.Select(res => new { res.ProviderId, Protocol = res.Type.ToString(), res.IsPrimary,
+                Model = ParseDiagnostics.CaptureText(res.Endpoint.Model, includeAtStandard: true), res.ConfidenceThreshold }).ToArray(),
+        });
         if (ordered.Count == 0)
         {
             _logger.LogWarning("AI 调用链：无可用 provider（resolver 返回空）");
@@ -139,6 +171,8 @@ internal sealed class AiCallOrchestrator : IAiCallOrchestrator
 
             if (!_parser.Supports(res.Type))
             {
+                ParseDiagnostics.Emit("ai.provider_skipped", new { ChainId = chainId, Level = level,
+                    res.ProviderId, Reason = ErrorConfigError });
                 // 配置漂移：DB 里的协议找不到对应实现（理论上不发生，DI 注册时即覆盖全枚举）
                 await _audit.WriteAsync(new AuditAiCallEntry(
                     res.ProviderId, mediaItemId, Success: false, LatencyMs: 0,
@@ -157,6 +191,8 @@ internal sealed class AiCallOrchestrator : IAiCallOrchestrator
             // 记一条 Audit + attempt 作轨迹，直接升级到下一级；窗口滑出后自动恢复（与上方「配置漂移」同款不消耗级数）
             if (_rpmGate.IsThrottled(res.ProviderId, res.RpmLimit))
             {
+                ParseDiagnostics.Emit("ai.provider_skipped", new { ChainId = chainId, Level = level,
+                    res.ProviderId, Reason = "LocalRpmLimit", res.RpmLimit });
                 await _audit.WriteAsync(new AuditAiCallEntry(
                     res.ProviderId, mediaItemId, Success: false, LatencyMs: 0,
                     ErrorType: ErrorRateLimit,
@@ -174,6 +210,8 @@ internal sealed class AiCallOrchestrator : IAiCallOrchestrator
             _rpmGate.Record(res.ProviderId);
             ProviderCallOutcome call;
             Stopwatch levelSw = Stopwatch.StartNew();
+            ParseDiagnostics.Emit("ai.provider_started", new { ChainId = chainId, Level = level,
+                res.ProviderId, Protocol = res.Type.ToString(), res.IsPrimary, ChainTimeoutMs = chainTimeout.TotalMilliseconds });
             try
             {
                 call = await CallWithTransientRetryAsync(res, request, chain, linkedCt);
@@ -186,6 +224,8 @@ internal sealed class AiCallOrchestrator : IAiCallOrchestrator
                 // 审计行再抛。审计写入用原始 ct（linkedCt 已取消写不进库）；异常 message 中文化，
                 // 让下游 ProcessFileService.MarkFailed 落库的失败原因可读。
                 levelSw.Stop();
+                ParseDiagnostics.Emit("ai.provider_timeout", new { ChainId = chainId, Level = level,
+                    res.ProviderId, ElapsedMs = levelSw.ElapsedMilliseconds, ChainTimeoutMs = chainTimeout.TotalMilliseconds });
                 await _audit.WriteAsync(new AuditAiCallEntry(
                     res.ProviderId, mediaItemId, Success: false, LatencyMs: (int)levelSw.Elapsed.TotalMilliseconds,
                     ErrorType: ErrorTimeout,
@@ -205,13 +245,31 @@ internal sealed class AiCallOrchestrator : IAiCallOrchestrator
             int? httpStatus = call.HttpStatus;
 
             // 质量门：HTTP 成功但置信度不达标 → 视为「结果不满意」软失败，升级到下一级（落实「反馈不满意无条件升级」）
-            if (success && result is not null && !result.IsAcceptable(res.ConfidenceThreshold))
+            bool canSearchIdentity = request.Context is { SchemaVersion: 2, TaskType: AiParseTaskType.IdentifyWork }
+                && result?.CanSearchForIdentity(res.ConfidenceThreshold) == true;
+            if (success && canSearchIdentity) errorDetail = "仅提取可供检索的标题线索，作品身份与类型待 TMDB 核验";
+            if (success && result is not null && !result.IsAcceptable(res.ConfidenceThreshold) && !canSearchIdentity)
             {
                 success = false;
-                errorType = result.Abstained ? ErrorUnknownEvidence : ErrorLowConfidence;
-                errorDetail = result.Abstained ? "作品证据不足，模型放弃识别"
+                bool invalidSchema = result.Validation?.SchemaIssues?.Any(issue => issue.BlocksAcceptance) == true
+                    || !double.IsFinite(result.Confidence) || result.Confidence is < 0 or > 1;
+                bool unverified = result.Abstained || result.MediaType == "unknown" || result.RequiresIdentityVerification;
+                errorType = invalidSchema ? ErrorLogical : unverified ? ErrorUnknownEvidence : ErrorLowConfidence;
+                errorDetail = invalidSchema ? "AI 响应未通过字段结构或取值域校验"
+                    : unverified ? "作品身份或类型证据不足，当前结果不能采用"
                     : $"置信度 {result.Confidence:F2} < 阈值 {res.ConfidenceThreshold:F2}，升级到更高级 AI";
             }
+
+            ParseDiagnostics.Emit("ai.provider_result", new
+            {
+                ChainId = chainId, Level = level, res.ProviderId, Success = success,
+                ErrorType = errorType, LatencyMs = latencyMs,
+                Confidence = confidence is double value && double.IsFinite(value) ? confidence : null,
+                ConfidenceState = confidence is null ? "unknown" : double.IsFinite(confidence.Value) ? "recorded" : "invalid",
+                res.ConfidenceThreshold, CanSearchIdentity = canSearchIdentity,
+                Abstained = result?.Abstained, RequiresIdentityVerification = result?.RequiresIdentityVerification,
+                HttpStatus = httpStatus, call.PromptTokens, call.CompletionTokens,
+            });
 
             // Audit 写入用原始 ct（即使链路超时也要落审计行）；含 token / 置信度 / 原文 / 升级链等监控维度
             await _audit.WriteAsync(new AuditAiCallEntry(
@@ -235,7 +293,8 @@ internal sealed class AiCallOrchestrator : IAiCallOrchestrator
             {
                 chain.RecordSuccess();
                 attempts.Add(new AiCallAttempt(level, res.ProviderId, res.Name, res.Type, res.IsPrimary,
-                    Success: true, Confidence: result.Confidence, ErrorType: null, ErrorDetail: null, LatencyMs: latencyMs));
+                    Success: true, Confidence: result.Confidence, ErrorType: null,
+                    ErrorDetail: canSearchIdentity ? errorDetail : null, LatencyMs: latencyMs));
                 return new AiCallOutcome(true, result, res.ProviderId, chain.ProvidersCalled, FailureSummary: null, Attempts: attempts, RequestMetadata: call.RequestMetadata);
             }
 
@@ -267,11 +326,14 @@ internal sealed class AiCallOrchestrator : IAiCallOrchestrator
         AiProviderResolution res, AiParseRequest request, AiCallChain chain, CancellationToken ct)
     {
         Stopwatch sw = Stopwatch.StartNew();
+        int attempt = 0;
         while (true)
         {
             ct.ThrowIfCancellationRequested();
             try
             {
+                attempt++;
+                ParseDiagnostics.Emit("ai.attempt_started", new { res.ProviderId, Attempt = attempt });
                 AiParseOutcome o = await _parser.ParseAsync(res.Type, res.Endpoint, request, ct);
                 sw.Stop();
                 // 成功：HTTP 状态记 200（解析门面成功即 2xx），携带原文 + token 供监控
@@ -283,23 +345,25 @@ internal sealed class AiCallOrchestrator : IAiCallOrchestrator
                 if (chain.CanRetryTransient)
                 {
                     chain.RecordTransientError();
-                    _logger.LogWarning(ex, "AI provider {Provider} 瞬时错误，{Backoff}ms 后重试", res.Name, TransientRetryBackoff.TotalMilliseconds);
+                    ParseDiagnostics.Emit("ai.retry_scheduled", new { res.ProviderId, Attempt = attempt,
+                        Reason = ErrorTransient, BackoffMs = TransientRetryBackoff.TotalMilliseconds });
+                    _logger.LogWarning("AI provider {ProviderId} 瞬时错误（{ExceptionType}），{Backoff}ms 后重试", res.ProviderId, ex.GetType().Name, TransientRetryBackoff.TotalMilliseconds);
                     await Task.Delay(TransientRetryBackoff, ct);
                     continue;
                 }
                 sw.Stop();
-                return FailureOutcome(ErrorTransient, ex, (int)sw.Elapsed.TotalMilliseconds);
+                return FailureOutcome(ErrorTransient, ex, (int)sw.Elapsed.TotalMilliseconds, res.Endpoint);
             }
             catch (AiProviderModelRuntimeException ex)
             {
                 sw.Stop();
-                return FailureOutcome(ErrorModelRuntime, ex, (int)sw.Elapsed.TotalMilliseconds);
+                return FailureOutcome(ErrorModelRuntime, ex, (int)sw.Elapsed.TotalMilliseconds, res.Endpoint);
             }
             catch (AiProviderRateLimitException ex)
             {
                 // 限流 / 配额：本 provider 已达上限，不重试，直接升级到更高级 AI（落实「接口达到上限自动升级」）
                 sw.Stop();
-                return FailureOutcome(ErrorRateLimit, ex, (int)sw.Elapsed.TotalMilliseconds);
+                return FailureOutcome(ErrorRateLimit, ex, (int)sw.Elapsed.TotalMilliseconds, res.Endpoint);
             }
             catch (AiProviderLogicalException ex)
             {
@@ -311,19 +375,33 @@ internal sealed class AiCallOrchestrator : IAiCallOrchestrator
                     _ when ex.InnerException is TaskCanceledException => ErrorTimeout,
                     _ => ErrorLogical,
                 };
-                return FailureOutcome(errorType, ex, (int)sw.Elapsed.TotalMilliseconds);
+                return FailureOutcome(errorType, ex, (int)sw.Elapsed.TotalMilliseconds, res.Endpoint);
             }
         }
     }
 
     /// <summary>从契约异常的 Exception.Data 读出诊断原文/状态码/token，组装失败结果（见 AiCallDiagnostics）</summary>
-    private static ProviderCallOutcome FailureOutcome(string errorType, Exception ex, int latencyMs) =>
-        new(Success: false, Result: null, errorType, ex.Message, latencyMs,
+    private static ProviderCallOutcome FailureOutcome(string errorType, Exception ex, int latencyMs, AiProviderEndpoint endpoint) =>
+        new(Success: false, Result: null, errorType, ErrorDetailForPolicy(errorType, ex.Message, endpoint), latencyMs,
             PromptTokens: ex.Data[AiCallDiagnostics.PromptTokensKey] as int?,
             CompletionTokens: ex.Data[AiCallDiagnostics.CompletionTokensKey] as int?,
             HttpStatus: ex.Data[AiCallDiagnostics.HttpStatusKey] as int?,
-            RequestText: ex.Data[AiCallDiagnostics.RequestTextKey] as string,
-            ResponseText: ex.Data[AiCallDiagnostics.ResponseTextKey] as string);
+            RequestText: RemoveCredential(ex.Data[AiCallDiagnostics.RequestTextKey] as string, endpoint),
+            ResponseText: RemoveCredential(ex.Data[AiCallDiagnostics.ResponseTextKey] as string, endpoint));
+
+    /// <summary>供应商异常可能包含响应正文，下游摘要也必须遵从同一正文策略</summary>
+    private static string ErrorDetailForPolicy(string errorType, string text, AiProviderEndpoint endpoint)
+    {
+        DiagnosticText captured = ParseDiagnostics.CaptureText(RemoveCredential(text, endpoint));
+        if (captured.Text is null)
+            return $"AI 调用失败（{errorType}；诊断正文未记录；状态={captured.State}；SHA256={captured.Sha256}）";
+        if (captured.Truncated)
+            return captured.Text + $"\n[诊断正文已截断；捕获UTF-8={captured.CapturedUtf8Bytes}字节；SHA256={captured.Sha256}]";
+        return captured.Text;
+    }
+
+    private static string? RemoveCredential(string? text, AiProviderEndpoint endpoint) =>
+        string.IsNullOrEmpty(endpoint.ApiKey) ? text : text?.Replace(endpoint.ApiKey, "[凭据已脱敏]", StringComparison.Ordinal);
 
     /// <summary>单个 provider 一次调用的产出（成功结果或失败诊断 + token/原文/状态码）</summary>
     private sealed record ProviderCallOutcome(

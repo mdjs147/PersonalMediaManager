@@ -1,3 +1,4 @@
+using PersonalMediaManager.Application.Common.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -58,6 +59,26 @@ internal sealed class TmdbSearchService : ITmdbSearchService
     }
 
     public async Task<TmdbSearchResult> SearchAsync(TmdbSearchRequest request, CancellationToken ct = default)
+    {
+        string requestId = Guid.NewGuid().ToString("N");
+        global::System.Diagnostics.Stopwatch started = global::System.Diagnostics.Stopwatch.StartNew();
+        ParseDiagnostics.Emit("tmdb.Search.request", new { requestId, input = new { request } });
+        try
+        {
+            TmdbSearchResult result = await SearchCoreAsync(request, ct);
+            ParseDiagnostics.Emit("tmdb.Search.response", new { requestId, elapsedMs = started.ElapsedMilliseconds, result });
+            return result;
+        }
+        catch (Exception ex)
+        {
+            ParseDiagnostics.Emit("tmdb.Search.failed", new { requestId, elapsedMs = started.ElapsedMilliseconds,
+                cancelled = ex is OperationCanceledException, type = ex.GetType().Name,
+                error = ParseDiagnostics.CaptureText(ex.Message) });
+            throw;
+        }
+    }
+
+    private async Task<TmdbSearchResult> SearchCoreAsync(TmdbSearchRequest request, CancellationToken ct)
     {
         await using PmmDbContext ctx = await _dbFactory.CreateDbContextAsync(ct);
         TmdbSetting setting = await LoadSettingAsync(ctx, ct);
@@ -162,6 +183,26 @@ internal sealed class TmdbSearchService : ITmdbSearchService
 
     public async Task<TmdbDetailsResult> GetDetailsAsync(int tmdbId, string mediaType, CancellationToken ct = default)
     {
+        string requestId = Guid.NewGuid().ToString("N");
+        global::System.Diagnostics.Stopwatch started = global::System.Diagnostics.Stopwatch.StartNew();
+        ParseDiagnostics.Emit("tmdb.GetDetails.request", new { requestId, input = new { tmdbId, mediaType } });
+        try
+        {
+            TmdbDetailsResult result = await GetDetailsCoreAsync(tmdbId, mediaType, ct);
+            ParseDiagnostics.Emit("tmdb.GetDetails.response", new { requestId, elapsedMs = started.ElapsedMilliseconds, result });
+            return result;
+        }
+        catch (Exception ex)
+        {
+            ParseDiagnostics.Emit("tmdb.GetDetails.failed", new { requestId, elapsedMs = started.ElapsedMilliseconds,
+                cancelled = ex is OperationCanceledException, type = ex.GetType().Name,
+                error = ParseDiagnostics.CaptureText(ex.Message) });
+            throw;
+        }
+    }
+
+    private async Task<TmdbDetailsResult> GetDetailsCoreAsync(int tmdbId, string mediaType, CancellationToken ct)
+    {
         await using PmmDbContext ctx = await _dbFactory.CreateDbContextAsync(ct);
         TmdbSetting setting = await LoadSettingAsync(ctx, ct);
         string apiKey = DecryptApiKey(setting);
@@ -195,6 +236,26 @@ internal sealed class TmdbSearchService : ITmdbSearchService
     }
 
     public async Task<TmdbEpisodeGroup> GetEpisodeGroupAsync(string episodeGroupId, CancellationToken ct = default)
+    {
+        string requestId = Guid.NewGuid().ToString("N");
+        global::System.Diagnostics.Stopwatch started = global::System.Diagnostics.Stopwatch.StartNew();
+        ParseDiagnostics.Emit("tmdb.GetEpisodeGroup.request", new { requestId, input = new { episodeGroupId } });
+        try
+        {
+            TmdbEpisodeGroup result = await GetEpisodeGroupCoreAsync(episodeGroupId, ct);
+            ParseDiagnostics.Emit("tmdb.GetEpisodeGroup.response", new { requestId, elapsedMs = started.ElapsedMilliseconds, result });
+            return result;
+        }
+        catch (Exception ex)
+        {
+            ParseDiagnostics.Emit("tmdb.GetEpisodeGroup.failed", new { requestId, elapsedMs = started.ElapsedMilliseconds,
+                cancelled = ex is OperationCanceledException, type = ex.GetType().Name,
+                error = ParseDiagnostics.CaptureText(ex.Message) });
+            throw;
+        }
+    }
+
+    private async Task<TmdbEpisodeGroup> GetEpisodeGroupCoreAsync(string episodeGroupId, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(episodeGroupId)) throw new BusinessException("剧集组 id 不能为空");
         await using PmmDbContext ctx = await _dbFactory.CreateDbContextAsync(ct);

@@ -1,3 +1,4 @@
+using PersonalMediaManager.Application.Common.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using PersonalMediaManager.Application.Common;
@@ -33,19 +34,21 @@ internal sealed class ScanService : IScanService, IFullScanCoordinator
     private readonly IFileIntakeService _intake;
     private readonly IMediaExtensionProvider _extensionProvider;
     private readonly ILogger<ScanService> _logger;
+    private readonly IParseDiagnosticSink? _diagnostics;
 
     public ScanService(
         IDbContextFactory<PmmDbContext> dbFactory,
         IPendingFileQueue queue,
         IFileIntakeService intake,
         IMediaExtensionProvider extensionProvider,
-        ILogger<ScanService> logger)
+        ILogger<ScanService> logger, IParseDiagnosticSink? diagnostics = null)
     {
         _dbFactory = dbFactory;
         _queue = queue;
         _intake = intake;
         _extensionProvider = extensionProvider;
         _logger = logger;
+        _diagnostics = diagnostics;
     }
 
     // ---------- IFullScanCoordinator（被 D.5.2 FullScanJob 调用）----------
@@ -58,6 +61,20 @@ internal sealed class ScanService : IScanService, IFullScanCoordinator
     /// 否则 Audit_ScheduledTaskRun.Outcome=Failed + [ERR] 日志会成为零配置场景的误告警噪声（首启用户必踩坑）。
     /// </remarks>
     public async Task RunAsync(CancellationToken cancellationToken)
+    {
+        using IDisposable trace = ParseDiagnostics.Begin("scan", sink: _diagnostics);
+        ParseDiagnostics.Emit("scan.requested", new { action = "Run" });
+        try { await RunCoreAsync(cancellationToken); }
+        catch (Exception ex)
+        {
+            ParseDiagnostics.Emit(ex is OperationCanceledException ? "scan.cancelled" : "scan.failed",
+                new { type = ex.GetType().Name, requested = cancellationToken.IsCancellationRequested,
+                    error = ParseDiagnostics.CaptureText(ex.Message) });
+            throw;
+        }
+    }
+
+    private async Task RunCoreAsync(CancellationToken cancellationToken)
     {
         AcquireLock();
         try
@@ -85,6 +102,21 @@ internal sealed class ScanService : IScanService, IFullScanCoordinator
 
     public async Task<ScanTriggerResult> TriggerAllAsync(bool force = false, CancellationToken ct = default)
     {
+        using IDisposable trace = ParseDiagnostics.Begin("scan", sink: _diagnostics);
+        ParseDiagnostics.Emit("scan.requested", new { action = "TriggerAll" });
+        try { ScanTriggerResult result = await TriggerAllCoreAsync(force, ct);
+            return result; }
+        catch (Exception ex)
+        {
+            ParseDiagnostics.Emit(ex is OperationCanceledException ? "scan.cancelled" : "scan.failed",
+                new { type = ex.GetType().Name, requested = ct.IsCancellationRequested,
+                    error = ParseDiagnostics.CaptureText(ex.Message) });
+            throw;
+        }
+    }
+
+    private async Task<ScanTriggerResult> TriggerAllCoreAsync(bool force = false, CancellationToken ct = default)
+    {
         AcquireLock();
         try
         {
@@ -109,6 +141,21 @@ internal sealed class ScanService : IScanService, IFullScanCoordinator
 
     public async Task<ScanFolderResult> ScanFolderAsync(long folderId, CancellationToken ct = default)
     {
+        using IDisposable trace = ParseDiagnostics.Begin("scan", sink: _diagnostics);
+        ParseDiagnostics.Emit("scan.requested", new { action = "ScanFolder" });
+        try { ScanFolderResult result = await ScanFolderCoreAsync(folderId, ct);
+            return result; }
+        catch (Exception ex)
+        {
+            ParseDiagnostics.Emit(ex is OperationCanceledException ? "scan.cancelled" : "scan.failed",
+                new { type = ex.GetType().Name, requested = ct.IsCancellationRequested,
+                    error = ParseDiagnostics.CaptureText(ex.Message) });
+            throw;
+        }
+    }
+
+    private async Task<ScanFolderResult> ScanFolderCoreAsync(long folderId, CancellationToken ct = default)
+    {
         AcquireLock();
         try
         {
@@ -119,12 +166,13 @@ internal sealed class ScanService : IScanService, IFullScanCoordinator
             if (!folder.Enabled) throw new BusinessException("目录已禁用");
             if (!Directory.Exists(folder.Path)) throw new BusinessException("目录不可达（网络共享异常）");
 
-            string scanId = Guid.NewGuid().ToString("N");
+            string scanId = ParseDiagnostics.CurrentScanRunId ?? Guid.NewGuid().ToString("N");
             // 单目录扫描保持非 force 语义：用户要批量重投失败记录，请走顶部「强制全扫」
             (int enq, _) = await ScanOneFolderAsync(folder.Id, folder.Path, PendingFileSource.Manual, force: false, db, ct);
 
             _logger.LogInformation("单目录扫描完成：ScanId={ScanId}, FolderId={Id}, Files={Files}",
                 scanId, folder.Id, enq);
+            ParseDiagnostics.Emit("scan.finished", new { folderId = folder.Id, enqueued = enq });
             return new ScanFolderResult(scanId, folder.Id, folder.Path, enq);
         }
         finally
@@ -134,6 +182,21 @@ internal sealed class ScanService : IScanService, IFullScanCoordinator
     }
 
     public async Task<ScanPathResult> ScanPathAsync(string path, CancellationToken ct = default)
+    {
+        using IDisposable trace = ParseDiagnostics.Begin("scan", sink: _diagnostics);
+        ParseDiagnostics.Emit("scan.requested", new { action = "ScanPath" });
+        try { ScanPathResult result = await ScanPathCoreAsync(path, ct);
+            return result; }
+        catch (Exception ex)
+        {
+            ParseDiagnostics.Emit(ex is OperationCanceledException ? "scan.cancelled" : "scan.failed",
+                new { type = ex.GetType().Name, requested = ct.IsCancellationRequested,
+                    error = ParseDiagnostics.CaptureText(ex.Message) });
+            throw;
+        }
+    }
+
+    private async Task<ScanPathResult> ScanPathCoreAsync(string path, CancellationToken ct = default)
     {
         // 路径非空校验已上移至 ScanPathRequest DataAnnotations，模型绑定阶段拦截；
         // 此处对 null 仅做防御性归一为空串，后续走「路径不存在」分支
@@ -151,7 +214,7 @@ internal sealed class ScanService : IScanService, IFullScanCoordinator
         AcquireLock();
         try
         {
-            string scanId = Guid.NewGuid().ToString("N");
+            string scanId = ParseDiagnostics.CurrentScanRunId ?? Guid.NewGuid().ToString("N");
 
             IReadOnlyList<string> files = isFile
                 ? new[] { normalized }
@@ -187,6 +250,7 @@ internal sealed class ScanService : IScanService, IFullScanCoordinator
             _logger.LogInformation(
                 "手动整理完成：ScanId={ScanId}, Path={Path}, IsDir={IsDir}, Enqueued={Enq}, Skipped={Skip}",
                 scanId, normalized, isDir, enqueued, skipped);
+            ParseDiagnostics.Emit("scan.finished", new { enqueued, skipped });
             return new ScanPathResult(scanId, normalized, isDir, enqueued, skipped);
         }
         finally
@@ -219,13 +283,14 @@ internal sealed class ScanService : IScanService, IFullScanCoordinator
     private async Task<ScanTriggerResult> ScanFoldersAsync(
         List<WatchFolder> folders, PendingFileSource source, bool force, PmmDbContext db, CancellationToken ct)
     {
-        string scanId = Guid.NewGuid().ToString("N");
+        string scanId = ParseDiagnostics.CurrentScanRunId ?? Guid.NewGuid().ToString("N");
         int totalEnqueued = 0;
         int totalRescanned = 0;
         foreach (WatchFolder folder in folders)
         {
             if (!Directory.Exists(folder.Path))
             {
+                ParseDiagnostics.Emit("scan.folder_rejected", new { folderId = folder.Id, reason = "unreachable" });
                 _logger.LogWarning("扫描跳过不可达目录：FolderId={Id}, Path={Path}", folder.Id, folder.Path);
                 continue;
             }
@@ -237,6 +302,7 @@ internal sealed class ScanService : IScanService, IFullScanCoordinator
         _logger.LogInformation(
             "{Mode}扫描完成：ScanId={ScanId}, FolderCount={Folders}, Files={Files}, FailedRescanned={Rescanned}",
             force ? "强制" : "全量", scanId, folders.Count, totalEnqueued, totalRescanned);
+        ParseDiagnostics.Emit("scan.finished", new { totalEnqueued, totalRescanned, folderCount = folders.Count, force });
         return new ScanTriggerResult(scanId, folders.Count, totalEnqueued, totalRescanned);
     }
 

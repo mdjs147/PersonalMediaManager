@@ -39,6 +39,9 @@ jobs:
           cache: npm
           cache-dependency-path: src/PersonalMediaManager.Frontend/package-lock.json
 
+      - name: Check product version metadata
+        run: npm --prefix src/PersonalMediaManager.Frontend run version:check
+
       - name: Install frontend dependencies
         working-directory: src/PersonalMediaManager.Frontend
         run: npm ci
@@ -101,6 +104,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Check product version metadata
+        run: npm --prefix src/PersonalMediaManager.Frontend run version:check
       - run: npm --prefix src/PersonalMediaManager.Frontend ci
       - name: Portable tests
         run: bash scripts/test-portable.sh

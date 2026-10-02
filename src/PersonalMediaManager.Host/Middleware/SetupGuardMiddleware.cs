@@ -14,6 +14,7 @@ namespace PersonalMediaManager.Host.Middleware;
 /// Setup 完成前前端页面（含初始化向导本身）根本无法加载。
 /// 放行规则（精确路径，r2 P2-r2.2 收紧为精确匹配防子端点全开）：
 /// - 始终放行：GET /api/setup/status、GET /api/setup/checklist、POST /api/auth/login、GET /api/health、GET /api/diag/boom
+/// - 静态版本：仅精确匹配 GET /api/system/version，初始化前可读且不查数据库
 /// - 仅「初始化未完成」放行：POST /api/setup/admin、POST /api/setup/complete
 ///   （已完成后这两个写端点会沦为「匿名 → 创建 Admin / 标记完成」的认证绕过后门，故已完成即拦截；
 ///    SetupService.CreateAdminAsync 另有 hasAdmin 守门做纵深防御）
@@ -66,8 +67,11 @@ public sealed class SetupGuardMiddleware
 
         string path = context.Request.Path.Value ?? string.Empty;
 
-        // 始终放行：状态查询 / 健康检查 / 诊断（初始化前后都需可达）
-        if (AlwaysAllowPaths.Contains(path))
+        // 静态版本供登录前展示；仅放行这一 GET，不扩到同路径写请求或 system 子端点。
+        bool isStaticVersion = HttpMethods.IsGet(context.Request.Method)
+            && string.Equals(path, "/api/system/version", StringComparison.OrdinalIgnoreCase);
+        // 始终放行：状态查询 / 静态版本 / 健康检查 / 诊断（初始化前后都需可达）
+        if (AlwaysAllowPaths.Contains(path) || isStaticVersion)
         {
             await _next(context);
             return;
