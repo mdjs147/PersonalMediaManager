@@ -102,7 +102,8 @@
     <!-- 2026-07-23 AI 年份幻觉字面溯源守护：AI 会给「文件名/路径都没写年份」的作品用世界知识凭空补发行年，多版本作品（重制/多次剧场版）倾向锚定最早/最知名版本（如《攻壳机动队》2026 版文件被填 1995），该幻觉 year 会作为 TMDB 检索参数搜到错版本、污染候选年份维度打分（默认权重 0.3）、优先落进 ParsedInfo.Year。① SystemPrompt 收紧 year：只从文件名/路径明确写出的 4 位年份数字提取、缺则必须 null、严禁凭作品名推断（title 仍可基于线索翻译转写，year 属事实字段只能照抄）；② 新增 AiPromptHelpers.GroundYear，在 AiProtocolParser 反解后做字面溯源——year 未以「前后非数字」独立形态出现在 FileName/RelativeSegments/ParentFolderName 任一处即判幻觉置 null，下游年份维度记中性、检索不带年、回退 TMDB 候选年靠标题/热度/语言消歧；③ 仅守 year（season/episode 有单季自动补季等默认、title 允许最佳猜测，均不适用该校验）。External 测试 +9。后端升 0.9.2；无 migration、数据库/前端/产品版本号不动 -->
     <!-- 2026-08-29 托盘右键新增「扫描硬盘」：复用 TriggerAllAsync(false) 异步扫描全部已启用监控目录；后端升 0.10.0，无 migration，数据库/前端/产品版本号不动 -->
     <!-- 2026-08-30 扫描待确认网页提醒 + 单任务取消：MainLayout 订阅现有 /hubs/tasks 的 AwaitingReview 状态事件，统一覆盖手动全扫、周期/实时自动扫描与单目录扫描；右下角提醒可点击前往待确认队列，设置→常规新增 Notification_ReviewRequiredEnabled 开关（默认开，KnownSettings 免 migration）；处理详情对排队及归档前处理状态提供取消，排队项以 Cancelled 终态跳过，活动项以独立 linked token 安全停止，Archiving 为保证磁盘一致性不允许取消。后端升 0.11.0、前端升 0.8.0；无 migration，数据库/产品版本号不动 -->
-    <PmmProductVersion>0.2.0</PmmProductVersion>
+    <!-- 2026-10-02 跨平台整合发布：产品版本升 0.3.0；后端、数据库、前端沿用各自独立版本号 -->
+    <PmmProductVersion>0.3.0</PmmProductVersion>
     <VersionPrefix>0.11.0</VersionPrefix>
     <PmmDbVersion>0.10.0</PmmDbVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
