@@ -1,3 +1,5 @@
+using PersonalMediaManager.Application.Common.Diagnostics;
+using PersonalMediaManager.Infrastructure.Platform.Diagnostics;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
@@ -96,6 +98,12 @@ public static class PmmHost
         builder.Configuration.AddEnvironmentVariables();
         if (args.Length > 0) builder.Configuration.AddCommandLine(args);
 
+        ParseDiagnosticOptions parseDiagnostics = new();
+        builder.Configuration.GetSection("ParseDiagnostics").Bind(parseDiagnostics);
+        parseDiagnostics.Normalize();
+        builder.Services.AddSingleton(new ParseDiagnosticFileSink(Path.Combine(paths.LogDir, "parse-diagnostics"), parseDiagnostics));
+        builder.Services.AddSingleton<IParseDiagnosticSink>(sp => sp.GetRequiredService<ParseDiagnosticFileSink>());
+
         if (webHostOverride is not null)
         {
             // 测试场景：调用方注入 .UseTestServer() 等替换 Kestrel
@@ -170,6 +178,7 @@ public static class PmmHost
         // 命名 HttpClient（r2 P2-r2.3）：与 Tmdb / Ai 等风格统一，便于后续在此处集中配置 Polly 策略
         builder.Services.AddHttpClient(HostedServices.WebhookOutboxWorker.HttpClientName);
         builder.Services.AddInfrastructureExternal();
+        builder.Services.AddLocalAiServices();
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
 
@@ -321,7 +330,7 @@ public static class PmmHost
                .CreateLogger("PersonalMediaManager.Host.ImportSwap")
                .LogInformation("{ImportSwap}", msg));
 
-        // 启动期版本号 banner：4 套版本号 + commit + framework，方便日志 / 巡检脚本一眼定位部署的是哪个版本
+        // 启动日志只展示主版本，提交与构建时间保留为诊断信息
         // dirty=true 升 Warning（说明二进制带未提交改动，不可被任何 commit 复现），其它正常 Information
         // 用 ILoggerFactory.CreateLogger 拿 Microsoft.Extensions.Logging.ILogger，避免 app.Logger 被 using Serilog 误解析为 Serilog.ILogger
         try
@@ -331,7 +340,7 @@ public static class PmmHost
             Microsoft.Extensions.Logging.ILogger startupLogger = app.Services
                 .GetRequiredService<ILoggerFactory>()
                 .CreateLogger("PersonalMediaManager.Host.Startup");
-            string banner = $"PersonalMediaManager v{v.Product} (后端 {v.Backend}, 前端 {v.Frontend}, db 目标 {v.DbVersionTarget}) on {v.Framework}";
+            string banner = $"PersonalMediaManager v{v.Product} (commit {v.Commit}, 构建时间 {v.BuildTime:O}) on {v.Framework}";
             if (v.Dirty)
             {
                 startupLogger.LogWarning("[启动] {Banner}（二进制带未提交改动 dirty=true，仅适用本地调试）", banner);

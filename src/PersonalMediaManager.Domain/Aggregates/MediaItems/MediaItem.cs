@@ -377,6 +377,14 @@ public sealed class MediaItem : AggregateRoot
         ParsedInfo = parsedInfo.ToJson();
     }
 
+    /// <summary>保存未绑定身份的规则字段供确认页使用</summary>
+    public void PreserveUnmatchedParse(ParsedInfo parsedInfo)
+    {
+        if (IsTerminal()) throw new DomainException("终态不允许修改待核验解析字段");
+        // 既有绑定的字段保持原样；新建议不能通过审核预填覆盖已验证身份。
+        if (TmdbId is null) ParsedInfo = parsedInfo.ToJson();
+    }
+
     /// <summary>标记本次处理动用了 AI 解析（幂等，不受终态限制）</summary>
     /// <remarks>
     /// 在 AI 升级链真正发起调用的时刻置位（早于结果采纳），即使 AI 失败转人工也保留——

@@ -1,12 +1,18 @@
 {
   "name": "personal-media-manager-frontend",
   "private": true,
-  "version": "0.8.1",
+  "version": "0.4.0",
   "type": "module",
   "scripts": {
+    "version:sync": "node scripts/sync-product-version.js",
+    "version:check": "node scripts/sync-product-version.js --check",
+    "test:version": "node --test tests/productVersion.test.js",
+    "predev": "npm run version:sync",
     "dev": "vite",
+    "prebuild": "npm run version:sync",
     "build": "vite build",
     "preview": "vite preview",
+    "prebuild:host": "npm run version:sync",
     "build:host": "vite build && node scripts/copy-to-host-wwwroot.js",
     "gen:api": "openapi-typescript http://localhost:7288/openapi/v1.json -o src/api/schema.d.ts"
   },

@@ -202,6 +202,20 @@ public sealed class D9MediaPipelineE2ETests : IDisposable
         media.TmdbMediaType.Should().Be("tv");
     }
 
+    [Fact]
+    public async Task E2E_Tv_ExplicitNumberingWithoutCatalogueRemainsForReview()
+    {
+        await CompleteSetupAsync();
+        await SeedTvCategoryAsync(_scratchTargetRoot);
+        ConfigureTmdbForTv(1396, "绝命毒师", "Breaking Bad", 2008, 5, ["US"], "[]", includeCatalogue: false);
+        string source = Path.Combine(_scratchSourceDir, "BreakingBad.S01E01.1080p.mkv");
+        await File.WriteAllBytesAsync(source, new byte[1024]);
+        ProcessFileOutcome outcome = await ProcessFileAsync(source);
+        outcome.Outcome.Should().Be(ProcessOutcome.AwaitingReview);
+        File.Exists(source).Should().BeTrue("缺少季集目录时不能把文件归档");
+        (await ReadMediaItemByIdAsync(outcome.MediaItemId)).TargetPath.Should().BeNull();
+    }
+
     // ---------- E2E3：人工兜底 ----------
 
     [Fact]
@@ -257,6 +271,20 @@ public sealed class D9MediaPipelineE2ETests : IDisposable
     }
 
     // ---------- helpers ----------
+
+    [Fact]
+    public async Task E2E_MismatchingTitleCannotAutoArchiveOnePopularMovieCandidate()
+    {
+        await CompleteSetupAsync();
+        await SeedMovieCategoryAsync(_scratchTargetRoot);
+        ConfigureTmdbForMovie(27205, "盗梦空间", "Inception", 2010, ["US"], "[]");
+        string source = Path.Combine(_scratchSourceDir, "Batch.000.Inception.2010.mkv");
+        await File.WriteAllBytesAsync(source, new byte[256]);
+        (await ProcessFileAsync(source)).Outcome.Should().Be(ProcessOutcome.AwaitingReview);
+        using IServiceScope scope = _factory.Services.CreateScope();
+        using PmmDbContext db = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PmmDbContext>>().CreateDbContext();
+        db.MediaItems.Single().TmdbId.Should().BeNull();
+    }
 
     private async Task CompleteSetupAsync()
     {
@@ -328,14 +356,17 @@ public sealed class D9MediaPipelineE2ETests : IDisposable
     }
 
     private void ConfigureTmdbForTv(int tmdbId, string title, string originalTitle, int year,
-        int totalSeasons, string[] originCountry, string genres)
+        int totalSeasons, string[] originCountry, string genres, bool includeCatalogue = true)
     {
         TmdbCandidate cand = new(tmdbId, "tv", title, originalTitle, year, 50.0, "en", originCountry, "/p.jpg", null);
         _tmdbStub.SearchAsync(Arg.Any<TmdbSearchRequest>(), Arg.Any<CancellationToken>())
             .Returns(new TmdbSearchResult(new[] { cand }, null));
         SeedTmdbCache(tmdbId, "tv", title, originalTitle, year, originCountry, genres, totalSeasons);
+        // 合成目录用于验证归档流程，不是这部作品的真实集数资料；空目录另有反例守护。
+        TmdbSeasonInfo[]? seasons = includeCatalogue
+            ? Enumerable.Range(1, totalSeasons).Select(season => new TmdbSeasonInfo(season, 10)).ToArray() : null;
         _tmdbStub.GetDetailsAsync(tmdbId, "tv", Arg.Any<CancellationToken>())
-            .Returns(new TmdbDetailsResult(tmdbId, "tv", title, originalTitle, year, totalSeasons, "/p.jpg", originCountry, "en", null, null, "{}"));
+            .Returns(new TmdbDetailsResult(tmdbId, "tv", title, originalTitle, year, totalSeasons, "/p.jpg", originCountry, "en", null, null, "{}", seasons));
     }
 
     private void SeedTmdbCache(int tmdbId, string mediaType, string title, string originalTitle, int year,

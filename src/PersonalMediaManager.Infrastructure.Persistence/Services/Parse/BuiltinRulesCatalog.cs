@@ -26,7 +26,7 @@ internal static class BuiltinRulesCatalog
         //   1. 显式范围标记 - 或 ~（可选跟 E/EP）：S01E08-E09 / S01E08-9；
         //   2. 直连无分隔但必须带 E/EP 前缀：S01E08E09 / S01EP08EP09。
         // 直连形态强制 E/EP 前缀、范围外形态强制 -/~ 标记，均为避免把后续 .1080p 等技术参数误识别为范围末端
-        @"[Ss]\.?(?<season>\d{1,2})[\.\-_\s]*[Ee][Pp]?(?<episode>\d{1,4})(?:(?:[\-~][Ee]?[Pp]?|[Ee][Pp]?)(?<episodeEnd>\d{1,4}))?";
+        @"(?<![A-Za-z0-9])[Ss]\.?(?<season>\d{1,2})[\.\-_\s]*[Ee][Pp]?(?<episode>\d{1,4})(?:(?:[\-~][Ee]?[Pp]?|[Ee][Pp]?)(?<episodeEnd>\d{1,4}))?(?:v\d{1,3})?(?![A-Za-z0-9])";
 
     public const string SeasonChinesePattern =
         // 同时支持阿拉伯数字「第2季」与中文数字「第二季 / 第十季 / 第二十一季」（1-99）；
@@ -86,7 +86,7 @@ internal static class BuiltinRulesCatalog
     public const string SeasonRomanPattern =
         @"(?<![A-Za-z0-9])(?![Xx](?:264|265)(?![0-9]))(?<roman>VIII|VII|III|VI|IV|IX|II|V|X)(?=[\s\.\-_]*(?:$|\[|\d))";
 
-    /// <summary>季的篇章标题（中文「XXX篇」，如「锻刀村篇 / 柱训练篇 / 游郭篇 / 无限列车篇」），以篇章名标识季的番剧用</summary>
+    /// <summary>篇章原文候选，不能独立证明季号或系列身份</summary>
     /// <remarks>
     /// 要求篇章名前有分隔符或开头、「篇」后非中文，避免把主标题尾字吞进篇章；捕获含「篇」的完整篇章名，
     /// 便于与 TMDB 季名对照。TMDB 季名多为日文（如「刀鍛冶の里編」），自动字符匹配不可靠，主要供人工对照选季。
@@ -97,6 +97,7 @@ internal static class BuiltinRulesCatalog
     public const string YearPattern =
         @"(?<![\d])(?<year>(?:19|20)\d{2})(?![\d])";
 
+    /// <summary>技术区域词表，不能直接全局应用于完整标题</summary>
     public const string NoisePattern =
         @"\b(?:" +
         // 帧率（60fps / 120FPS）须在纯分辨率之前整体剥除，避免数字段残留进标题
@@ -109,7 +110,7 @@ internal static class BuiltinRulesCatalog
         @"ddp\d?(?:\.\d)?|ddp\+?|eac3|dd\+?\d?(?:\.\d)?|" +
         // 独立声道标记（5.1 / 7.1 / 2.0 / 6.1ch / 8ch）；x.y 后紧跟数字时 \b 不成立，不误伤「Evangelion 1.11」等版本号
         @"[1-9]\.[0-2](?:ch)?|[1-9]ch|" +
-        @"ac3|aac|dts(?:[\-\.]hd)?|truehd(?:\s?\d(?:\.\d)?)?|atmos|flac|opus|mp3|" +
+        @"ac3|aac(?:[1-9](?:\.[0-2])?)?|dts(?:[\-\.]hd)?|truehd(?:\s?\d(?:\.\d)?)?|atmos|flac(?:[1-9](?:\.[0-2])?)?|opus|mp3|" +
         @"chs|cht|chi|eng|jpn|kor|gb|big5|sub|cc|" +
         @"10bit|8bit|" +
         @"remux|repack|proper|extended|directors[\.\s]?cut|unrated|" +
@@ -121,6 +122,14 @@ internal static class BuiltinRulesCatalog
         // .NET \b 视 CJK 为单词字符：与真实词粘连（如「高清剧集网」「全职高手」）时边界不成立、不会误伤标题。
         @"(?:正片|花絮|特典|特辑|合集|高清|蓝光|原盘|国语|粤语|中字|双语|字幕|修复版|收藏版|完结|全集)+" +
         @")\b";
+
+    /// <summary>技术尾区的强锚点，不包含平台简称或普通发行形容词</summary>
+    public const string TechnicalAnchorPattern =
+        @"(?<![\p{L}\p{N}])(?:[0-9]{3,4}\s*[x×]\s*[0-9]{3,4}|" +
+        @"(?:480|576|720|1080|1440|2160|4320)[pi]|4K|8K|\d{2,3}fps|" +
+        @"x264|x265|h\.?264|h\.?265|hevc|avc|av1|vp9|" +
+        @"bluray|bdrip|brrip|web[\-.]?dl|webrip|hdtv|dvdrip|hdrip|tvrip|hdcam|" +
+        @"ddp(?:\d(?:\.\d)?)?|eac3|ac3|aac|truehd|flac|10bit|8bit)(?![\p{L}\p{N}])";
 
     /// <summary>总季数 / 总集数后缀噪声（剧名层「6季 / 全24集 / 第1-6季」等总量标记，区别于单季「第N季」）</summary>
     /// <remarks>
@@ -165,6 +174,7 @@ internal static class BuiltinRulesCatalog
     public static readonly Regex SeasonArc = new(SeasonArcPattern, NoIgnoreCase, Timeout);
     public static readonly Regex Year = new(YearPattern, BaseOptions, Timeout);
     public static readonly Regex Noise = new(NoisePattern, BaseOptions, Timeout);
+    public static readonly Regex TechnicalAnchor = new(TechnicalAnchorPattern, BaseOptions, Timeout);
     public static readonly Regex TotalCountNoise = new(TotalCountNoisePattern, NoIgnoreCase, Timeout);
     public static readonly Regex GroupBracket = new(GroupBracketPattern, NoIgnoreCase, Timeout);
     public static readonly Regex ReleaseGroupSuffix = new(ReleaseGroupSuffixPattern, BaseOptions, Timeout);
@@ -248,8 +258,8 @@ internal static class BuiltinRulesCatalog
 
         new(
             Key: "SeasonArc",
-            Name: "篇章季标题「XXX篇」",
-            Description: "识别以篇章名标识季的番剧（如「鬼灭之刃 锻刀村篇 / 柱训练篇 / 游郭篇」）。提取篇章名为季标题（SeasonTitle）并从主标题剥离，供审核页人工对照 TMDB 季名选季——TMDB 季名多为日文，自动字符匹配不可靠，故以保留 + 展示为主。",
+            Name: "篇章原文候选「XXX篇」",
+            Description: "提取篇章原文供审核对照，保留完整主标题，不凭篇章推断季号、剧集类型或已核实系列身份。检索时可另保留去篇章候选，仍需目录核验。",
             Pattern: SeasonArcPattern,
             Order: 57,
             Samples: new[] { "鬼灭之刃 锻刀村篇 第01集.mkv", "鬼灭之刃.柱训练篇.01.mkv" }),
@@ -272,8 +282,8 @@ internal static class BuiltinRulesCatalog
 
         new(
             Key: "Noise",
-            Name: "噪声 token 清洗（含流媒体平台 + DDP/EAC3）",
-            Description: "清除分辨率（1080p / 4K / UHD）、帧率（60fps）、编码（x264 / HEVC / AV1）、来源（BluRay / WEB-DL / HDTV，含被尾缀规则拆剩的裸 WEB / DL）、HDR（HDR10 / DV / Dolby Vision）、音频（AC3 / AAC / DTS / DDP / EAC3 / DD+ / TrueHD / Atmos / FLAC）、独立声道（5.1 / 7.1 / 2.0 / 6.1ch）、语种（CHS / CHT / ENG）、流媒体平台（IQ / NF / AMZN / DSNP / ATVP / HMAX / BILI / MGTV / TX / HULU）、压制标记（REMUX / REPACK / EXTENDED）、中文纯噪声词（正片 / 花絮 / 蓝光原盘 / 国语中字 / 双语字幕 / 全集等，仅独立成段时剥除）等 80+ 常见 token，保持标题干净。",
+            Name: "技术区域词表（按尾部与括号角色清理）",
+            Description: "只在分辨率、编码或完整来源标记锚定且全段可解释的技术尾部，以及已识别技术括号内清理来源、音轨、语言、平台和发布标记。MAX、Stan、Web、Extended 等普通词不从完整标题全局删除；未知副标题括号和版本原文保留。",
             Pattern: NoisePattern,
             Order: 70,
             Samples: new[] { "Inception.2010.2160p.UHD.BluRay.HEVC.HDR10.Atmos-GROUP.mkv", "Born.with.Luck.S01.2160p.IQ.WEB-DL.H265.DDP5.1-ColorWEB.mkv" }),
@@ -288,8 +298,8 @@ internal static class BuiltinRulesCatalog
 
         new(
             Key: "GroupBracket",
-            Name: "方括号 / 全角【】块剥离",
-            Description: "剥离最多 60 字符的方括号块（半角 [] 与中文全角【】），覆盖字幕组前缀、压制组、PT 站发布组水印（如【高清剧集网发布 www.PTHDTV.com】）。",
+            Name: "方括号 / 全角【】块结构",
+            Description: "定位方括号块；执行清理时另核对技术、集号或发布组角色，不全局删除未知标题块，也不删除未知圆括号副标题。",
             Pattern: GroupBracketPattern,
             Order: 80,
             Samples: new[] { "[ReleaseGroup] My Movie 2020 1080p.mkv", "【高清剧集网发布 www.PTHDTV.com】低智商犯罪.mkv" }),

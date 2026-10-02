@@ -148,6 +148,7 @@ const NAV_GROUPS = [
       { key: '/settings/forced-match', label: '强制匹配', icon: 'shield' },
       { key: '/settings/parse-testcases', label: '测试集', icon: 'check' },
       { key: '/settings/parse-ai-providers', label: 'AI 提供商', icon: 'brain' },
+      { key: '/settings/local-ai', label: '本地模型', icon: 'server' },
       { key: '/settings/tmdb', label: 'TMDB', icon: 'globe' },
       { key: '/settings/subtitles', label: '字幕', icon: 'download' },
       { key: '/settings/categories', label: '媒体分类', icon: 'layers' },

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using PersonalMediaManager.Application.Contracts;
+using PersonalMediaManager.Application.Common.Diagnostics;
 using PersonalMediaManager.Application.Services.Audit;
 using PersonalMediaManager.Domain.Entities;
 
@@ -17,9 +18,6 @@ internal sealed class AuditAiCallWriter : IAuditAiCallWriter
         _clock = clock;
     }
 
-    /// <summary>原文安全阀：正常解析的请求/响应原文远小于此，仅防个别厂商返回异常巨包撑爆库</summary>
-    private const int MaxTextLength = 16_000;
-
     public async Task WriteAsync(AuditAiCallEntry e, CancellationToken ct = default)
     {
         await using PmmDbContext ctx = await _dbFactory.CreateDbContextAsync(ct);
@@ -30,8 +28,8 @@ internal sealed class AuditAiCallWriter : IAuditAiCallWriter
             Success = e.Success,
             LatencyMs = e.LatencyMs,
             ErrorType = e.ErrorType,
-            ErrorDetail = Truncate(e.ErrorDetail, 1000),
-            Model = e.Model,
+            ErrorDetail = FormatText(e.ErrorDetail, maxUtf8Bytes: 1000),
+            Model = FormatText(e.Model, includeAtStandard: true, maxUtf8Bytes: 256),
             PromptTokens = e.PromptTokens,
             CompletionTokens = e.CompletionTokens,
             Confidence = e.Confidence,
@@ -39,15 +37,28 @@ internal sealed class AuditAiCallWriter : IAuditAiCallWriter
             ChainId = e.ChainId,
             AttemptLevel = e.AttemptLevel,
             IsPrimary = e.IsPrimary,
-            RequestText = Truncate(e.RequestText, MaxTextLength),
-            ResponseText = Truncate(e.ResponseText, MaxTextLength),
+            RequestText = FormatText(e.RequestText),
+            ResponseText = FormatText(e.ResponseText),
             Timestamp = _clock.UtcNow,
         };
         ctx.AuditAiCalls.Add(row);
         await ctx.SaveChangesAsync(ct);
+        ParseDiagnostics.Emit("ai.audit_written", new
+        {
+            AuditId = row.Id, e.ProviderId, e.ChainId, e.AttemptLevel,
+            e.Success, e.ErrorType, e.LatencyMs,
+        });
     }
 
-    /// <summary>按上限截断（null 透传；超长取前 max 字符）</summary>
-    private static string? Truncate(string? s, int max) =>
-        s is null ? null : (s.Length <= max ? s : s[..max]);
+    /// <summary>复用诊断脱敏、正文开关及字节上限，缺失和截断均明确呈现</summary>
+    internal static string? FormatText(string? text, bool includeAtStandard = false, int? maxUtf8Bytes = null)
+    {
+        if (text is null) return null;
+        DiagnosticText captured = ParseDiagnostics.CaptureText(text, includeAtStandard, maxUtf8Bytes);
+        if (captured.Text is null)
+            return $"[正文未记录；状态={captured.State}；原始UTF-8={captured.OriginalUtf8Bytes}字节；SHA256={captured.Sha256}]";
+        if (captured.Truncated)
+            return captured.Text + $"\n[正文已截断；原始UTF-8={captured.OriginalUtf8Bytes}字节；已捕获={captured.CapturedUtf8Bytes}字节；SHA256={captured.Sha256}；已脱敏={captured.Redacted}]";
+        return captured.Redacted ? captured.Text + "\n[正文已脱敏]" : captured.Text;
+    }
 }

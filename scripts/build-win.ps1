@@ -4,7 +4,7 @@
 
 .DESCRIPTION
     Pipeline:
-      1) Build frontend: npm install + npm run build:host (vite -> dist -> copy to Host wwwroot)
+      1) Verify product version metadata, then build frontend: npm install + npm run build:host
       2) Publish Launcher: dotnet publish -r win-x64 -p:PublishSingleFile=true -p:SelfContained=true
       3) Output: dist/win/PersonalMediaManager.exe
 
@@ -35,6 +35,9 @@ Write-Host '=== [1/3] Frontend build ===' -ForegroundColor Cyan
 $frontendDir = Join-Path $repoRoot 'src\PersonalMediaManager.Frontend'
 Push-Location $frontendDir
 try {
+    Write-Host '  npm run version:check...' -ForegroundColor Gray
+    & npm run version:check
+    if ($LASTEXITCODE -ne 0) { throw 'Product version metadata drifted; run npm run version:sync and review the generated changes' }
     if (-not (Test-Path 'node_modules')) {
         Write-Host '  npm install...' -ForegroundColor Gray
         & npm install --no-audit --no-fund

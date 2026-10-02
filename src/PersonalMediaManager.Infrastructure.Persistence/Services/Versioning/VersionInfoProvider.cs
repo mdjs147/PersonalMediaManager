@@ -1,7 +1,5 @@
 using System.Reflection;
 using System.Runtime.InteropServices;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using PersonalMediaManager.Application.Contracts;
@@ -9,62 +7,36 @@ using PersonalMediaManager.Application.Dtos.System;
 
 namespace PersonalMediaManager.Infrastructure.Persistence.Services.Versioning;
 
-/// <summary>IVersionInfoProvider 实现：反射 assembly metadata + 查 __EFMigrationsHistory + 解析嵌入的 version-map.json</summary>
-/// <remarks>
-/// 单例：静态信息（assembly metadata）+ 嵌入资源（version-map.json）在构造时一次性加载，后续只查 db。
-/// 启动期把版本号自检结果打到 ILogger（needsMigration 时升 Warning，配合 Host 启动 banner 一并暴露）。
-/// </remarks>
+/// <summary>提供统一产品版本和 EF 迁移集合诊断</summary>
+/// <remarks>单例缓存程序集元数据与代码迁移标识；动态查询只读历史，不执行迁移。</remarks>
 public sealed class VersionInfoProvider : IVersionInfoProvider
 {
-    private const string VersionMapResourceName = "PersonalMediaManager.Infrastructure.Persistence.version-map.json";
-
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        ReadCommentHandling = JsonCommentHandling.Skip,
-        AllowTrailingCommas = true,
-    };
-
     private readonly IDbContextFactory<PmmDbContext> _factory;
     private readonly ILogger<VersionInfoProvider> _logger;
     private readonly StaticVersionInfo _static;
-    private readonly VersionMapData _versionMap;
+    private readonly string[] _knownMigrationIds;
 
     public VersionInfoProvider(IDbContextFactory<PmmDbContext> factory, ILogger<VersionInfoProvider> logger)
     {
         _factory = factory;
         _logger = logger;
-        _static = LoadStaticVersionInfo();
-        _versionMap = LoadVersionMap(_logger);
+        // GetMigrations 只读取编译后的迁移元数据，不打开数据库连接。
+        using PmmDbContext db = factory.CreateDbContext();
+        _knownMigrationIds = db.Database.GetMigrations().Order(StringComparer.Ordinal).ToArray();
+        _static = LoadStaticVersionInfo(_knownMigrationIds.LastOrDefault() ?? string.Empty);
     }
 
     public StaticVersionInfo GetStatic() => _static;
 
     public async Task<VersionInfoResponse> GetFullAsync(CancellationToken ct = default)
     {
-        string? appliedMigrationId = await GetAppliedMigrationIdAsync(ct).ConfigureAwait(false);
-        string applied = ResolveAppliedDbVersion(appliedMigrationId);
-        string target = _static.DbVersionTarget;
-        string? targetMigrationId = ResolveMigrationIdForVersion(target);
-
-        // applied 与 target migrationId 都是时间戳前缀，字典序 = 时间序
-        // applied < target → 数据库 schema 落后，需要 EF Migrate
-        bool needsMigration = targetMigrationId is not null
-            && (appliedMigrationId is null
-                || string.Compare(appliedMigrationId, targetMigrationId, StringComparison.Ordinal) < 0);
-
+        string[]? appliedMigrationIds = await GetAppliedMigrationIdsAsync(ct).ConfigureAwait(false);
         return new VersionInfoResponse
         {
             Product = _static.Product,
-            Backend = _static.Backend,
-            Frontend = _static.Frontend,
-            Database = new DbVersionStatus
-            {
-                Target = target,
-                Applied = applied,
-                AppliedMigrationId = appliedMigrationId,
-                NeedsMigration = needsMigration,
-            },
+            Backend = _static.Product,
+            Frontend = _static.Product,
+            Database = BuildMigrationStatus(appliedMigrationIds),
             Commit = _static.Commit,
             Dirty = _static.Dirty,
             BuildTime = _static.BuildTime,
@@ -72,65 +44,72 @@ public sealed class VersionInfoProvider : IVersionInfoProvider
         };
     }
 
-    /// <summary>查 __EFMigrationsHistory 最大 MigrationId；db 未就绪 / 表不存在时返 null（首启场景）</summary>
-    private async Task<string?> GetAppliedMigrationIdAsync(CancellationToken ct)
+    /// <summary>读取全部 EF 迁移历史；不可读时返回 null，取消请求照常传播</summary>
+    private async Task<string[]?> GetAppliedMigrationIdsAsync(CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         try
         {
             await using PmmDbContext db = await _factory.CreateDbContextAsync(ct).ConfigureAwait(false);
-            System.Data.Common.DbConnection conn = db.Database.GetDbConnection();
-            await conn.OpenAsync(ct).ConfigureAwait(false);
-            await using System.Data.Common.DbCommand cmd = conn.CreateCommand();
-            cmd.CommandText = "SELECT MigrationId FROM __EFMigrationsHistory ORDER BY MigrationId DESC LIMIT 1";
-            object? result = await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false);
-            return result as string;
+            return (await db.Database.GetAppliedMigrationsAsync(ct).ConfigureAwait(false))
+                .Order(StringComparer.Ordinal).ToArray();
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // 首启 db 文件刚建、__EFMigrationsHistory 未生成；不当成错误，仅 Debug 留痕
-            _logger.LogDebug(ex, "读取 __EFMigrationsHistory 失败（首启或 db 不可达），applied 版本号置为 unknown");
+            _logger.LogWarning(ex, "读取 __EFMigrationsHistory 失败，数据库迁移状态未知");
             return null;
         }
     }
 
-    /// <summary>查 version-map.json：找 migrationId ≤ applied 的最大版本</summary>
-    private string ResolveAppliedDbVersion(string? appliedMigrationId)
+    /// <summary>按完整迁移集合判断缺失、未知迁移和链中间缺口</summary>
+    private DbVersionStatus BuildMigrationStatus(string[]? appliedMigrationIds)
     {
-        if (string.IsNullOrEmpty(appliedMigrationId) || _versionMap.Versions.Count == 0)
+        if (appliedMigrationIds is null)
         {
-            return "unknown";
+            return new DbVersionStatus { Target = _static.DbVersionTarget, Applied = "unknown" };
         }
 
-        // 时间戳前缀的字典序 = 时间序；倒序遍历找第一个 ≤ applied
-        foreach (VersionMapEntry entry in _versionMap.Versions
-            .OrderByDescending(v => v.MigrationId, StringComparer.Ordinal))
+        HashSet<string> applied = appliedMigrationIds.ToHashSet(StringComparer.Ordinal);
+        string[] pending = _knownMigrationIds.Except(applied, StringComparer.Ordinal).ToArray();
+        string[] unknown = appliedMigrationIds.Except(_knownMigrationIds, StringComparer.Ordinal).ToArray();
+        string? latestApplied = appliedMigrationIds.LastOrDefault();
+        // 正常待升级历史必须是代码迁移链的连续前缀；最大 ID 对齐不能掩盖中间缺口。
+        bool hasGap = latestApplied is not null
+            && pending.Any(id => string.CompareOrdinal(id, latestApplied) < 0);
+        string status = unknown.Length > 0 || hasGap ? "incompatible"
+            : pending.Length > 0 ? "pending" : "upToDate";
+
+        return new DbVersionStatus
         {
-            if (string.Compare(appliedMigrationId, entry.MigrationId, StringComparison.Ordinal) >= 0)
-            {
-                return entry.Db;
-            }
-        }
-
-        return "unknown";
+            Target = _static.DbVersionTarget,
+            Applied = latestApplied ?? "unknown",
+            AppliedMigrationId = latestApplied,
+            NeedsMigration = pending.Length > 0,
+            HistoryAvailable = true,
+            Status = status,
+            PendingMigrationIds = pending,
+            UnknownMigrationIds = unknown,
+        };
     }
 
-    private string? ResolveMigrationIdForVersion(string dbVersion)
+    private static StaticVersionInfo LoadStaticVersionInfo(string dbTarget)
     {
-        return _versionMap.Versions.FirstOrDefault(v => v.Db == dbVersion)?.MigrationId;
+        // testhost 等外部入口没有产品元数据时回退到本程序集，避免读出测试宿主版本。
+        Assembly? entryAssembly = Assembly.GetEntryAssembly();
+        Assembly asm = entryAssembly is not null && entryAssembly.GetCustomAttributes<AssemblyMetadataAttribute>()
+            .Any(a => a.Key == "ProductVersion" && !string.IsNullOrWhiteSpace(a.Value))
+            ? entryAssembly : typeof(VersionInfoProvider).Assembly;
+        return LoadStaticVersionInfo(asm, dbTarget);
     }
 
-    private static StaticVersionInfo LoadStaticVersionInfo()
+    /// <summary>读取同一程序集中的主版本与构建诊断信息</summary>
+    internal static StaticVersionInfo LoadStaticVersionInfo(Assembly asm, string dbTarget)
     {
-        // entry assembly 在 Launcher 是 PersonalMediaManager（exe），在测试夹具是 testhost；
-        // 回退到本程序集保证测试环境不空。所有 dll 的 metadata 在同一次构建产物中一致。
-        Assembly asm = Assembly.GetEntryAssembly() ?? typeof(VersionInfoProvider).Assembly;
         Dictionary<string, string> meta = asm.GetCustomAttributes<AssemblyMetadataAttribute>()
             .Where(a => !string.IsNullOrEmpty(a.Key))
             .ToDictionary(a => a.Key!, a => a.Value ?? string.Empty, StringComparer.Ordinal);
 
         string product = meta.GetValueOrDefault("ProductVersion", "0.0.0");
-        string dbTarget = meta.GetValueOrDefault("DbVersion", "0.0.0");
-        string frontend = meta.GetValueOrDefault("FrontendVersion", "0.0.0");
 
         DateTimeOffset? buildTime = null;
         if (meta.TryGetValue("BuildTimeUtc", out string? buildStr)
@@ -165,54 +144,13 @@ public sealed class VersionInfoProvider : IVersionInfoProvider
         return new StaticVersionInfo
         {
             Product = product,
-            Backend = informational,
-            Frontend = frontend,
+            Backend = product,
+            Frontend = product,
             DbVersionTarget = dbTarget,
             Commit = commit,
             Dirty = dirty,
             BuildTime = buildTime,
             Framework = RuntimeInformation.FrameworkDescription,
         };
-    }
-
-    private static VersionMapData LoadVersionMap(ILogger logger)
-    {
-        try
-        {
-            Assembly asm = typeof(VersionInfoProvider).Assembly;
-            using Stream? stream = asm.GetManifestResourceStream(VersionMapResourceName);
-            if (stream is null)
-            {
-                logger.LogWarning("version-map.json 资源未嵌入（资源名 {Name}），applied 版本号将一律返回 unknown",
-                    VersionMapResourceName);
-                return VersionMapData.Empty;
-            }
-            using StreamReader reader = new(stream);
-            string content = reader.ReadToEnd();
-            VersionMapData? data = JsonSerializer.Deserialize<VersionMapData>(content, JsonOptions);
-            return data ?? VersionMapData.Empty;
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "解析 version-map.json 失败，applied 版本号将一律返回 unknown");
-            return VersionMapData.Empty;
-        }
-    }
-
-    private sealed class VersionMapData
-    {
-        public static readonly VersionMapData Empty = new();
-
-        [JsonPropertyName("versions")]
-        public List<VersionMapEntry> Versions { get; init; } = [];
-    }
-
-    private sealed class VersionMapEntry
-    {
-        [JsonPropertyName("db")]
-        public string Db { get; init; } = string.Empty;
-
-        [JsonPropertyName("migrationId")]
-        public string MigrationId { get; init; } = string.Empty;
     }
 }

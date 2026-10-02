@@ -26,6 +26,10 @@ import PmmIcon from '@/components/PmmIcon.vue';
 import PmmPoster from '@/components/PmmPoster.vue';
 import PmmPageHeader from '@/components/PmmPageHeader.vue';
 import { SOURCE_MAP, timeAgo, fmtTime } from '@/utils/format';
+import {
+  findTmdbCandidate, mergeTmdbCandidates, normalizeTmdbMediaType, sameTmdbCandidate,
+  tmdbCandidateIdentity, tmdbCandidateKey, upsertTmdbCandidate,
+} from '@/utils/tmdbCandidateIdentity';
 
 const loading = ref(false);
 const allItems = ref([]); // 后端原始 ReviewItemResponse[]
@@ -50,7 +54,7 @@ const batchProgressPercent = computed(() =>
 
 /** 入队原因 → 标签元数据（label + ElTag type） */
 const REASON_VARIANT = {
-  TmdbMultiCandidate: { label: 'TMDB 多候选', type: 'warning' },
+  TmdbMultiCandidate: { label: 'TMDB 候选待确认', type: 'warning' },
   TmdbZeroResult: { label: 'TMDB 零结果', type: 'danger' },
   AiLowConfidence: { label: 'AI 低置信度', type: 'info' },
   CategoryUnresolved: { label: '分类未定', type: 'warning' },
@@ -85,16 +89,11 @@ function parseInfo(raw) {
 
 /** 候选优先推断默认 mediaType（候选 → parsedInfo.type → 默认电影），统一返回 'Movie' | 'Tv' */
 function inferMediaType(item) {
-  const m = item?.tmdbCandidates?.[0]?.mediaType;
-  if (m) return normalizeMediaType(m);
+  const m = normalizeTmdbMediaType(item?.tmdbCandidates?.[0]?.mediaType);
+  if (m) return m;
   const t = parseInfo(item?.parsedInfo).type;
   if (t === 'tv' || t === 'Tv') return 'Tv';
   return 'Movie';
-}
-
-/** 归一 mediaType 为 'Movie' | 'Tv'（后端候选 / 搜索结果可能返回小写 movie/tv） */
-function normalizeMediaType(m) {
-  return String(m || '').toLowerCase() === 'tv' ? 'Tv' : 'Movie';
 }
 
 /** 文件名去扩展名（保留主名）；无扩展名原样返回 */
@@ -294,6 +293,7 @@ async function onBatchIgnore() {
 const openGroup = ref(null);
 const groupForm = ref({ tmdbId: null, mediaType: 'Movie', categoryId: null });
 const groupCandidates = ref([]); // 组内去重并集候选（可被搜索 / 填 ID 灌入）
+const hasInvalidCandidates = ref(false);
 const episodeEdits = ref({}); // { [itemId]: { checked, season, episode, episodeEnd } }
 
 // 搜索 / 填 ID（默认折叠）
@@ -334,15 +334,15 @@ function openGroupDrawer(g) {
   openGroup.value = g;
   const first = g.items[0];
   const info = parseInfo(first.parsedInfo);
-  const mt = inferMediaType(first);
-
-  // 去重并集候选（拷贝一份避免直接改原始 item）
-  const seen = new Map();
-  for (const it of g.items) for (const c of (it.tmdbCandidates || [])) if (!seen.has(c.tmdbId)) seen.set(c.tmdbId, { ...c });
-  groupCandidates.value = [...seen.values()];
+  // TMDB 的电影与剧集可共用数字 ID，候选并集和初选必须同时带上类型。
+  const candidates = g.items.flatMap((item) => item.tmdbCandidates || []);
+  groupCandidates.value = mergeTmdbCandidates(candidates);
+  hasInvalidCandidates.value = candidates.some((candidate) => !tmdbCandidateIdentity(candidate));
+  const initial = groupCandidates.value[0];
+  const mt = initial?.mediaType ?? inferMediaType(first);
 
   groupForm.value = {
-    tmdbId: groupCandidates.value[0]?.tmdbId ?? null,
+    tmdbId: initial?.tmdbId ?? null,
     mediaType: mt,
     categoryId: defaultCategoryId(mt),
   };
@@ -379,16 +379,18 @@ const openGroupReasons = computed(() =>
 
 /** 选定候选 → 同步媒体类型 */
 function pickCandidate(c) {
-  groupForm.value.tmdbId = c.tmdbId;
-  groupForm.value.mediaType = normalizeMediaType(c.mediaType);
+  const identity = tmdbCandidateIdentity(c);
+  if (!identity) return ElMessage.warning('候选缺少有效的媒体类型或 ID，请重新搜索或指定类型后查询 ID');
+  Object.assign(groupForm.value, identity);
 }
 
 const selectedCandidate = computed(() =>
-  groupCandidates.value.find((c) => c.tmdbId === groupForm.value.tmdbId) ?? null);
+  findTmdbCandidate(groupCandidates.value, groupForm.value));
 
 // ---------- 季数 / 绝对集号换算 ----------
 
 const selectedSeasonCount = computed(() => {
+  if (groupForm.value.mediaType !== 'Tv') return null;
   const cand = selectedCandidate.value;
   if (cand?.totalSeasons != null) return cand.totalSeasons;
   const id = groupForm.value.tmdbId;
@@ -545,9 +547,11 @@ async function onTmdbSearch() {
       type: searchForm.value.type,
       year: searchForm.value.year ?? undefined,
     });
-    searchResults.value = res?.items || [];
+    const results = res?.items || [];
+    searchResults.value = mergeTmdbCandidates(results);
     searched.value = true;
-    if (!searchResults.value.length) ElMessage.info('没搜到匹配结果，换个关键词或年份再试');
+    if (results.some((candidate) => !tmdbCandidateIdentity(candidate))) ElMessage.warning('部分结果缺少有效的媒体类型或 ID，未列入可选结果，请重新查询');
+    else if (!searchResults.value.length) ElMessage.info('没搜到匹配结果，换个关键词或年份再试');
   } finally {
     searching.value = false;
   }
@@ -561,7 +565,7 @@ async function onTmdbIdQuery() {
   idQuerying.value = true;
   try {
     const d = await api.review.tmdbDetail(itemId, { tmdbId, mediaType: idForm.value.type });
-    searchResults.value = [{
+    searchResults.value = mergeTmdbCandidates([{
       tmdbId: d.tmdbId,
       mediaType: d.mediaType,
       title: d.title,
@@ -570,8 +574,9 @@ async function onTmdbIdQuery() {
       posterUrl: d.posterUrl,
       originCountry: d.originCountry,
       totalSeasons: d.totalSeasons,
-    }];
+    }]);
     searched.value = true;
+    if (!searchResults.value.length) ElMessage.warning('TMDB 返回的作品缺少有效的媒体类型或 ID，请重新查询');
   } finally {
     idQuerying.value = false;
   }
@@ -579,24 +584,16 @@ async function onTmdbIdQuery() {
 
 /** 把一个 TMDB 结果灌入候选并选中（前端态，确认时携带 tmdbId 落库） */
 function adoptCandidate(r) {
-  const mediaType = normalizeMediaType(r.mediaType);
-  const exist = groupCandidates.value.find((c) => c.tmdbId === r.tmdbId);
-  const card = {
-    tmdbId: r.tmdbId,
-    mediaType,
-    title: r.title ?? exist?.title ?? null,
-    originalTitle: r.originalTitle ?? exist?.originalTitle ?? null,
-    year: r.year ?? exist?.year ?? null,
-    posterUrl: r.posterUrl ?? exist?.posterUrl ?? null,
-    totalSeasons: r.totalSeasons ?? exist?.totalSeasons ?? null,
-  };
-  if (exist) Object.assign(exist, card);
-  else groupCandidates.value.unshift(card);
-  groupForm.value.tmdbId = r.tmdbId;
-  groupForm.value.mediaType = mediaType;
+  const card = upsertTmdbCandidate(groupCandidates.value, r);
+  if (!card) {
+    ElMessage.warning('候选缺少有效的媒体类型或 ID，请重新搜索或指定类型后查询 ID');
+    return false;
+  }
+  pickCandidate(card);
+  return true;
 }
 function onPickSearchResult(r) {
-  adoptCandidate(r);
+  if (!adoptCandidate(r)) return;
   searchPanelOpen.value = false;
   ElMessage.success('已选用该作品');
 }
@@ -743,6 +740,7 @@ function buildPreviewItems() {
   const { tmdbId, mediaType, categoryId } = groupForm.value;
   if (!tmdbId || !categoryId) return [];
   const picked = selectedCandidate.value;
+  if (!picked) return [];
   const isTv = mediaType === 'Tv';
   const out = [];
   for (const it of checkedItems.value) {
@@ -814,6 +812,7 @@ async function runBatchConfirmWithProgress(items) {
 /** 确认归档可用：作品 + 分类已定，且至少一个勾选行（剧集还要季集齐全） */
 const canConfirm = computed(() => {
   if (!groupForm.value.tmdbId || !groupForm.value.categoryId) return false;
+  if (!selectedCandidate.value) return false;
   if (!checkedCount.value) return false;
   if (groupForm.value.mediaType !== 'Tv') return true;
   return checkedItems.value.some((it) => {
@@ -831,6 +830,7 @@ async function onConfirmGroup() {
   if (!categoryId) return ElMessage.warning('请选择归档分类');
   const isTv = mediaType === 'Tv';
   const picked = selectedCandidate.value;
+  if (!picked) return ElMessage.warning('请先选择媒体类型与 ID 完整的 TMDB 作品');
 
   const items = [];
   const skipped = [];
@@ -1070,9 +1070,9 @@ onUnmounted(() => { if (previewTimer) clearTimeout(previewTimer); });
             <div v-if="groupCandidates.length" class="cand-grid">
               <div
                 v-for="c in groupCandidates"
-                :key="c.tmdbId"
+                :key="tmdbCandidateKey(c)"
                 class="card cand-card"
-                :class="{ active: groupForm.tmdbId === c.tmdbId }"
+                :class="{ active: sameTmdbCandidate(groupForm, c) }"
                 @click="pickCandidate(c)"
               >
                 <PmmPoster :title="c.title" :year="c.year" :src="c.posterUrl" size="sm" :show-text="false" />
@@ -1082,17 +1082,18 @@ onUnmounted(() => { if (previewTimer) clearTimeout(previewTimer); });
                   </div>
                   <div v-if="c.originalTitle && c.originalTitle !== c.title" class="muted small">原名：{{ c.originalTitle }}</div>
                   <div class="muted xs">
-                    TmdbId {{ c.tmdbId }} · {{ normalizeMediaType(c.mediaType) === 'Tv' ? '剧集' : '电影' }}<span v-if="c.totalSeasons"> · {{ c.totalSeasons }} 季</span>
+                    TmdbId {{ c.tmdbId }} · {{ c.mediaType === 'Tv' ? '剧集' : '电影' }}<span v-if="c.totalSeasons"> · {{ c.totalSeasons }} 季</span>
                   </div>
                 </div>
-                <div class="cand-pick" :class="{ on: groupForm.tmdbId === c.tmdbId }">
-                  <PmmIcon v-if="groupForm.tmdbId === c.tmdbId" name="check" :size="13" :stroke="2.5" />
+                <div class="cand-pick" :class="{ on: sameTmdbCandidate(groupForm, c) }">
+                  <PmmIcon v-if="sameTmdbCandidate(groupForm, c)" name="check" :size="13" :stroke="2.5" />
                 </div>
               </div>
             </div>
             <div v-else class="empty-cands muted small">
               <PmmIcon name="warning" :size="16" /> TMDB 没有返回候选，请用下方手动搜索 / 填 ID。
             </div>
+            <p v-if="hasInvalidCandidates" class="muted small">部分旧候选缺少有效的媒体类型或 ID，已从可选列表排除；请手动搜索或指定类型后查询 ID。</p>
 
             <!-- 折叠：手动搜索 / 填 ID -->
             <button class="link-toggle" @click="searchPanelOpen = !searchPanelOpen">
@@ -1128,16 +1129,16 @@ onUnmounted(() => { if (previewTimer) clearTimeout(previewTimer); });
               <div v-if="searchResults.length" class="search-results">
                 <div
                   v-for="r in searchResults"
-                  :key="`${r.mediaType}-${r.tmdbId}`"
+                  :key="tmdbCandidateKey(r)"
                   class="card cand-card sr-card"
-                  :class="{ active: groupForm.tmdbId === r.tmdbId }"
+                  :class="{ active: sameTmdbCandidate(groupForm, r) }"
                 >
                   <PmmPoster :title="r.title" :year="r.year" :src="r.posterUrl" size="sm" :show-text="false" />
                   <div class="cand-meta">
                     <div class="cand-title">{{ r.title || '(无标题)' }}<span v-if="r.year" class="muted small"> ({{ r.year }})</span></div>
                     <div v-if="r.originalTitle && r.originalTitle !== r.title" class="muted small">原名：{{ r.originalTitle }}</div>
                     <div class="muted xs">
-                      TmdbId {{ r.tmdbId }} · {{ r.mediaType === 'tv' ? '剧集' : '电影' }}<span v-if="r.originCountry?.length"> · {{ r.originCountry.join('/') }}</span>
+                      TmdbId {{ r.tmdbId }} · {{ r.mediaType === 'Tv' ? '剧集' : '电影' }}<span v-if="r.originCountry?.length"> · {{ r.originCountry.join('/') }}</span>
                     </div>
                   </div>
                   <button class="btn btn-primary btn-sm" @click="onPickSearchResult(r)">选用</button>

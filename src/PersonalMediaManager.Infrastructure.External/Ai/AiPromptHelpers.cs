@@ -150,7 +150,9 @@ internal static partial class AiPromptHelpers
     }
 
     /// <summary>把 AI 文本里的 JSON 反解到 AiParseResult；容忍 Markdown 代码块包裹</summary>
-    public static AiParseResult ParseContent(string content)
+    public static AiParseResult ParseContent(string content) => ParseContentCore(content, allowUnknown: false);
+
+    private static AiParseResult ParseContentCore(string content, bool allowUnknown, bool preserveEpisodicFields = false)
     {
         string json = StripMarkdownFences(content).Trim();
         if (string.IsNullOrWhiteSpace(json))
@@ -158,6 +160,7 @@ internal static partial class AiPromptHelpers
 
         try
         {
+            RejectDuplicateProperties(json);
             using JsonDocument doc = JsonDocument.Parse(json);
             JsonElement root = doc.RootElement;
             string? title = GetStr(root, "title");
@@ -169,9 +172,9 @@ internal static partial class AiPromptHelpers
             double confidence = TryGetDouble(root, "confidence") ?? 0;
             IReadOnlyList<string>? aliases = TryGetSearchAliases(root, title);
 
-            if (string.IsNullOrWhiteSpace(title))
+            if (string.IsNullOrWhiteSpace(title) && !allowUnknown)
                 throw new AiProviderLogicalException("AI 返回缺少 title");
-            if (string.IsNullOrWhiteSpace(type) || (type != "movie" && type != "tv"))
+            if (type != "movie" && type != "tv" && !(allowUnknown && type == "unknown"))
                 throw new AiProviderLogicalException($"AI 返回 type 非法：{type ?? "<null>"}");
 
             // 数值范围守护：AI 可能输出越界值（season=2024 / episode=-1 / episode=99999 等），
@@ -183,8 +186,8 @@ internal static partial class AiPromptHelpers
             episodeEnd = NullIfOutOfRange(episodeEnd, 0, 9999);
             year = NullIfOutOfRange(year, 1900, 2100);
 
-            // movie 类型清空季集字段（AI 可能错填）；episodeEnd 必须 ≥ episode
-            if (type == "movie")
+            // 任务契约先保留季集声明供证据守护判断类型冲突；旧接口保持清空行为。
+            if (type == "movie" && !preserveEpisodicFields)
             {
                 season = null;
                 episode = null;
@@ -195,7 +198,8 @@ internal static partial class AiPromptHelpers
                 episodeEnd = null; // 范围非法时丢弃 end，保留单集 start
             }
 
-            return new AiParseResult(title!, year, type, season, episode, episodeEnd, Math.Clamp(confidence, 0, 1), aliases);
+            return new AiParseResult(title ?? "", year, type!, season, episode, episodeEnd,
+                double.IsFinite(confidence) ? Math.Clamp(confidence, 0, 1) : 0, aliases);
         }
         catch (JsonException ex)
         {
@@ -224,29 +228,8 @@ internal static partial class AiPromptHelpers
     /// <summary>年份是否以独立数字形态出现在文件名 / 路径段 / 父目录名任一处</summary>
     private static bool YearAppearsInSource(int year, AiParseRequest request)
     {
-        string digits = year.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        if (AppearsAsStandaloneNumber(request.FileName, digits)) return true;
-        if (request.RelativeSegments is { } segments)
-            foreach (string seg in segments)
-                if (AppearsAsStandaloneNumber(seg, digits)) return true;
-        return AppearsAsStandaloneNumber(request.ParentFolderName, digits);
-    }
-
-    /// <summary>digits 是否作为「前后紧邻均非数字」的独立数字段出现在 text 中（防 119952 命中 1995）</summary>
-    private static bool AppearsAsStandaloneNumber(string? text, string digits)
-    {
-        if (string.IsNullOrEmpty(text)) return false;
-        int from = 0;
-        while (true)
-        {
-            int idx = text.IndexOf(digits, from, StringComparison.Ordinal);
-            if (idx < 0) return false;
-            bool leftBoundary = idx == 0 || !char.IsDigit(text[idx - 1]);
-            int after = idx + digits.Length;
-            bool rightBoundary = after >= text.Length || !char.IsDigit(text[after]);
-            if (leftBoundary && rightBoundary) return true;
-            from = idx + 1;
-        }
+        return MediaYearEvidence.ContainsYear(new[] { request.FileName, request.ParentFolderName ?? "" }
+            .Concat(request.RelativeSegments ?? []), year);
     }
 
     public static string Truncate(string s, int max) => s.Length <= max ? s : s[..max];

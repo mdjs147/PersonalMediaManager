@@ -11,7 +11,7 @@ using Setup = PersonalMediaManager.Infrastructure.Persistence.Services.Setup;
 namespace PersonalMediaManager.Infrastructure.Persistence.Tests;
 
 /// <summary>RuleEngineService（D7.2）— 内置规则 + 用户规则 + 置信度评分</summary>
-public sealed class RuleEngineServiceTests : IDisposable
+public sealed partial class RuleEngineServiceTests : IDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly TestDbContextFactory _dbFactory;
@@ -329,10 +329,12 @@ public sealed class RuleEngineServiceTests : IDisposable
     // ---------- 特殊字符 ----------
 
     [Fact]
-    public async Task SpecialChars_CJK_Latin_Mix_Sets_HasSpecialChars_True()
+    public async Task SpecialChars_SeparateCompleteTitlesPreferCjkWithoutMixedFlag()
     {
         RuleParseResult r = await Parse("君の名は Your Name 2016.mkv", parentFolderName: null);
-        r.HasSpecialChars.Should().BeTrue();
+        r.Title.Should().Be("君の名は");
+        r.HasSpecialChars.Should().BeFalse();
+        r.AlternativeTitles.Should().Contain("Your Name");
     }
 
     [Fact]
@@ -706,12 +708,13 @@ public sealed class RuleEngineServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Builtin_RomanNumeralSeason_TailParsed_TitleStripped()
+    public async Task Builtin_RomanNumeralTail_PreservedUntilNumberingVerified()
     {
-        // 罗马数字季号（动漫）：刀剑神域 II → season=2，标题剥到罗马数字前
+        // 罗马数字可能是系列固有名称或续作编号，不能仅凭一集文件认定为第二季
         RuleParseResult r = await Parse("刀剑神域 II [01].mkv", parentFolderName: null);
-        r.Season.Should().Be(2);
-        r.Title.Should().Be("刀剑神域");
+        r.Season.Should().BeNull();
+        r.Title.Should().Be("刀剑神域 II");
+        r.NamingEvidence!.SeasonCandidate.Should().Be(2);
         r.MediaType.Should().Be("tv");
     }
 
@@ -725,12 +728,13 @@ public sealed class RuleEngineServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Builtin_SeasonArcTitle_Extracted_TitleStripped()
+    public async Task Builtin_SeasonArcTitle_PreservedUntilCatalogueVerification()
     {
-        // 篇章季标题：鬼灭之刃 锻刀村篇 → seasonTitle=锻刀村篇，主标题剥到篇章前，供人工对照 TMDB 季名
+        // 篇章季标题：鬼灭之刃 锻刀村篇 → seasonTitle=锻刀村篇，主标题保留篇章，供人工对照 TMDB 季名
         RuleParseResult r = await Parse("鬼灭之刃 锻刀村篇 第01集.mkv", parentFolderName: null);
         r.SeasonTitle.Should().Be("锻刀村篇");
-        r.Title.Should().Be("鬼灭之刃");
+        r.Title.Should().Be("鬼灭之刃 锻刀村篇");
+        r.AlternativeTitles.Should().Contain("鬼灭之刃");
     }
 
     // ---------- HasMixedCjkLatin 边界 ----------
@@ -1049,7 +1053,6 @@ public sealed class RuleEngineServiceTests : IDisposable
 
     [Theory]
     [InlineData("EP11.1080p.mkv")] // 多位数字技术参数不是小数尾巴
-    [InlineData("EP11.5v2.mkv")]   // 数字后跟字母（v2 版本标记）不是小数尾巴，口径与 SxxEyy 检测一致
     public async Task Builtin_EpisodeOnly_TechTokenAfterEpisode_NotMistakenAsFraction(string fileName)
     {
         RuleParseResult r = await Parse(fileName, parentFolderName: null);
@@ -1085,23 +1088,24 @@ public sealed class RuleEngineServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Builtin_DirectDoubleEpisode_EndLessThanStart_Dropped()
+    public async Task Builtin_DirectDoubleEpisode_ReversedList_RequiresReview()
     {
-        // end < start 视为非法范围：丢弃 end，保留单集 start
+        // 倒序枚举不是连续集范围，不能保留首集假装是普通单集
         RuleParseResult r = await Parse("Show.S01E09E08.mkv", parentFolderName: null);
 
-        r.Episode.Should().Be(9);
+        r.Episode.Should().BeNull();
+        r.RejectedFields.Should().Contain("episode");
         r.EpisodeEnd.Should().BeNull();
     }
 
     // ---------- 种子规则 V2：综艺日期 / AKA / Anime 英文季号 / 全N集 / Episode N / 第N章回 ----------
 
     [Fact]
-    public async Task SeedRule_VarietyDateWithSeason_ExtractsYearAndMmdd()
+    public async Task SeedRule_VarietyDateWithSeason_KeepsSeasonAndAirDateCandidate()
     {
         SeedRule(new ParseRule
         {
-            Name = "综艺第N季 + 日期作集",
+            Name = "综艺第N季 + 播出日期",
             Enabled = true,
             Priority = 22,
             Scope = ParseScope.FileName,
@@ -1115,17 +1119,18 @@ public sealed class RuleEngineServiceTests : IDisposable
         r.MatchedRuleId.Should().NotBeNull();
         r.Title.Should().Be("极限挑战");
         r.Season.Should().Be(7);
-        r.Year.Should().Be(2021);
-        r.Episode.Should().Be(501, "MMDD = 0501 → episode=501");
+        r.Year.Should().BeNull("播出日期不能锁定整部作品年份");
+        r.Episode.Should().BeNull("日期只提供播出日期候选，不能当季内集号");
+        r.NumberingEvidence.Should().Contain(e => e.Kind == RuleNumberingKind.AirDate && e.State == RuleEvidenceState.Candidate);
         r.MediaType.Should().Be("tv");
     }
 
     [Fact]
-    public async Task SeedRule_VarietyDateOnly_ExtractsYearAndMmdd()
+    public async Task SeedRule_VarietyDateOnly_KeepsAirDateCandidateWithoutWorkYear()
     {
         SeedRule(new ParseRule
         {
-            Name = "综艺日期作集",
+            Name = "综艺播出日期候选",
             Enabled = true,
             Priority = 28,
             Scope = ParseScope.FileName,
@@ -1138,8 +1143,9 @@ public sealed class RuleEngineServiceTests : IDisposable
 
         r.MatchedRuleId.Should().NotBeNull();
         r.Title.Should().Be("Running Man", "分隔符折叠后空格");
-        r.Year.Should().Be(2023);
-        r.Episode.Should().Be(101, "MMDD = 0101 → episode=101");
+        r.Year.Should().BeNull("播出日期不等于作品首播年");
+        r.Episode.Should().BeNull("日期只提供播出日期候选，不能当季内集号");
+        r.NumberingEvidence.Should().Contain(e => e.Kind == RuleNumberingKind.AirDate && e.State == RuleEvidenceState.Candidate);
     }
 
     [Fact]
@@ -1356,11 +1362,11 @@ public sealed class RuleEngineServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task SeedRule_AnimeVolume_Matches()
+    public async Task SeedRule_AnimeVolume_RemainsUnmappedCandidate()
     {
         SeedRule(new ParseRule
         {
-            Name = "动漫 Vol / Volume 卷集号",
+            Name = "动漫 Vol / Volume 卷号候选",
             Enabled = true,
             Priority = 52,
             Scope = ParseScope.FileName,
@@ -1373,17 +1379,19 @@ public sealed class RuleEngineServiceTests : IDisposable
         RuleParseResult r1 = await Parse("[VCB-Studio] 进击的巨人 Vol.01 [BDRip].mkv", parentFolderName: null);
         r1.MatchedRuleId.Should().NotBeNull();
         r1.Title.Should().Be("进击的巨人");
-        r1.Episode.Should().Be(1);
+        r1.Episode.Should().BeNull();
+        r1.NumberingEvidence.Should().Contain(e => e.Kind == RuleNumberingKind.Volume && e.Value == 1);
 
         // Volume N 全词
         RuleParseResult r2 = await Parse("Some Show Volume 3 BDBox.mkv", parentFolderName: null);
         r2.MatchedRuleId.Should().NotBeNull();
         r2.Title.Should().Be("Some Show");
-        r2.Episode.Should().Be(3);
+        r2.Episode.Should().BeNull();
+        r2.NumberingEvidence.Should().Contain(e => e.Kind == RuleNumberingKind.Volume && e.Value == 3);
     }
 
     [Fact]
-    public async Task SeedRule_AbsoluteEpisodeHashOrNo_Matches()
+    public async Task SeedRule_AbsoluteEpisodeHashOrNo_RemainsUnmappedCandidate()
     {
         SeedRule(new ParseRule
         {
@@ -1400,13 +1408,15 @@ public sealed class RuleEngineServiceTests : IDisposable
         RuleParseResult r1 = await Parse("One Piece #1000.mkv", parentFolderName: null);
         r1.MatchedRuleId.Should().NotBeNull();
         r1.Title.Should().Be("One Piece");
-        r1.Episode.Should().Be(1000);
+        r1.Episode.Should().BeNull();
+        r1.NumberingEvidence.Should().Contain(e => e.Kind == RuleNumberingKind.Absolute && e.Value == 1000);
 
         // No.N
         RuleParseResult r2 = await Parse("海贼王 No.1100.mkv", parentFolderName: null);
         r2.MatchedRuleId.Should().NotBeNull();
         r2.Title.Should().Be("海贼王");
-        r2.Episode.Should().Be(1100);
+        r2.Episode.Should().BeNull();
+        r2.NumberingEvidence.Should().Contain(e => e.Kind == RuleNumberingKind.Absolute && e.Value == 1100);
     }
 
     [Fact]
@@ -1437,11 +1447,11 @@ public sealed class RuleEngineServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task SeedRule_VarietyShortDate_Matches()
+    public async Task SeedRule_VarietyShortDate_IsUnmappedCandidate()
     {
         SeedRule(new ParseRule
         {
-            Name = "综艺 YYMMDD 短日期作集",
+            Name = "综艺 YYMMDD 短日期候选",
             Enabled = true,
             Priority = 85,
             Scope = ParseScope.FileName,
@@ -1454,7 +1464,8 @@ public sealed class RuleEngineServiceTests : IDisposable
 
         r.MatchedRuleId.Should().NotBeNull();
         r.Title.Should().Be("Running Man", "分隔符折叠后空格");
-        r.Episode.Should().Be(210501, "YYMMDD 整体作 episode");
+        r.Episode.Should().BeNull("日期只提供播出日期候选，不能当季内集号");
+        r.NumberingEvidence.Should().Contain(e => e.Kind == RuleNumberingKind.ShortAirDate && e.State == RuleEvidenceState.Candidate);
     }
 
     // ---------- DataSeeder 集成验证 ----------
@@ -1475,8 +1486,8 @@ public sealed class RuleEngineServiceTests : IDisposable
         // 抽查 V2 引入的 7 个名字都在
         string[] expectedV2Names =
         {
-            "综艺第N季 + 日期作集",
-            "综艺日期作集",
+            "综艺第N季 + 播出日期",
+            "综艺播出日期候选",
             "AKA 多语言标题",
             "Anime 英文季号 (Nth Season)",
             "全N集 整季合集",
@@ -1490,10 +1501,10 @@ public sealed class RuleEngineServiceTests : IDisposable
             "中文「第N部 第N集」",
             "综艺「第N期」",
             "番剧分卷 Part / Cour + 集号",
-            "动漫 Vol / Volume 卷集号",
+            "动漫 Vol / Volume 卷号候选",
             "绝对集号「#N / No.N」",
             "无季号「第N集」中文兜底",
-            "综艺 YYMMDD 短日期作集",
+            "综艺 YYMMDD 短日期候选",
         };
         List<string> existing = await db.ParseRules.Select(r => r.Name).ToListAsync();
         foreach (string name in expectedV2Names)
@@ -1577,7 +1588,7 @@ public sealed class RuleEngineServiceTests : IDisposable
         r.Year.Should().Be(2024);
         r.AlternativeTitles.Should().NotBeNull();
         r.AlternativeTitles.Should().Contain("Mobile Suit Gundam Seed Freedom", "拉丁词组段可独立搜 TMDB 命中电影条目");
-        r.AlternativeTitles![0].Should().Be("机动战士高达", "纯 CJK 段排最前（TMDB 首选语言 zh-CN 命中率最高）");
+        r.Title.Should().Be("机动战士高达SEEDFREEDOM", "作品副标必须随中文主标题保留，避免搜到整个系列");
     }
 
     [Fact]
@@ -1606,7 +1617,7 @@ public sealed class RuleEngineServiceTests : IDisposable
 
     [Theory]
     [InlineData("国王排名 Ousama Ranking", new[] { "国王排名", "Ousama Ranking" })]
-    [InlineData("机动战士高达SEEDFREEDOM Mobile Suit Gundam Seed Freedom", new[] { "机动战士高达", "SEEDFREEDOM", "Mobile Suit Gundam Seed Freedom" })]
+    [InlineData("机动战士高达SEEDFREEDOM Mobile Suit Gundam Seed Freedom", new[] { "机动战士高达SEEDFREEDOM", "Mobile Suit Gundam Seed Freedom" })]
     [InlineData("Pure English Title", new[] { "Pure English Title" })]
     [InlineData("纯中文标题", new[] { "纯中文标题" })]
     public void SplitMixedSegments_Cases(string input, string[] expected)

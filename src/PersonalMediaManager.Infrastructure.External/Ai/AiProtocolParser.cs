@@ -1,3 +1,8 @@
+using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using PersonalMediaManager.Application.Common.Diagnostics;
 using PersonalMediaManager.Application.Contracts;
 using PersonalMediaManager.Domain.Enums;
 
@@ -31,26 +36,61 @@ internal sealed class AiProtocolParser : IAiParser
         if (!_protocols.TryGetValue(protocol, out IAiProtocol? impl))
             throw new AiProviderLogicalException($"无 IAiProtocol 实现：{protocol}");
 
-        // 请求原文：仅 user 提示词（system 恒定不入库省体积）；失败路径也补挂供诊断
+        // 诊断同时捕获实际发送的系统与用户提示词；旧审计契约继续只返回用户提示词。
         AiPromptHelpers.PreparedTaskPrompt? prepared = request.Context is null ? null : AiPromptHelpers.PrepareTaskPrompt(request);
         string userPrompt = prepared?.UserPrompt ?? AiPromptHelpers.BuildUserPrompt(request);
         List<AiChatMessage> messages =
         [
-            new("system", prepared is null ? AiPromptHelpers.SystemPrompt : AiPromptHelpers.TaskSystemPrompt),
+            new("system", prepared is null ? AiPromptHelpers.SystemPrompt : AiPromptHelpers.GetTaskSystemPrompt(prepared.Request)),
             new("user", userPrompt),
         ];
+
+        int maxTokens = request.Context is { SchemaVersion: 2, OutputDetail: AiOutputDetail.Compact } ? 512 : 1024;
+        AiProtocolRequest protocolRequest = new(endpoint, messages, JsonMode: endpoint.StructuredJson,
+            Temperature: 0, MaxTokens: maxTokens);
+        using IDisposable? diagnosticScope = ParseDiagnostics.CurrentRunId is null ? ParseDiagnostics.Begin("ai_protocol") : null;
+        DiagnosticText systemText = Capture(messages[0].Content);
+        DiagnosticText userText = Capture(userPrompt);
+        string fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new
+        {
+            Protocol = protocol.ToString(), ModelSha256 = Capture(endpoint.Model).Sha256, protocolRequest.JsonMode,
+            protocolRequest.Temperature, protocolRequest.MaxTokens,
+            SystemSha256 = systemText.Sha256, UserSha256 = userText.Sha256,
+        }))));
+        Stopwatch elapsed = Stopwatch.StartNew();
+        ParseDiagnostics.Emit("ai.request", new
+        {
+            Protocol = protocol.ToString(), Model = Capture(endpoint.Model, includeAtStandard: true),
+            protocolRequest.JsonMode, protocolRequest.Temperature, protocolRequest.MaxTokens,
+            endpoint.TimeoutSeconds, Stream = false, Fingerprint = fingerprint,
+            System = systemText, User = userText,
+            Metadata = prepared?.Metadata,
+        });
 
         AiCompletion completion;
         try
         {
-            completion = await impl.CompleteAsync(
-                new AiProtocolRequest(endpoint, messages, JsonMode: endpoint.StructuredJson, Temperature: 0, MaxTokens: 1024),
-                ct);
+            completion = await impl.CompleteAsync(protocolRequest, ct);
+            ParseDiagnostics.Emit("ai.response", new
+            {
+                Fingerprint = fingerprint, ElapsedMs = elapsed.ElapsedMilliseconds,
+                completion.PromptTokens, completion.CompletionTokens, Response = Capture(completion.Text),
+            });
         }
-        catch (Exception ex) when (ex is AiProviderTransientException or AiProviderRateLimitException or AiProviderLogicalException or AiProviderModelRuntimeException)
+        catch (Exception ex)
         {
-            // 接口故障：补挂请求原文（响应体 + 状态码已由 AiHttpFailureMapper 在抛出前塞入 Exception.Data）
-            ex.Data[AiCallDiagnostics.RequestTextKey] = userPrompt;
+            // 不序列化异常对象或端点，避免凭据、请求头及私有推理进入诊断。
+            ex.Data[AiCallDiagnostics.RequestTextKey] = RemoveCredential(userPrompt);
+            if (ex.Data[AiCallDiagnostics.ResponseTextKey] is string body)
+                ex.Data[AiCallDiagnostics.ResponseTextKey] = RemoveCredential(body);
+            ParseDiagnostics.Emit(ex is OperationCanceledException ? "ai.cancelled" : "ai.failed", new
+            {
+                Fingerprint = fingerprint, ElapsedMs = elapsed.ElapsedMilliseconds,
+                ExceptionType = ex.GetType().Name, CallerCancelled = ct.IsCancellationRequested,
+                HttpStatus = ex.Data[AiCallDiagnostics.HttpStatusKey] as int?,
+                Error = Capture(ex.Message), Response = ex.Data.Contains(AiCallDiagnostics.ResponseTextKey)
+                    ? Capture(ex.Data[AiCallDiagnostics.ResponseTextKey] as string) : ParseDiagnostics.UnknownText(),
+            });
             throw;
         }
 
@@ -60,16 +100,37 @@ internal sealed class AiProtocolParser : IAiParser
                 : AiPromptHelpers.ParseTaskContent(completion.Text, prepared.Request);
             // 字面溯源守护：剔除 AI 凭作品名幻觉、文件名 / 路径里根本没写的年份（多版本作品会锚到最早版本，污染 TMDB 匹配）
             if (prepared is null) result = AiPromptHelpers.GroundYear(result, request);
-            return new AiParseOutcome(result, userPrompt, completion.Text, completion.PromptTokens, completion.CompletionTokens, prepared?.Metadata);
+            ParseDiagnostics.Emit("ai.parse_result", new
+            {
+                Fingerprint = fingerprint, ElapsedMs = elapsed.ElapsedMilliseconds, Parsed = true,
+                Title = Capture(result.Title), result.Year, result.MediaType, result.Season,
+                result.Episode, result.EpisodeEnd,
+                Confidence = double.IsFinite(result.Confidence) ? (double?)result.Confidence : null,
+                ConfidenceState = double.IsFinite(result.Confidence) ? "recorded" : "invalid",
+                result.SelectedCandidateId,
+                result.Abstained, result.RequiresIdentityVerification,
+                Validation = ParseDiagnostics.CaptureText(JsonSerializer.Serialize(result.Validation), includeAtStandard: true),
+            });
+            return new AiParseOutcome(result, RemoveCredential(userPrompt), RemoveCredential(completion.Text), completion.PromptTokens, completion.CompletionTokens, prepared?.Metadata);
         }
         catch (AiProviderLogicalException ex)
         {
             // JSON 反解失败：补挂请求 + 响应原文 + token，便于诊断「AI 究竟返回了什么」
-            ex.Data[AiCallDiagnostics.RequestTextKey] = userPrompt;
-            ex.Data[AiCallDiagnostics.ResponseTextKey] = completion.Text;
+            ex.Data[AiCallDiagnostics.RequestTextKey] = RemoveCredential(userPrompt);
+            ex.Data[AiCallDiagnostics.ResponseTextKey] = RemoveCredential(completion.Text);
             if (completion.PromptTokens is int pt) ex.Data[AiCallDiagnostics.PromptTokensKey] = pt;
             if (completion.CompletionTokens is int ctk) ex.Data[AiCallDiagnostics.CompletionTokensKey] = ctk;
+            ParseDiagnostics.Emit("ai.parse_result", new
+            {
+                Fingerprint = fingerprint, ElapsedMs = elapsed.ElapsedMilliseconds, Parsed = false,
+                ExceptionType = ex.GetType().Name, Error = Capture(ex.Message),
+            });
             throw;
         }
+
+        string? RemoveCredential(string? text) => string.IsNullOrEmpty(endpoint.ApiKey) ? text
+            : text?.Replace(endpoint.ApiKey, "[凭据已脱敏]", StringComparison.Ordinal);
+        DiagnosticText Capture(string? text, bool includeAtStandard = false) =>
+            ParseDiagnostics.CaptureText(RemoveCredential(text), includeAtStandard);
     }
 }

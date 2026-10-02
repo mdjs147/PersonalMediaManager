@@ -42,6 +42,17 @@ public sealed class SystemControllerTests : IDisposable
 
         JsonElement data = body.GetProperty("data");
         data.GetProperty("version").GetString().Should().NotBeNullOrWhiteSpace();
+        JsonElement versions = data.GetProperty("versionInfo");
+        versions.GetProperty("product").GetString().Should().Be(data.GetProperty("version").GetString());
+        versions.GetProperty("backend").GetString().Should().Be(versions.GetProperty("product").GetString());
+        versions.GetProperty("frontend").GetString().Should().Be(versions.GetProperty("product").GetString());
+        JsonElement database = versions.GetProperty("database");
+        database.GetProperty("target").GetString().Should().Be(database.GetProperty("appliedMigrationId").GetString())
+            .And.NotBeNullOrWhiteSpace();
+        database.GetProperty("status").GetString().Should().Be("upToDate");
+        database.GetProperty("historyAvailable").GetBoolean().Should().BeTrue();
+        database.GetProperty("pendingMigrationIds").GetArrayLength().Should().Be(0);
+        database.GetProperty("unknownMigrationIds").GetArrayLength().Should().Be(0);
         data.GetProperty("os").GetString().Should().NotBeNullOrWhiteSpace();
         data.GetProperty("runtimeVersion").GetString().Should().Contain(".NET");
         data.GetProperty("dataRoot").GetString().Should().Be(_factory.Paths.Root);

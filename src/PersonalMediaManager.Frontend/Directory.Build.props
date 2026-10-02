@@ -8,8 +8,8 @@
     （TargetFramework=net10.0 / Nullable / TreatWarningsAsErrors / LangVersion 等）；
     尤其 TargetFramework 会让 JS 项目被误判为 .NET 目标，污染 restore/build。
 
-    前端版本号注入由 vite.config.js 在构建期直接 readFileSync 根 Directory.Build.props
-    完成（不依赖 MSBuild 属性继承），故切断继承不影响前端版本号注入。
+    唯一主版本号由 vite.config.js 通过 scripts/product-version.js 读取根 Directory.Build.props
+    的 PmmProductVersion（不依赖 MSBuild 属性继承）；npm 清单版本由脚本自动同步。
   -->
 
 </Project>

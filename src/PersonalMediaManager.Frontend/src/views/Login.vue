@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import PmmBrandMark from '@/components/PmmBrandMark.vue';
 
-// 主版本号来自 vite.config define 注入（构建期烤进 bundle）；登录前没法调 API，必须用构建期常量
+// 唯一主版本号由 vite.config 从根 PmmProductVersion 注入，登录页无需等待 API。
 const productVersion = __APP_PRODUCT_VERSION__;
 
 const router = useRouter();

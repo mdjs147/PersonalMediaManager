@@ -1,3 +1,4 @@
+using PersonalMediaManager.Application.Common.Diagnostics;
 using System.Threading.Channels;
 
 namespace PersonalMediaManager.Application.Common;
@@ -6,7 +7,7 @@ namespace PersonalMediaManager.Application.Common;
 /// <param name="FullPath">绝对路径（FileSystemWatcher 给出的原样）</param>
 /// <param name="WatchFolderId">所属 WatchFolder 主键；为 0 表示手动扫描 / 全量扫描时来源未绑定</param>
 /// <param name="Source">入队来源（便于日志追踪：watcher / full-scan / manual）</param>
-public sealed record PendingFileItem(string FullPath, long WatchFolderId, PendingFileSource Source);
+public sealed record PendingFileItem(string FullPath, long WatchFolderId, PendingFileSource Source, string? ScanRunId = null);
 
 /// <summary>入队来源</summary>
 public enum PendingFileSource
@@ -61,7 +62,7 @@ public sealed class PendingFileQueue : IPendingFileQueue
     }
 
     public ValueTask EnqueueAsync(PendingFileItem item, CancellationToken cancellationToken = default)
-        => _channel.Writer.WriteAsync(item, cancellationToken);
+        => _channel.Writer.WriteAsync(item with { ScanRunId = item.ScanRunId ?? ParseDiagnostics.CurrentScanRunId }, cancellationToken);
 
     public ChannelReader<PendingFileItem> Reader => _channel.Reader;
 }

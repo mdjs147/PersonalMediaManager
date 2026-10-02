@@ -18,7 +18,7 @@ using PersonalMediaManager.Infrastructure.Persistence.Services.Review;
 namespace PersonalMediaManager.Infrastructure.Persistence.Tests;
 
 /// <summary>D7.5 ReviewService — list / confirm / ignore / batch / tmdb-search / bind-tmdb 全分支</summary>
-public sealed class ReviewServiceTests : IDisposable
+public sealed partial class ReviewServiceTests : IDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly TestDbContextFactory _dbFactory;

@@ -145,10 +145,12 @@ internal sealed class GeminiProtocol : IAiProtocol
             if (!content.TryGetProperty("parts", out JsonElement parts) || parts.ValueKind != JsonValueKind.Array || parts.GetArrayLength() == 0)
                 throw new AiProviderLogicalException("AI 响应缺少 content.parts");
 
-            // 多 part 文本按序拼接（Gemini 可能分片返回）
+            // 只拼接公开文本；thought 标记的模型私有推理不进入业务结果或诊断。
             StringBuilder sb = new();
             foreach (JsonElement part in parts.EnumerateArray())
             {
+                if (part.TryGetProperty("thought", out JsonElement thought) && thought.ValueKind == JsonValueKind.True)
+                    continue;
                 if (part.TryGetProperty("text", out JsonElement textEl) && textEl.ValueKind == JsonValueKind.String)
                     sb.Append(textEl.GetString());
             }

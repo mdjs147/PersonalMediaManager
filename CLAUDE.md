@@ -70,6 +70,7 @@
 | `User_` | 账号与会话 |
 | `Watch_` | 文件监控（监控目录、忽略规则） |
 | `Parse_` | 媒体名称解析（规则引擎、AI 提供商） |
+| `LocalAi_` | 本地模型设置与受管运行时（设置使用 System_Setting KV，当前无独立表） |
 | `Tmdb_` | TMDB 配置与缓存 |
 | `Category_` | 媒体分类（定义、匹配规则） |
 | `Media_` | 媒体处理记录（业务主表） |
@@ -162,12 +163,9 @@
    - `git push origin main`（origin 配了多 push URL，**一推同时落 Azure DevOps + GitHub 镜像**，详见 §9.2 / §9.5）
 3. 用中文汇报每步结果。
 
-> **推送 ≠ 发版（强制护栏）**：§9.1 永远**止于 push main**。push 后 GitHub 镜像只触发 main 开发构建 artifact（§9.3.2，7 天留存、不进 Releases、不影响升级检查），**绝不自动打 tag、不自动发版**。
-> 发版（打 `v*` tag → GitHub Release）是**独立动作**，**仅当满足下列任一条件**才执行：
-> 1. 本次变更就是要升 `PmmProductVersion`（主版本号）；
-> 2. 用户**主动**提出要发版。
+> **合并与发布边界（强制护栏）**：现有 `release.yml` 在 `main` 首次出现尚无 tag 的 `PmmProductVersion` 时自动创建 tag 与 Release；同一发版提交重跑会补传资产，已发版本的后续提交只生成保留 7 天的开发 Artifact。因此把新产品版本合入并推送 `main` 包含发布动作，必须已获得该版本的发布授权。
 >
-> 两者都不满足时——哪怕本轮攒了多个功能、按 §version 升了 `VersionPrefix` / `PmmDbVersion` / `FrontendVersion` 子版本号——也**只 push 不发版**，更不要主动提议发版（子版本号照常每提交升，主版本号一直留到发版那一刻才动）。
+> 普通开发期间保持既定产品版本，只提交功能与修复，不再分别升后端、前端或数据库版本。确定下一产品版本时只编辑根 `Directory.Build.props:PmmProductVersion`，其余元数据自动派生，见 §9.6。版本写入、合并完成、发布成功和部署成功须分别据实说明；暂停发布 / 部署时不得靠推送新版本绕过暂停。
 
 ### 9.2 源码托管 = GitHub 公开主仓 + Azure DevOps Server 内网镜像
 - **公开事实源**：`https://github.com/mdjs147/PersonalMediaManager.git`，承载公开源码、Issue、PR、Actions 与 Releases；公开开发分支必须从 GitHub `main` 创建。
@@ -177,7 +175,7 @@
 
 ### 9.3 CI/CD = Azure Pipelines（内网 PR / 主 CI）+ GitHub Actions（公开 PR CI + 发版打包）
 
-**两套平台均有明确边界**：内网 Azure Pipelines 保留团队 PR / 主 CI；公开 GitHub 通过 `pr-ci.yml` 对外部 PR 跑同等 build/test/红线/schema 门禁，`release.yml` 只生成 Windows 安装包（main push 入 Artifact、tag push 入 Releases）。
+**两套平台均有明确边界**：内网 Azure Pipelines 保留团队 PR / 主 CI；公开 GitHub 通过 `pr-ci.yml` 对外部 PR 跑同等 build/test/红线/schema 门禁，`release.yml` 只生成 Windows 单文件发布包（新产品版本的 main push 或 tag push 入 Releases，已发版本的后续 main push 入 Artifact）。
 
 #### 9.3.1 Azure Pipelines（PR / 主 CI）—— 跑在 self-hosted agent
 - 管道文件：
@@ -208,16 +206,17 @@
   - `.github/workflows/pr-ci.yml`：仅 `pull_request` → `main`，只读权限，跑 build/test/红线/schema drift；固定墙钟性能基线 `Category=Performance` 仅留在受控 Azure self-hosted agent。
   - `.github/workflows/release.yml`：仅 `push` tag `v*` 与 `push` `main`，负责开发 Artifact 与正式 Release。
 - **禁止**在上述文件加入 `workflow_dispatch` / `schedule` / `repository_dispatch`，也禁止新增第三份 workflow；公开 PR CI 不得读取 Secrets 或使用 `pull_request_target`。
-- **产物去向二分**（在同一 yaml 内用 `if` 守门实现）：
+- **产物去向**（在同一 yaml 内用 `if` 守门实现）：
   - **tag push（vX.Y.Z）** → 创建 / 复用 GitHub Release + 上传单文件 exe（**正式发版**，「客户端检查更新」端点会读到）
-  - **main push** → 仅 `actions/upload-artifact@v4` 保留 7 天（**开发构建**，仅 Actions Run 页可下载，**不**进 Releases 页、**不**影响升级检查）
+  - **main push，产品版本 tag 尚不存在** → 自动创建该 tag 与 Release；tag 已指向同一提交时作为正式发版重跑
+  - **main push，产品版本 tag 已指向其他提交** → `actions/upload-artifact@v4` 保留 7 天（开发构建，不影响升级检查）
 - **职责仅限**：
   1. checkout + setup-dotnet 10.x + setup-node 22
-  2. `npm ci`（前端依赖；vite build 由 `.esproj` 随 dotnet publish 自动触发）
+  2. `npm --prefix src/PersonalMediaManager.Frontend run version:check` 只读校验派生版本，再 `npm ci`（vite build 由 `.esproj` 随 dotnet publish 自动触发）
   3. `dotnet publish src/PersonalMediaManager.Launcher -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true` → 前端 + appsettings 嵌入的单文件 exe
   4. 校验 publish 输出确为单一 exe（多余文件 = 单文件收敛被破坏，直接 fail）+ 重命名为 `PersonalMediaManager-{ver}-win-x64.exe`，**不再打 zip**
-  5. tag push 走 `gh release create` + `gh release upload`；main push 走 `actions/upload-artifact@v4`（用 `secrets.GITHUB_TOKEN`，**不需要 PAT**）
-- **版本号校验守门**：`PmmProductVersion` 与 tag 一致性校验仅在 tag push 时执行（main push 跳过，避免重复 commit 误报版本漂移）。
+  5. 正式发版或同提交重跑走 `gh release create` + `gh release upload`；开发构建走 `actions/upload-artifact@v4`（用 `secrets.GITHUB_TOKEN`，**不需要 PAT**）
+- **版本号校验守门**：所有正式发版（tag、main 新版本、同提交重跑）校验 `PmmProductVersion` 与 tag 一致；PR / Release / Azure CI 在依赖安装或 restore 前执行前端 `version:check`，拒绝未同步的兼容元数据。
 - `release.yml` **不承担**单元测试 / 红线扫描；这些由 `pr-ci.yml` 与 Azure PR Pipeline 承担。构建产物**仅 win-x64**。
 - **PAT 红线无关**：runner 用 GitHub 自动注入的 `GITHUB_TOKEN`（一次性、scope 自动限制到本仓 contents:write），不与「客户端升级检查 PAT」共用。
 
@@ -232,7 +231,7 @@
 
 #### 9.4.2 GitHub Actions 边界（公开 PR CI + 发版）
 - **仅允许** `.github/workflows/pr-ci.yml` 与 `.github/workflows/release.yml`。前者只能 `pull_request` → `main` 且 `permissions: contents: read`；后者只能 `push` tag `v*` / `push` `main`。新增第三份 workflow 即违反红线。
-- **main push 仅产 Artifact、严禁创建 Release**：必须用 `if: startsWith(github.ref, 'refs/tags/v')` 把 `gh release create` / `gh release upload` 两个 step 守起来；任何形式的 main → Releases 页写入都视为违反红线（污染正式发版渠道、误导升级检查端点）。
+- **发版分流必须保持显式**：`gh release create` / `upload` 仅在 `steps.ver.outputs.isRelease == 'true'` 时执行；已发产品版本的其他 main 提交只产 Artifact。不得绕过 `PmmProductVersion` 与 tag 的一致性校验；新产品版本进入 main 前须有发布授权。
 - workflow 步骤里**禁止**调 `https://api.github.com/repos/*/actions/*` 等自指 API（避免链式触发死循环）。
 - 凭据仅用 `secrets.GITHUB_TOKEN`（GitHub 自动注入）；**禁止**在 Actions secrets 里塞 Azure DevOps PAT / 用户密码等内网凭据。
 
@@ -246,6 +245,14 @@
   - **禁止**：写进 `appsettings*.json` / 环境变量 / `.git/config` / 任何 tracked 文件；日志输出走 `SensitiveDataRedactor`（Bearer Token + apikey 等关键字自动脱敏）
   - 推荐 **Fine-grained PAT**（单仓库 + 强制过期 + `Contents: Read-only`），Classic PAT 兼容但不推荐
 - **CLI 红线**：本仓库 PowerShell / Bash 自动化脚本里禁止内嵌明文 PAT；需要用 PAT 时走 **Windows Credential Manager**（`git credential approve` 一次性灌入）或显式 stdin 注入，绝不进命令行参数。
+
+### 9.6 单一产品版本（当前目标 0.4.0）
+
+- **唯一人工版本源**：根 `Directory.Build.props:PmmProductVersion`，格式固定为 `X.Y.Z`。`VersionPrefix`、程序集版本、API 与 UI 的兼容版本字段均由此派生，不再分别维护。
+- 前端 `package.json` / `package-lock.json` 的项目版本是 npm 所需的兼容元数据。修改产品版本后运行 `npm --prefix src/PersonalMediaManager.Frontend run version:sync` 并检查生成 diff；禁止 `npm version` 单独升前端版本。`version:check` 为只读检查，CI 在构建前强制执行，失败时修正源或重新同步，不能手工维持多份版本号。
+- `AssemblyVersion` / `FileVersion` 固定为产品版本加 `.0`（如 `0.4.0.0`）；`InformationalVersion` 的 `+commit[.dirty]` 和构建时间只定位产物，不是独立产品版本。Release tag、产物文件名、更新比较及产品展示统一使用 `PmmProductVersion`。
+- 数据库以 EF migration ID 和完整的已应用 / 待迁移集合判定状态，不维护 `PmmDbVersion`。`__EFMigrationsHistory.ProductVersion` 是 EF 工具版本，不能当作 PMM 产品号。已发布历史记录、旧 `db/version-map.json` 与已有 Migrations 保留，不为统一版本而改写。
+- 每次合并、发布或部署报告产品版本、commit、迁移状态和验证结果即可；不再要求四版本旧、新值清单。当前源码目标 0.4.0 不等于已发布或已部署，流程见 [发版流程](docs/发版流程.md)。
 
 ## 十、新需求 / 需求变更
 - 与当前需求文档对比；有变更则同步更新需求文档与进度表，必要时调整 README。
@@ -275,9 +282,9 @@
 | `PersonalMediaManager.Frontend` | `.esproj`（JS 工程） | Vue 3 + Vite SPA；`npm run build:host` 产物写入 `Host/wwwroot`；VS 资源管理器可见、可 F5 起 vite dev(5173) | `Microsoft.VisualStudio.JavaScript.SDK`（参考 VS「Vue 应用」模板） |
 
 - **不计入「8 src」矩阵**：它是 JavaScript 工程而非 .NET 项目；矩阵的引用关系图与红线只约束 8 个 .NET 项目。
-- **隔离根 MSBuild**：`Frontend/Directory.Build.props` + `Directory.Build.targets`（均为空壳）切断对仓库根 `Directory.Build.props/.targets` 的继承，避免 `TargetFramework=net10.0` 等 .NET 属性污染 JS 工程；前端版本号仍由 `vite.config.js` 直接读根 props 注入，不受影响。
+- **隔离根 MSBuild**：`Frontend/Directory.Build.props` + `Directory.Build.targets`（均为空壳）切断对仓库根 `Directory.Build.props/.targets` 的继承，避免 `TargetFramework=net10.0` 等 .NET 属性污染 JS 工程；产品版本仍由前端构建读取根 props 注入；npm 项目版本由同步脚本派生，不受影响。
 - **构建集成（深度集成：build/publish slnx 即出前端）**：
-  - `Host._PmmBuildFrontend`（`BeforeTargets=_CalculateEmbeddedFilesManifestInputs;BeforeCompile`）显式 `<MSBuild>` 调 `.esproj` 的 Build → 跑 `npm run build:host`。**Debug/Release 均触发，但带 MSBuild 增量**（`Inputs`=前端源码 src/public/index.html/package.json/vite.config.js，排除 vite 生成的 `*.d.ts`；`Outputs`=`wwwroot/index.html`）：仅当前端源码比 wwwroot 新时才重跑 vite，否则短路跳过——**F5 启动 Launcher 即拿到最新前端，未改前端时秒过**。**为何锚到 `_CalculateEmbeddedFilesManifestInputs`**：wwwroot 要嵌入 Host 程序集（见下条），前端产物须在「嵌入清单收集 + Host 编译」之前就绪，挂成 `BeforeTargets=Build` 会晚于编译。`dotnet build *solution*` 不会自动调 `.esproj` 的 Build（只跑 restore 图），项目级 ProjectReference 又会触发，故统一显式触发 + `BuildReference=false` 防重复。前端 HMR / 源码调试可另起 vite dev(5173)，与本构建解耦。
+  - `Host._PmmBuildFrontend`（`BeforeTargets=_CalculateEmbeddedFilesManifestInputs;BeforeCompile`）显式 `<MSBuild>` 调 `.esproj` 的 Build → 跑 `npm run build:host`。**Debug/Release 均触发，但带 MSBuild 增量**（`Inputs`=前端源码 src/public/index.html/package.json/package-lock.json/vite.config.js、前端 scripts 与根 Directory.Build.props，排除 vite 生成的 `*.d.ts`；`Outputs`=`wwwroot/index.html`）：仅当前端源码比 wwwroot 新时才重跑 vite，否则短路跳过——**F5 启动 Launcher 即拿到最新前端，未改前端时秒过**。**为何锚到 `_CalculateEmbeddedFilesManifestInputs`**：wwwroot 要嵌入 Host 程序集（见下条），前端产物须在「嵌入清单收集 + Host 编译」之前就绪，挂成 `BeforeTargets=Build` 会晚于编译。`dotnet build *solution*` 不会自动调 `.esproj` 的 Build（只跑 restore 图），项目级 ProjectReference 又会触发，故统一显式触发 + `BuildReference=false` 防重复。前端 HMR / 源码调试可另起 vite dev(5173)，与本构建解耦。
   - `Host._PmmCollectFrontendEmbed`（`AfterTargets=_PmmBuildFrontend`、`BeforeTargets=_CalculateEmbeddedFilesManifestInputs`）在 **execution 阶段**动态把 `wwwroot/**` 加为 `EmbeddedResource`（配合 `GenerateEmbeddedFilesManifest=true`）→ 前端产物连同 `appsettings.json` 编译进 `Host.dll` 随单文件 exe 内置；运行时 `PmmHost` 用 `ManifestEmbeddedFileProvider` 内存直读。**发布产物收敛为单一 exe**（不再外置 `wwwroot/`，原 `Launcher._PmmCopyFrontendToOutput/Publish` 复制 Target 已删；Launcher 发布配置加 `AllowedReferenceRelatedFileExtensions=none` 阻止 `Host.xml` 外溢）。
   - **避开 MSB3030/嵌入快照**：wwwroot 不以 `<Content/EmbeddedResource Include="wwwroot\**">` 静态 glob 纳入项目——vite 的 hash 文件名每次变，VS 设计时（evaluation）会快照旧 hash 清单导致失败；改用 execution 阶段（`_PmmCollectFrontendEmbed`）动态加 `EmbeddedResource`，evaluation 不再快照，从根上消除。
 - **CI 联动**：`.esproj` 进 slnx 后 `dotnet restore/build slnx` 会触发 npm install 与 vite，故 Azure PR 管道 build/test 的 Windows agent 在 restore 前加 `NodeTool@0`；GitHub `release.yml` 删手动 `npm run build`/拷贝步骤，由 `dotnet publish`（Release）自动产出前端。

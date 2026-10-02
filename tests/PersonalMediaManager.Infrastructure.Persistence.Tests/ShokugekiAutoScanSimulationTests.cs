@@ -14,15 +14,9 @@ namespace PersonalMediaManager.Infrastructure.Persistence.Tests;
 /// 喂入真实 RuleEngineService（含 DataSeeder 的 23 条生产种子规则 + 内置兜底正则），
 /// 观察规则引擎对 DBD-Raws「全方括号 + 花式中文副标题季（貳/餐/神/豪 之皿）」命名的识别结果。
 ///
-/// 实测结论（本测试固化为回归基线）：规则引擎对这 5 季——
-///   · 标题：种子规则「方括号包裹剧集」(Id=4) 正确抽出「食戟之灵 [副标题]」；
-///   · 集号：[NN] 方括号集号正确抽出；类型判定 tv；
-///   · 季号：**全部为 null**。「貳」非内置中文数字字符集（一二三四五六七八九十两），
-///     「餐/神/豪」更是纯文字游戏非数字，且「X之皿」不命中「第N季 / 罗马数字 / XXX篇」任一季号规则，
-///     故规则引擎无法判定季号 → 置信度 0.75（tv 仅缺季 0.70 + bonus 0.05，≥0.6）→ 线上走 TMDB 直查，
-///     多季剧（食戟之灵 5 季）由「单季自动补季」守护判定季数 &gt;1 → 转人工审核选季（不再为季号动用 AI）。
-/// 即：单靠规则引擎，5 季都拿不到季号；季号最终对错取决于人工审核 / pmm.txt 强制匹配。
-/// 若未来扩展季号识别（如识别異體数字「貳」），本测试的 Season 断言需相应翻转。
+/// 当前规则对已核验的完整系列分季副标题保留来源映射，第二至第五季可得到季号。
+/// 无副标题的第一季仍不能只靠系列名称默认为 S01，须由后续 TMDB 单季条件或人工绑定核对。
+/// 本测试仅验证规则提取与证据，不证明实时 TMDB 季目录已核验。
 /// </remarks>
 public sealed class ShokugekiAutoScanSimulationTests : IDisposable
 {
@@ -48,7 +42,7 @@ public sealed class ShokugekiAutoScanSimulationTests : IDisposable
 
     public void Dispose() => _connection.Dispose();
 
-    /// <summary>5 季各取首集 + 末集，喂真实解析器，打印结果表并固化「标题/集号 OK、季号缺失」当前行为</summary>
+    /// <summary>5 季各取首集 + 末集，喂真实解析器，打印结果表并验证副标题映射与第一季不默认补全</summary>
     [Fact]
     public async Task FiveSeasons_AutoScan_ParseSimulation()
     {
@@ -82,12 +76,16 @@ public sealed class ShokugekiAutoScanSimulationTests : IDisposable
                 r.Title.Should().Contain("食戟之灵", $"标题应抽出作品名：{ep.File}");
                 r.Episode.Should().Be(ep.Episode, $"集号应来自 [NN]：{ep.File}");
                 r.MediaType.Should().Be("tv", $"有集号应判 tv：{ep.File}");
-                r.Confidence.Should().BeApproximately(0.75, 0.001, $"tv 仅缺季 0.70 + 种子 bonus 0.05：{ep.File}");
+                r.Confidence.Should().BeApproximately(s.RealSeason == 1 ? 0.75 : 0.85, 0.001);
+                if (s.RealSeason == 1)
+                    r.Season.Should().BeNull("没有副标题或显式季号，不能默认第一季");
+                else
+                {
+                    r.Season.Should().Be(s.RealSeason);
+                    r.FieldEvidence.Should().Contain(e => e.Field == "season" && e.Value == s.RealSeason
+                        && e.Source == "LicensedSeasonCatalogue");
+                }
 
-                // 缺口基线：规则引擎无法从「貳/餐/神/豪 之皿」副标题判定季号 → Season 为 null。
-                // 季号最终由下游 AI 兜底 / 人工审核 / pmm.txt 强制匹配决定（见类注释）。
-                r.Season.Should().BeNull(
-                    $"规则引擎对花式中文副标题季识别不出季号（已知缺口，下游兜底）：{ep.File}");
             }
             _output.WriteLine("");
         }
@@ -95,7 +93,7 @@ public sealed class ShokugekiAutoScanSimulationTests : IDisposable
 
     /// <summary>带 pmm.txt 强制匹配：5 季各自的 TMDB 季 URL → 正确锚定 (id=62273, tv, S1..S5)，叠加规则集号还原完整 SxxEyy</summary>
     /// <remarks>
-    /// 与上一个测试（裸规则引擎季号全 null）形成对照：每季文件夹放 pmm.txt 贴 themoviedb.org/tv/62273/season/{n} 后，
+    /// 与上一个测试（第一季仍缺显式季号）形成对照：每季文件夹放 pmm.txt 贴 themoviedb.org/tv/62273/season/{n} 后，
     /// ForcedMatchMarkerParser 解析出 (TmdbId=62273, MediaType=tv, Season=n)；线上 ProcessFileService 合成
     /// season = forced.Season ?? rule.Season、episode = rule.Episode（强制匹配只覆盖身份+季，集号仍走规则）。
     /// 本测试复刻该合成，证明 5 季都能拿到正确的 (season, episode) 且同一 tmdbId。URL 与写入磁盘的 pmm.txt 逐字一致。

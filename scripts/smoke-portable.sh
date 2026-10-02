@@ -3,8 +3,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 # 仅临时空库，无媒体目录、账号、外部提供商或 webhook。
 python3 - <<'PY'
-import json, os, pathlib, re, signal, socket, subprocess, tempfile, time, urllib.request
+import json, os, pathlib, re, signal, socket, subprocess, tempfile, time, urllib.request, xml.etree.ElementTree as ET
 root = pathlib.Path.cwd()
+expected_version = ET.parse(root / 'Directory.Build.props').find('.//PmmProductVersion').text.strip()
 dll = root / 'src/PersonalMediaManager.Server/bin/Release/net10.0/PersonalMediaManager.Server.dll'
 with tempfile.TemporaryDirectory(prefix='pmm-smoke-') as temp:
     data = pathlib.Path(temp) / 'data'
@@ -28,6 +29,14 @@ with tempfile.TemporaryDirectory(prefix='pmm-smoke-') as temp:
                     except (OSError, ValueError): time.sleep(.5)
                 else:
                     log.seek(0); raise RuntimeError('启动超时\n' + log.read())
+                with urllib.request.urlopen(f'http://127.0.0.1:{port}/api/system/version', timeout=3) as response:
+                    version = json.load(response)
+                    assert version['code'] == 0
+                    assert {version['data'][field] for field in ('product', 'backend', 'frontend')} == {expected_version}
+                    database = version['data']['database']
+                    assert database['status'] == 'notChecked'
+                    assert not database.get('appliedMigrationId') and not database.get('target')
+                    assert not database['pendingMigrationIds'] and not database['unknownMigrationIds']
                 with urllib.request.urlopen(f'http://127.0.0.1:{port}/', timeout=3) as response:
                     html = response.read().decode()
                     assert '<html' in html.lower()

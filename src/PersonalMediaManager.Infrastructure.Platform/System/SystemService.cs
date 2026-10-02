@@ -49,7 +49,7 @@ public sealed class SystemService : ISystemService
 
     public async Task<SystemInfoResponse> GetInfoAsync(CancellationToken ct = default)
     {
-        // 版本号走 IVersionInfoProvider 统一来源（4 套版本号 + db 实际状态）；
+        // 版本号走 IVersionInfoProvider 统一来源（主版本与数据库迁移诊断）；
         // Version 字段 = Product（主版本号），保留作为前端旧字段的向后兼容
         VersionInfoResponse versions = await _versionInfo.GetFullAsync(ct).ConfigureAwait(false);
 

@@ -4,7 +4,7 @@ namespace PersonalMediaManager.Domain.Enums;
 /// <remarks>
 /// 仅在 MediaItem.Status 转为 AwaitingReview 时写入；其它状态该字段保持 null。
 /// 由 ProcessFileService 在 7 个决策分支映射对应枚举值：
-///   - TmdbMultiCandidate：TMDB 候选 &gt; 阈值 N（无法自动取舍）
+///   - TmdbMultiCandidate：TMDB 候选数量或身份依据不足以自动取舍（包括待核验检索建议）
 ///   - TmdbZeroResult：TMDB 候选 = 0（找不到匹配项）
 ///   - AiLowConfidence：AI 兜底失败或置信度不足
 ///   - CategoryUnresolved：规则/AI 均未命中分类映射
@@ -18,7 +18,7 @@ public enum ReviewReason
     /// <summary>未指定原因（默认值，不应入库 AwaitingReview 时使用）</summary>
     None = 0,
 
-    /// <summary>TMDB 候选过多无法自动取舍</summary>
+    /// <summary>TMDB 候选数量或身份依据需要人工确认</summary>
     TmdbMultiCandidate = 1,
 
     /// <summary>TMDB 零候选</summary>

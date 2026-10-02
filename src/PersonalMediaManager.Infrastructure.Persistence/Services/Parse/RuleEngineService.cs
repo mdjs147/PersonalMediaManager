@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
@@ -16,7 +17,7 @@ namespace PersonalMediaManager.Infrastructure.Persistence.Services.Parse;
 /// 一条用户规则命中即返回（先命中先采用）；零命中走内置规则。
 ///
 /// 正则安全：所有正则强制 RegexOptions.Compiled + MatchTimeout=500ms 防 ReDoS（需求文档 §3.3.1）；
-/// 单条规则编译失败 / 匹配超时 → 仅写 Warning 跳过该规则，继续尝试下一条。
+/// 编译失败或匹配超时会保留诊断并进入审核；规则计算总预算 2 秒，轨迹与缓存均有容量上限。
 ///
 /// 置信度评分表（需求文档 §3.3.1）：
 ///   title+type+season+episode+year → 0.95
@@ -36,9 +37,10 @@ namespace PersonalMediaManager.Infrastructure.Persistence.Services.Parse;
 /// 特殊字符判定：标题既有 CJK 又有拉丁字符（各 ≥ 3 个字符）→ HasSpecialChars=true，
 /// 上层 ProcessFileService 据此触发 §3.3.2「直接走 AI」分支。
 /// </remarks>
-internal sealed class RuleEngineService : IRuleEngineService
+internal sealed partial class RuleEngineService : IRuleEngineService
 {
-    private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(500);
+    // partial 文件的字段初始化顺序不保证；超时用属性避免新正则先读到 TimeSpan.Zero。
+    private static TimeSpan RegexTimeout => TimeSpan.FromMilliseconds(500);
     private const RegexOptions BaseOptions = RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant;
 
     // 内置正则全部下沉到 BuiltinRulesCatalog 作为唯一来源，
@@ -55,61 +57,104 @@ internal sealed class RuleEngineService : IRuleEngineService
 
     public async Task<RuleParseResult> ParseAsync(FileParseContext context, CancellationToken ct = default)
     {
-        // 1. 用户规则按 Priority 升序
+        ct.ThrowIfCancellationRequested();
         await using PmmDbContext db = await _dbFactory.CreateDbContextAsync(ct);
-        List<ParseRule> userRules = await db.ParseRules
+        List<ParseRule> userRules = await db.ParseRules.AsNoTracking()
             .Where(r => r.Enabled)
             .OrderBy(r => r.Priority).ThenBy(r => r.Id)
             .ToListAsync(ct);
 
-        foreach (ParseRule rule in userRules)
+        using RuleRegexExecution.Run execution = RuleRegexExecution.Begin(ct);
+        RuleParseResult? result = null;
+        try
         {
-            RuleParseResult? hit = TryUserRule(rule, context);
-            if (hit is not null)
+            foreach (ParseRule rule in userRules)
             {
-                _logger.LogDebug("用户规则命中：RuleId={RuleId}, Name={Name}", rule.Id, rule.Name);
-                return WithAlternativeTitles(PostProcessSeasonMarkers(SupplementUserRule(hit, context)), context);
+                if (!execution.CanContinue()) break;
+                execution.RulesEvaluated++;
+                result = TryUserRule(rule, context, execution);
+                if (result is null) continue;
+                result = SupplementUserRule(result, context);
+                break;
             }
+            if (result is null && execution.CanContinue()) result = ApplyBuiltinRules(context);
+            result ??= IncompleteFallback(context);
+            if (execution.CanContinue()) result = ApplyStructuredEvidence(FinalizeNaming(result, context), context);
         }
-
-        // 2. 内置规则
-        return WithAlternativeTitles(PostProcessSeasonMarkers(ApplyBuiltinRules(context)), context);
+        catch (RegexMatchTimeoutException)
+        {
+            execution.Incomplete("UnwrappedRegexTimeout");
+            result ??= IncompleteFallback(context);
+        }
+        return execution.Complete(result);
     }
+
+    private static RuleParseResult IncompleteFallback(FileParseContext context) =>
+        new(Path.GetFileNameWithoutExtension(context.FileName), null, "unknown", null, null, null,
+            0.1, false, null, HasIdentityEvidence: false);
 
     // ---------- 用户规则 ----------
 
-    private RuleParseResult? TryUserRule(ParseRule rule, FileParseContext context)
+    private RuleParseResult? TryUserRule(ParseRule rule, FileParseContext context, RuleRegexExecution.Run execution)
     {
-        // 编译规则正则一次，对所有候选 input 复用
+        string hash = RuleRegexExecution.PatternHash(rule.Pattern);
+        string key = $"user:{rule.Id}:{hash[..12]}";
+        string scope = rule.Scope.ToString();
+        execution.Trace(new(key, "attempt", RuleId: rule.Id, Scope: scope, PatternHash: hash));
+        long started = Stopwatch.GetTimestamp();
         Regex re;
         try
         {
-            re = new Regex(rule.Pattern, BaseOptions, RegexTimeout);
+            re = RuleRegexExecution.Get(rule.Pattern);
         }
-        catch (ArgumentException ex)
+        catch (ArgumentException)
         {
-            _logger.LogWarning(ex, "用户规则正则非法（跳过）：RuleId={RuleId}", rule.Id);
+            _logger.LogWarning("用户规则正则非法（跳过）：RuleId={RuleId} PatternHash={PatternHash}", rule.Id, hash);
+            execution.Incomplete("InvalidRulePattern");
+            execution.Trace(new(key, "rejected", "InvalidPattern", rule.Id, scope, PatternHash: hash));
             return null;
         }
 
         // 按 scope 枚举候选 input（AllAncestors 多 input 内→外逐段尝试，其他 scope 单 input）
         Match? matched = null;
         string matchedInput = string.Empty;
+        int inputIndex = -1;
+        int? matchedSegment = null;
+        string matchedSource = scope;
         foreach (string input in EnumerateInputs(rule.Scope, context))
         {
+            inputIndex++;
+            if (!execution.CanContinue()) return null;
             if (string.IsNullOrEmpty(input)) continue;
-            try
+            string inputSource = scope is "FileName" || scope is "AllAncestors" && inputIndex == 0 ? "FileName"
+                : scope is "ParentFolder" or "AllAncestors" ? "RelativeSegment" : scope;
+            int? inputSegment = inputSource == "RelativeSegment"
+                ? context.RelativeSegments.Count - (scope == "ParentFolder" ? 1 : inputIndex) : null;
+            int faults = execution.FaultCount;
+            Match match = SafeMatch(re, input);
+            if (execution.FaultCount != faults)
             {
-                Match m = re.Match(input);
-                if (m.Success) { matched = m; matchedInput = input; break; }
-            }
-            catch (RegexMatchTimeoutException ex)
-            {
-                _logger.LogWarning(ex, "用户规则匹配超时（跳过）：RuleId={RuleId}", rule.Id);
+                execution.Trace(new(key, "rejected", execution.LastIssue, rule.Id, scope, inputSource, inputSegment, hash));
                 return null;
             }
+            if (!match.Success) continue;
+            if (!HasEffectiveCapture(match, input, rule))
+            {
+                execution.Trace(new(key, "rejected", "NoEffectiveCapture", rule.Id, scope, inputSource, inputSegment, hash));
+                continue;
+            }
+            matched = match;
+            matchedInput = input;
+            matchedSource = inputSource;
+            matchedSegment = inputSegment;
+            break;
         }
-        if (matched is null) return null;
+        if (matched is null)
+        {
+            execution.Trace(new(key, "noMatch", RuleId: rule.Id, Scope: scope,
+                PatternHash: hash, ElapsedMilliseconds: Stopwatch.GetElapsedTime(started).TotalMilliseconds));
+            return null;
+        }
 
         string fileName = context.FileName;
         string? parentFolderName = context.DirectParentFolderName;
@@ -141,6 +186,27 @@ internal sealed class RuleEngineService : IRuleEngineService
             }
         }
 
+        bool candidateCapture = new[] { "airDate", "volume", "disc", "part", "cour", "absolute" }
+            .Any(name => !string.IsNullOrWhiteSpace(TryGroup(capt, name)));
+        if (title is not null)
+        {
+            // 有效捕获在归一化后判断，纯分隔符捕获不能抢先终止更具体的规则。
+            title = Normalize(SafeReplace(BuiltinRulesCatalog.Separator, title, " "));
+            if (string.IsNullOrWhiteSpace(title)) title = null;
+        }
+        bool meaningful = !string.IsNullOrWhiteSpace(title) || year.HasValue || season.HasValue || episode.HasValue
+            || !string.IsNullOrWhiteSpace(seasonTitle) || fractionalEpisodeRejected || candidateCapture
+            || (capt.Length > 0 && rule.ForceType && (string.Equals(rule.DefaultType, "movie", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(rule.DefaultType, "tv", StringComparison.OrdinalIgnoreCase)));
+        if (!meaningful)
+        {
+            execution.Trace(new(key, "rejected", "NoEffectiveCapture", rule.Id, scope,
+                matchedSource, matchedSegment, hash, Stopwatch.GetElapsedTime(started).TotalMilliseconds));
+            return null;
+        }
+        execution.Trace(new(key, "matched", "EffectiveCapture", rule.Id, scope,
+            matchedSource, matchedSegment, hash, Stopwatch.GetElapsedTime(started).TotalMilliseconds));
+
         string mediaType;
         if (rule.ForceType && !string.IsNullOrEmpty(rule.DefaultType))
         {
@@ -151,13 +217,6 @@ internal sealed class RuleEngineService : IRuleEngineService
             mediaType = InferMediaType(season, episode, rule.DefaultType, parentFolderName, matchedInput, year);
         }
 
-        if (title is not null)
-        {
-            // 用户规则捕获的 title 也要做分隔符折叠（. _ - → 空格）+ 空白归一化，
-            // 否则形如 `[字幕组][Jujutsu_Kaisen][59]` 会把 `Jujutsu_Kaisen` 直接送进 TMDB 搜索失准。
-            // 这里只折叠分隔符，不剥噪声/方括号——用户既然显式捕获了 title 段，就尊重其内容范围。
-            title = Normalize(SafeReplace(BuiltinRulesCatalog.Separator, title, " "));
-        }
         title ??= CleanedStem(Path.GetFileNameWithoutExtension(fileName));
         bool special = HasMixedCjkLatin(title);
 
@@ -171,7 +230,21 @@ internal sealed class RuleEngineService : IRuleEngineService
         if (episodeEnd is int end) evidence.Add(new("episodeEnd", end, "UserRule", TryGroup(capt, "episodeEnd") ?? end.ToString()));
         return new RuleParseResult(title, year, mediaType, season, episode, episodeEnd, finalConf, special, rule.Id,
             SeasonTitle: seasonTitle, FieldEvidence: evidence,
-            RejectedFields: fractionalEpisodeRejected ? ["episode", "episodeEnd"] : null, ForceType: rule.ForceType);
+            RejectedFields: fractionalEpisodeRejected ? ["episode", "episodeEnd"] : null, ForceType: rule.ForceType,
+            NumberingEvidence: CollectUserNumberingCaptures(capt, matchedInput, matchedSource, matchedSegment, context, rule.Id));
+    }
+
+    /// <summary>无有效捕获的输入不阻止同一规则继续检查祖先层</summary>
+    private static bool HasEffectiveCapture(Match match, string input, ParseRule rule)
+    {
+        string title = Normalize(SafeReplace(BuiltinRulesCatalog.Separator, TryGroup(match, "title") ?? "", " "));
+        int? year = TryParseInt(TryGroup(match, "year"));
+        return title.Length > 0 || year is int y && MediaYearEvidence.ContainsYear([input], y)
+            || ParseCjkSeason(TryGroup(match, "season")).HasValue || TryParseInt(TryGroup(match, "episode")).HasValue
+            || new[] { "seasonTitle", "airDate", "volume", "disc", "part", "cour", "absolute" }
+                .Any(name => !string.IsNullOrWhiteSpace(TryGroup(match, name)))
+            || match.Length > 0 && rule.ForceType && (string.Equals(rule.DefaultType, "movie", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(rule.DefaultType, "tv", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>用户规则后仅用显式标记补空季集，保留捕获、强制类型和拒绝证据</summary>
@@ -234,7 +307,7 @@ internal sealed class RuleEngineService : IRuleEngineService
             // 只清理季标记，不把内置标题猜测覆盖用户捕获。
             foreach (Regex pattern in new[] { BuiltinRulesCatalog.SeasonOrdinalLatin, BuiltinRulesCatalog.SeasonWordLatin,
                 BuiltinRulesCatalog.SeasonOnlyLatin, BuiltinRulesCatalog.SeasonChinese })
-                title = SafeReplace(pattern, title, " ");
+                title = ReplaceOutsideTitleParentheses(pattern, title, " ");
             title = Normalize(title);
             if (string.IsNullOrWhiteSpace(title)) title = result.Title;
         }
@@ -270,8 +343,7 @@ internal sealed class RuleEngineService : IRuleEngineService
         foreach (Regex pattern in new[] { BuiltinRulesCatalog.SeasonEpisodeLatin, BuiltinRulesCatalog.SeasonChinese,
             BuiltinRulesCatalog.SeasonOnlyLatin, BuiltinRulesCatalog.SeasonOrdinalLatin, BuiltinRulesCatalog.SeasonWordLatin })
         {
-            try { matches.AddRange(pattern.Matches(text).Cast<Match>()); }
-            catch (RegexMatchTimeoutException) { }
+            matches.AddRange(SafeMatches(pattern, text));
         }
         return matches.OrderBy(m => m.Index).ToArray();
     }
@@ -370,10 +442,11 @@ internal sealed class RuleEngineService : IRuleEngineService
             }
             if (season is null && s is int literalSeason)
             {
-                Match ordinal = SafeMatch(BuiltinRulesCatalog.SeasonOrdinalLatin, layer);
-                if (ordinal.Success && TryParseInt(ordinal.Groups["season"].Value) == literalSeason)
+                Match? explicitSeason = MatchExplicitSeasons(layer)
+                    .FirstOrDefault(match => ParseCjkSeason(match.Groups["season"].Value) == literalSeason);
+                if (explicitSeason is not null)
                     fieldEvidence.Add(new("season", literalSeason, layers.IndexOf(layer) == 0 ? "FileName"
-                        : $"RelativeSegment:{context.RelativeSegments.Count - layers.IndexOf(layer)}", ordinal.Value));
+                        : $"RelativeSegment:{context.RelativeSegments.Count - layers.IndexOf(layer)}", explicitSeason.Value));
             }
             season ??= s;
             // 集号与末集是同一层的原子证据，父目录全集范围不能扩展文件单集。
@@ -415,7 +488,7 @@ internal sealed class RuleEngineService : IRuleEngineService
         }
 
         // 标题：从「最有信息量」的层选；优先级 = 剥噪声后非空 && 含字母词 → 越外层（PT 站剧名常在父目录）越优先
-        (string title, bool titleMeaningful) = SelectTitle(layers, season, episode, year);
+        (string title, bool titleMeaningful) = SelectTitle(layers, fileName, season, episode, year);
 
         // 类型推断时把所有层拼起来作为上下文（让父目录的「电影」「Anime」等 hint 也参与判断）
         string allContext = string.Join(' ', layers);
@@ -440,14 +513,15 @@ internal sealed class RuleEngineService : IRuleEngineService
     ///   3. 全部失败 → 回退到 stem 原文并标记 Meaningful=false，由调用方压低置信度，
     ///      避免技术残渣标题（"2026 60fps WEB 1"）以高置信直查 TMDB 零候选后白走 AI。
     /// </remarks>
-    private static (string Title, bool Meaningful) SelectTitle(IReadOnlyList<string> layers, int? season, int? episode, int? year)
+    private static (string Title, bool Meaningful) SelectTitle(IReadOnlyList<string> layers, string fileName, int? season, int? episode, int? year)
     {
         for (int i = 0; i < layers.Count; i++)
         {
             string raw = layers[i];
             // 「压制代号-集号」整串层：字母段是压制组 / 缩写代号，跳过竞选让更外层（父目录）接手
             if (IsReleaseTagEpisodeLayer(raw)) continue;
-            string cleaned = ExtractTitle(raw, season, episode, year);
+            string cleaned = i == 0 ? ExtractTitle(raw, season, episode, year)
+                : ExtractFolderTitle(raw, fileName, season, episode, year);
             if (HasMeaningfulContent(cleaned) && !IsNonIdentityTitle(cleaned) && !IsGenericFolder(cleaned))
             {
                 return (cleaned, true);
@@ -535,12 +609,7 @@ internal sealed class RuleEngineService : IRuleEngineService
             if (ordinal.Success) season = TryParseInt(ordinal.Groups["season"].Value);
         }
 
-        // 罗马数字季号兜底（标题尾部 II-X，主要动漫）：仅在中文 / 拉丁季号均未命中时尝试
-        if (season is null)
-        {
-            Match rm = SafeMatch(BuiltinRulesCatalog.SeasonRoman, s);
-            if (rm.Success) season = ParseRomanSeason(rm.Groups["roman"].Value);
-        }
+        // 罗马数字可能属于作品名（如 Lupin III），只在命名证据层保留候选，不直接赋季。
 
         (int? ep2, int? eEnd2) = ExtractEpisodeWithEnd(s);
         return (season, ep2, eEnd2);
@@ -601,14 +670,13 @@ internal sealed class RuleEngineService : IRuleEngineService
     /// <summary>文件开头的纯集号可后接明确分辨率；不把任意数字前缀或小数集当作单集</summary>
     private static int? ExtractNumericFileEpisode(string stem)
     {
-        Match numeric = Regex.Match(stem, @"^(?<episode>[0-9]{1,3})(?:$|[. _-]+(?:480|720|1080|1440|2160)[pP](?![A-Za-z0-9]))",
-            RegexOptions.CultureInvariant, RegexTimeout);
+        Match numeric = SafeMatch(RuleRegexExecution.Get(@"^(?<episode>[0-9]{1,3})(?:$|[. _-]+(?:480|720|1080|1440|2160)[pP](?![A-Za-z0-9]))"), stem);
         return numeric.Success ? TryParseInt(numeric.Groups["episode"].Value) : null;
     }
 
     private static int? ExtractYear(string s)
     {
-        Match m = SafeMatch(BuiltinRulesCatalog.Year, MediaYearEvidence.WithoutDimensions(s));
+        Match m = SafeMatch(BuiltinRulesCatalog.Year, MediaYearEvidence.WithoutTechnicalOrDateNumbers(s));
         return m.Success ? TryParseInt(m.Groups["year"].Value) : null;
     }
 
@@ -619,7 +687,7 @@ internal sealed class RuleEngineService : IRuleEngineService
         // 年份 / 季集是常见的「标题边界」：取其前的部分作为标题，丢弃后续 release group 等噪声。
         // 边界在串首（boundary=0，如「S01E01.2026.…」无标题打头的命名）→ 标题为空，
         // 交由 SelectTitle 回落到更外层（父目录常承载剧名），而不是把边界后的技术残渣当标题
-        int boundary = FindEarliestBoundary(s, year);
+        int boundary = FindEarliestBoundary(s, year, season);
         if (boundary >= 0)
         {
             s = s[..boundary];
@@ -627,19 +695,19 @@ internal sealed class RuleEngineService : IRuleEngineService
         else
         {
             // 没有边界时，仍剥季集字段
-            s = SafeReplace(BuiltinRulesCatalog.SeasonEpisodeLatin, s, string.Empty);
-            s = SafeReplace(BuiltinRulesCatalog.SeasonChinese, s, string.Empty);
-            s = SafeReplace(BuiltinRulesCatalog.SeasonOnlyLatin, s, string.Empty);
-            s = SafeReplace(BuiltinRulesCatalog.EpisodeChinese, s, string.Empty);
-            s = SafeReplace(BuiltinRulesCatalog.EpisodeOnly, s, string.Empty);
-            s = SafeReplace(BuiltinRulesCatalog.BracketEpisode, s, string.Empty);
+            s = ReplaceOutsideTitleParentheses(BuiltinRulesCatalog.SeasonEpisodeLatin, s, string.Empty);
+            s = ReplaceOutsideTitleParentheses(BuiltinRulesCatalog.SeasonChinese, s, string.Empty);
+            s = ReplaceOutsideTitleParentheses(BuiltinRulesCatalog.SeasonOnlyLatin, s, string.Empty);
+            s = ReplaceOutsideTitleParentheses(BuiltinRulesCatalog.EpisodeChinese, s, string.Empty);
+            s = ReplaceOutsideTitleParentheses(BuiltinRulesCatalog.EpisodeOnly, s, string.Empty);
+            s = ReplaceOutsideTitleParentheses(BuiltinRulesCatalog.BracketEpisode, s, string.Empty);
         }
 
         return Normalize(s);
     }
 
     /// <summary>找出年份 / 季集中最早出现的位置，作为标题边界（之后内容视为噪声）</summary>
-    private static int FindEarliestBoundary(string s, int? year)
+    private static int FindEarliestBoundary(string s, int? year, int? season)
     {
         int best = -1;
         void Consider(Match m)
@@ -650,40 +718,26 @@ internal sealed class RuleEngineService : IRuleEngineService
             }
         }
 
-        if (year is not null) Consider(SafeMatch(BuiltinRulesCatalog.Year, s));
-        Consider(SafeMatch(BuiltinRulesCatalog.SeasonEpisodeLatin, s));
-        Consider(SafeMatch(BuiltinRulesCatalog.SeasonChinese, s));
-        Consider(SafeMatch(BuiltinRulesCatalog.SeasonOnlyLatin, s));
-        Consider(SafeMatch(BuiltinRulesCatalog.EpisodeChinese, s));
-        Consider(SafeMatch(BuiltinRulesCatalog.EpisodeOnly, s));
-        Consider(SafeMatch(BuiltinRulesCatalog.BracketEpisode, s));
-        // 篇章标题与罗马数字季号也是标题边界（鬼灭之刃 锻刀村篇 / 刀剑神域II → 标题截到边界前）
-        Consider(SafeMatch(BuiltinRulesCatalog.SeasonArc, s));
-        Consider(SafeMatch(BuiltinRulesCatalog.SeasonRoman, s));
+        if (year is not null) Consider(FindUnprotectedTitleBoundary(BuiltinRulesCatalog.Year, s));
+        Consider(FindUnprotectedTitleBoundary(BuiltinRulesCatalog.SeasonEpisodeLatin, s));
+        Consider(FindUnprotectedTitleBoundary(BuiltinRulesCatalog.SeasonChinese, s));
+        Consider(FindUnprotectedTitleBoundary(BuiltinRulesCatalog.SeasonOnlyLatin, s));
+        Consider(FindUnprotectedTitleBoundary(BuiltinRulesCatalog.EpisodeChinese, s));
+        Consider(FindUnprotectedTitleBoundary(BuiltinRulesCatalog.EpisodeOnly, s));
+        Consider(FindUnprotectedTitleBoundary(BuiltinRulesCatalog.BracketEpisode, s));
+        // 新显式语法与字段提取使用同一模式；全角折叠保持索引长度不变，未知括号仍受保护。
+        string folded = FoldStructuredWidth(s);
+        Consider(FindUnprotectedTitleBoundary(StructuredCombined, folded));
+        Consider(FindUnprotectedTitleBoundary(StructuredNx, folded));
+        Consider(FindStructuredEpisodeBoundary(folded, season is not null));
+        foreach (Match chinese in SafeMatches(StructuredCjk, folded))
+            if (chinese.Groups["unit"].Value != "期" && !IntersectsTitleParentheses(folded, chinese)) Consider(chinese);
 
         return best;
     }
 
     private static string CleanedStem(string stem)
-    {
-        // 顺序敏感：先剥发布组尾缀（依赖 - 边界），再剥方括号 / 全角【】块，
-        // 然后剥总季数/总集数后缀——必须在分隔符折叠之前，否则「第1-6季」的连字符被折叠成空格后无法识别区间；
-        // 「Season NN」全词季号须在通用噪声之前整体剥除（Noise 词表含裸 season 单词，先跑会只吃掉单词、
-        // 把季号数字残留进标题，如「Show Season 2」→「Show 2」），最后剥噪声 token + 分隔符。
-        // 仅在发布元数据之后剥尾组；Spider-Man / X-Men 等标题内连字符必须保留。
-        Match suffix = SafeMatch(BuiltinRulesCatalog.ReleaseGroupSuffix, stem);
-        string s = stem;
-        if (suffix.Success && SafeMatch(BuiltinRulesCatalog.Noise, stem[..suffix.Index]).Success)
-            s = stem[..suffix.Index];
-        s = MediaYearEvidence.WithoutDimensions(s);
-        s = SafeReplace(BuiltinRulesCatalog.GroupBracket, s, " ");
-        s = SafeReplace(BuiltinRulesCatalog.TotalCountNoise, s, " ");
-        s = SafeReplace(BuiltinRulesCatalog.SeasonOrdinalLatin, s, " ");
-        s = SafeReplace(BuiltinRulesCatalog.SeasonWordLatin, s, " ");
-        s = SafeReplace(BuiltinRulesCatalog.Noise, s, " ");
-        s = SafeReplace(BuiltinRulesCatalog.Separator, s, " ");
-        return Normalize(s);
-    }
+    { return CleanTitleNoise(stem); }
 
     private static string Normalize(string s)
     {
@@ -799,15 +853,16 @@ internal sealed class RuleEngineService : IRuleEngineService
 
     private static Match SafeMatch(Regex re, string s)
     {
-        try { return re.Match(s); }
-        catch (RegexMatchTimeoutException) { return Match.Empty; }
+        return RuleRegexExecution.Match(re, s);
     }
 
     private static string SafeReplace(Regex re, string s, string replacement)
     {
-        try { return re.Replace(s, replacement); }
-        catch (RegexMatchTimeoutException) { return s; }
+        return RuleRegexExecution.Replace(re, s, replacement);
     }
+
+    private static IReadOnlyList<Match> SafeMatches(Regex re, string s) => RuleRegexExecution.Matches(re, s);
+    private static bool SafeIsMatch(Regex re, string s) => SafeMatch(re, s).Success;
 
     private static string? TryGroup(Match m, string name)
     {
@@ -840,17 +895,17 @@ internal sealed class RuleEngineService : IRuleEngineService
     }
 
     /// <summary>日期、纯技术或发行宣传词不构成作品身份</summary>
-    private static bool IsHashOnlyTitle(string title) => Regex.IsMatch(title.Trim(),
-        @"^[\[\(]?([A-Fa-f0-9]{8}|[A-Fa-f0-9]{32}|[A-Fa-f0-9]{40}|[A-Fa-f0-9]{64})[\]\)]?$", BaseOptions, RegexTimeout);
+    private static bool IsHashOnlyTitle(string title) => SafeIsMatch(RuleRegexExecution.Get(
+        @"^[\[\(]?([A-Fa-f0-9]{8}|[A-Fa-f0-9]{32}|[A-Fa-f0-9]{40}|[A-Fa-f0-9]{64})[\]\)]?$"), title.Trim());
 
     internal static bool IsNonIdentityTitle(string title)
     {
         if (IsHashOnlyTitle(title)) return true;
         string normalized = Normalize(SafeReplace(BuiltinRulesCatalog.Separator, title, " "));
-        if (Regex.IsMatch(normalized, @"^(?:19|20)\d{2}\s*(?:0?[1-9]|1[0-2])\s*(?:0?[1-9]|[12]\d|3[01])$", BaseOptions, RegexTimeout)) return true;
+        if (SafeIsMatch(RuleRegexExecution.Get(@"^(?:19|20)\d{2}\s*(?:0?[1-9]|1[0-2])\s*(?:0?[1-9]|[12]\d|3[01])$"), normalized)) return true;
         // 数字集号不能为纯技术残渣提供作品身份；只去掉有分隔符的短数字前缀，避免误伤正常标题。
-        string withoutEpisodePrefix = Regex.Replace(normalized, @"^[0-9]{1,4}\s+", "", BaseOptions, RegexTimeout);
-        if (Regex.IsMatch(withoutEpisodePrefix, @"^(?:(?:4K|8K|2160p|1080p|720p|480p|HDR|UHD|HD|高清|蓝光|国语|粤语|中字|字幕|无水印|修复版)|\s)+$", BaseOptions, RegexTimeout)) return true;
+        string withoutEpisodePrefix = SafeReplace(RuleRegexExecution.Get(@"^[0-9]{1,4}\s+"), normalized, "");
+        if (SafeIsMatch(RuleRegexExecution.Get(@"^(?:(?:4K|8K|2160p|1080p|720p|480p|HDR|UHD|HD|高清|蓝光|国语|粤语|中字|字幕|无水印|修复版)|\s)+$"), withoutEpisodePrefix)) return true;
         return !title.Contains('[') && !title.Contains('【') && string.IsNullOrWhiteSpace(CleanedStem(title));
     }
 
@@ -867,7 +922,7 @@ internal sealed class RuleEngineService : IRuleEngineService
 
         void Add(string? candidate)
         {
-            if (string.IsNullOrWhiteSpace(candidate)) return;
+            if (string.IsNullOrWhiteSpace(candidate) || IsUnverifiedTitleFragment(candidate)) return;
             string normalized = NormalizeForDedup(candidate);
             if (normalized.Length < 2) return;
             if (!seen.Add(normalized)) return;
@@ -884,12 +939,15 @@ internal sealed class RuleEngineService : IRuleEngineService
         string stem = Path.GetFileNameWithoutExtension(context.FileName);
         List<string> layers = new(context.RelativeSegments.Count + 1) { stem };
         for (int i = context.RelativeSegments.Count - 1; i >= 0; i--) layers.Add(context.RelativeSegments[i]);
-        foreach (string layer in layers)
+        for (int i = 0; i < layers.Count; i++)
         {
+            string layer = layers[i];
             // 「压制代号-集号」层无标题价值（与 SelectTitle 同口径）
             if (IsReleaseTagEpisodeLayer(layer)) continue;
-            string cleaned = ExtractTitle(layer, result.Season, result.Episode, result.Year);
-            if (!HasMeaningfulContent(cleaned)) continue;
+            string cleaned = i == 0 || (result.ForceType && result.MediaType == "movie")
+                ? ExtractTitle(layer, result.Season, result.Episode, result.Year)
+                : ExtractFolderTitle(layer, context.FileName, result.Season, result.Episode, result.Year);
+            if (!HasMeaningfulContent(cleaned) || IsNonIdentityTitle(cleaned) || IsGenericFolder(cleaned)) continue;
             Add(cleaned);
             foreach (string seg in SplitMixedSegments(cleaned)) Add(seg);
         }
@@ -905,53 +963,13 @@ internal sealed class RuleEngineService : IRuleEngineService
 
     /// <summary>把混排标题拆成可独立搜索的子段：CJK 段 / 与 CJK 粘连的拉丁副标段 / 拉丁词组段</summary>
     /// <remarks>
-    /// 「机动战士高达SEEDFREEDOM Mobile Suit Gundam Seed Freedom」→
-    /// [「机动战士高达」,「SEEDFREEDOM」,「Mobile Suit Gundam Seed Freedom」]。
-    /// 紧贴 CJK 无空格的拉丁 run（SEEDFREEDOM）常是与中文名粘连的系列副标，单独成段，
-    /// 避免混进空格词组污染整组搜索词。CJK 段 ≥2 字、拉丁段 ≥4 字母才有搜索价值；
+    /// 只在空白处分离明确的语言切换，粘连副标和紧随标题的数字仍随原片名保留。
+    /// 「机动战士高达SEEDFREEDOM Mobile Suit Gundam Seed Freedom」保留两个完整作品标题，
+    /// 不生成过宽的「机动战士高达」或无身份的「SEEDFREEDOM」片段。
     /// 纯单语标题拆出的唯一段与原串相同，由调用方去重剔除。
     /// </remarks>
     internal static List<string> SplitMixedSegments(string title)
-    {
-        List<string> segments = [];
-        if (string.IsNullOrWhiteSpace(title)) return segments;
-
-        // 1. 纯 CJK 段（连续 ≥2 字）
-        StringBuilder cjkRun = new();
-        foreach (char ch in title)
-        {
-            if (IsCjk(ch))
-            {
-                cjkRun.Append(ch);
-                continue;
-            }
-            if (cjkRun.Length >= 2) segments.Add(cjkRun.ToString());
-            cjkRun.Clear();
-        }
-        if (cjkRun.Length >= 2) segments.Add(cjkRun.ToString());
-
-        // 2. 拉丁侧：把 CJK 全部替为哨兵后按哨兵切片；片首紧贴哨兵（无空格）的首词 = 粘连副标，单独成段
-        const char sentinel = '\u0001';
-        StringBuilder masked = new(title.Length);
-        foreach (char ch in title) masked.Append(IsCjk(ch) ? sentinel : ch);
-        string[] pieces = masked.ToString().Split(sentinel);
-        for (int i = 0; i < pieces.Length; i++)
-        {
-            string piece = pieces[i];
-            if (piece.Length == 0) continue;
-            string phrase = piece;
-            if (i > 0 && !char.IsWhiteSpace(piece[0]))
-            {
-                int space = piece.IndexOf(' ');
-                string glued = space < 0 ? piece : piece[..space];
-                phrase = space < 0 ? string.Empty : piece[(space + 1)..];
-                if (CountLatinLetters(glued) >= 4) segments.Add(glued.Trim());
-            }
-            phrase = phrase.Trim();
-            if (CountLatinLetters(phrase) >= 4) segments.Add(phrase);
-        }
-        return segments;
-    }
+    { return SplitIdentityTitleSegments(title); }
 
     /// <summary>标题是否为纯 CJK 段（含 CJK 且不含拉丁字母；空格 / 数字点缀允许）</summary>
     private static bool IsAllCjkTitle(string s)
@@ -995,61 +1013,10 @@ internal sealed class RuleEngineService : IRuleEngineService
     /// 内置规则路径已在解析阶段提取过的字段此处不重复（仅缺失才补），保证两条规则路径口径一致：
     /// 即便命中用户规则（其 title 可能残留「II」「XXX篇」），也能补出 season / seasonTitle 并清理标题，
     /// 避免「Sword Art Online II」「鬼灭之刃 锻刀村篇」整串送 TMDB 失准。
-    /// 罗马数字补季后视为剧集；电影续集（教父 II）误判由下游 TMDB/AI 纠正回 movie（归档忽略 season）。
+    /// 罗马尾缀只保留候选，不自动改写标题或季号，避免电影续作和系列固有名称被误拆。
     /// </remarks>
     private static RuleParseResult PostProcessSeasonMarkers(RuleParseResult r)
-    {
-        if (r.ForceType && r.MediaType == "movie") return r;
-        string title = r.Title;
-        int? season = r.Season;
-        string? seasonTitle = r.SeasonTitle;
-        bool changed = false;
-
-        // 篇章标题（XXX篇）：未提取过才补；剥掉标题中篇章及其后内容
-        if (seasonTitle is null && !string.IsNullOrEmpty(title))
-        {
-            Match arc = SafeMatch(BuiltinRulesCatalog.SeasonArc, title);
-            if (arc.Success)
-            {
-                seasonTitle = arc.Groups["seasonTitle"].Value;
-                title = title[..arc.Index];
-                changed = true;
-            }
-        }
-
-        // 尾部罗马数字季号（II-X）：仅季号缺失时补；剥掉标题中罗马数字及其后内容
-        if (season is null && !string.IsNullOrEmpty(title))
-        {
-            Match rm = SafeMatch(BuiltinRulesCatalog.SeasonRoman, title);
-            if (rm.Success)
-            {
-                season = ParseRomanSeason(rm.Groups["roman"].Value);
-                title = title[..rm.Index];
-                changed = true;
-            }
-        }
-
-        if (!changed) return r;
-
-        string normalized = Normalize(title);
-        if (string.IsNullOrEmpty(normalized)) normalized = r.Title; // 剥空则回退原标题，避免标题丢失
-
-        // 补了季号 → 视为剧集（罗马 / 篇章均剧集语义）；缺季时 type 不变（篇章可能无季号）
-        string mediaType = season is not null && r.MediaType != "tv" ? "tv" : r.MediaType;
-        // 季号补全后置信度可能从「缺季 0.50」升级；取与原值较高者，避免抹掉用户规则 bonus
-        double confidence = Math.Max(r.Confidence, ScoreConfidence(normalized, mediaType, season, r.Episode, r.Year));
-        bool special = HasMixedCjkLatin(normalized);
-
-        return r with
-        {
-            Title = normalized,
-            Season = season,
-            SeasonTitle = seasonTitle,
-            MediaType = mediaType,
-            Confidence = confidence,
-            HasSpecialChars = special,
-        };
-    }
+    { return PreserveSeasonArcCandidate(r); }
 
     /// <summary>罗马数字季号 II-X → int（不含单 I；正则已限定 II 及以上）；非法返回 null</summary>
     private static int? ParseRomanSeason(string roman) => roman.ToUpperInvariant() switch
@@ -1068,10 +1035,7 @@ internal sealed class RuleEngineService : IRuleEngineService
 
     /// <summary>提取季的篇章标题（中文「XXX篇」，如「锻刀村篇」）；无则 null</summary>
     private static string? ExtractSeasonTitle(string s)
-    {
-        Match m = SafeMatch(BuiltinRulesCatalog.SeasonArc, s);
-        return m.Success ? m.Groups["seasonTitle"].Value : null;
-    }
+    { return ExtractUnverifiedArcTitle(s); }
 
     private const string CjkDigits = "零一二三四五六七八九";
 

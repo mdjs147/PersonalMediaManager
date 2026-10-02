@@ -14,14 +14,16 @@ export interface paths {
         /**
          * Version / 版本号
          * @description 匿名访问：登录页 footer / 巡检脚本 / 前后端对齐校验用，不暴露任何敏感字段（路径 / 磁盘大小不返）。
-         *     返完整 VersionInfoResponse：4 套版本号 + commit + dirty + buildTime + 数据库 target/applied/needsMigration。
+         *     product 为唯一产品版本，backend/frontend 是同值兼容字段。
+         *     保留 database 对象形状，但不查数据库：status=notChecked，迁移标识和列表为空。
+         *     完整迁移诊断仅由管理员 GET /system/info 的 versionInfo 返回。
          *
          *     成功响应：
          *     ```json
-         *     { "code":0, "message":"ok", "data":{ "product":"0.1.0", "backend":"0.1.0+a1b2c3d4", "frontend":"1.0.0", "database":{"target":"0.1.0","applied":"0.1.0","appliedMigrationId":"20260526...","needsMigration":false}, "commit":"a1b2c3d4", "dirty":false, "buildTime":"2026-05-27T01:33:32Z", "framework":".NET 10.0" }, "requestId":"..." }
+         *     { "code":0, "message":"ok", "data":{ "product":"0.4.0", "backend":"0.4.0", "frontend":"0.4.0", "database":{"target":"","applied":"unknown","appliedMigrationId":null,"needsMigration":false,"historyAvailable":false,"status":"notChecked","pendingMigrationIds":[],"unknownMigrationIds":[]}, "commit":"a1b2c3d4", "dirty":false, "buildTime":"2026-10-02T01:33:32Z", "framework":".NET 10.0" }, "requestId":"..." }
          *     ```
          *     错误码：
-         *     - 9000 ServerError — 反射 / db 查询失败（兜底返 unknown 而非抛错；仅严重场景命中）
+         *     - 9000 ServerError — 读取程序集元数据失败
          */
         get: {
             parameters: {
@@ -2365,6 +2367,548 @@ export interface paths {
                         "text/plain": components["schemas"]["ApiResponseOfTestFfmpegResponse"];
                         "application/json": components["schemas"]["ApiResponseOfTestFfmpegResponse"];
                         "text/json": components["schemas"]["ApiResponseOfTestFfmpegResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/local-ai": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 读取本地模型设置
+         * @description 成功：{"code":0,"message":"ok","data":{"mode":"Disabled","modelId":"qwen2.5-0.5b-instruct-q8_0"},"requestId":"..."}
+         *     错误码：1000 参数错误；9000 服务错误。
+         *     错误：{"code":9000,"message":"读取失败","data":null,"requestId":"..."}
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 当前设置 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfLocalAiSettingsDto"];
+                        "application/json": components["schemas"]["ApiResponseOfLocalAiSettingsDto"];
+                        "text/json": components["schemas"]["ApiResponseOfLocalAiSettingsDto"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/local-ai/update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 保存本地模型设置
+         * @description 请求：{"mode":"Disabled","modelId":"qwen2.5-0.5b-instruct-q8_0","runtimeExecutablePath":"","port":18081,"threads":2,"contextTokens":2048,"maxOutputTokens":512,"timeoutSeconds":30,"startupTimeoutSeconds":90,"memoryLimitMb":2048}
+         *     成功：{"code":0,"message":"ok","data":null,"requestId":"..."}
+         *     错误码：1000 配置超限或路径无效；9000 服务错误。
+         *     错误：{"code":1000,"message":"资源参数超出允许范围","data":null,"requestId":"..."}
+         *     保存前停止旧子进程；不会自动启动或下载模型。
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["LocalAiSettingsDto"];
+                    "text/json": components["schemas"]["LocalAiSettingsDto"];
+                    "application/*+json": components["schemas"]["LocalAiSettingsDto"];
+                };
+            };
+            responses: {
+                /** @description 保存成功 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/local-ai/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 列出白名单模型
+         * @description 成功：{"code":0,"message":"ok","data":[],"requestId":"..."}
+         *     错误码：9000 文件状态读取失败。
+         *     错误：{"code":9000,"message":"读取失败","data":null,"requestId":"..."}
+         *     installed 仅表示本地文件大小匹配；启动时仍会重新校验 SHA256。
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 模型列表 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfIReadOnlyListOfLocalAiModelDto"];
+                        "application/json": components["schemas"]["ApiResponseOfIReadOnlyListOfLocalAiModelDto"];
+                        "text/json": components["schemas"]["ApiResponseOfIReadOnlyListOfLocalAiModelDto"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/local-ai/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 读取运行和下载状态
+         * @description 成功：{"code":0,"message":"ok","data":{"state":"Stopped","downloadState":"Idle"},"requestId":"..."}
+         *     错误码：9000 服务错误。
+         *     错误：{"code":9000,"message":"读取失败","data":null,"requestId":"..."}
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 运行状态 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfLocalAiStatusDto"];
+                        "application/json": components["schemas"]["ApiResponseOfLocalAiStatusDto"];
+                        "text/json": components["schemas"]["ApiResponseOfLocalAiStatusDto"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/local-ai/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 开始下载固定模型
+         * @description 请求：{"modelId":"qwen2.5-0.5b-instruct-q8_0"}
+         *     成功：{"code":0,"message":"ok","data":null,"requestId":"..."}
+         *     错误码：1000 非白名单、无固定制品或已有操作；9000 服务错误。
+         *     错误：{"code":1000,"message":"已有模型正在下载","data":null,"requestId":"..."}
+         *     成功仅表示开始下载；通过 status 读取校验结果。
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["LocalAiDownloadRequest"];
+                    "text/json": components["schemas"]["LocalAiDownloadRequest"];
+                    "application/*+json": components["schemas"]["LocalAiDownloadRequest"];
+                };
+            };
+            responses: {
+                /** @description 下载已开始 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/local-ai/download/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 取消下载并清理临时文件
+         * @description 请求：空请求体。
+         *     成功：{"code":0,"message":"ok","data":null,"requestId":"..."}
+         *     错误码：9000 清理失败。
+         *     错误：{"code":9000,"message":"清理失败","data":null,"requestId":"..."}
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 下载已取消 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/local-ai/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 启动并检查本地运行时
+         * @description 请求：空请求体。
+         *     成功：{"code":0,"message":"ok","data":null,"requestId":"..."}
+         *     错误码：1000 未安装、模型校验失败、端口占用或启动超时；9000 服务错误。
+         *     错误：{"code":1000,"message":"本地端口已被占用","data":null,"requestId":"..."}
+         *     不改变模式；Disabled 时也可检查运行时，但不会参与媒体识别。
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 运行时健康 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/local-ai/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 停止自行启动的子进程
+         * @description 请求：空请求体。
+         *     成功：{"code":0,"message":"ok","data":null,"requestId":"..."}
+         *     错误码：1000 子进程尚未退出；9000 服务错误。
+         *     错误：{"code":1000,"message":"请重试停止","data":null,"requestId":"..."}
+         *     不终止其他程序启动的服务。
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 已停止 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
                     };
                 };
                 /** @description Bad Request */
@@ -10377,6 +10921,77 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/diagnostics/parse/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 导出已保留的解析证据
+         * @description 请求：GET ?runId=32位十六进制，或 ?scanRunId=32位十六进制，或 ?mediaItemId=正整数，三者只选其一。无路径入参。
+         *     成功：{ "code":0,"data":{ "events":[],"completeness":{} },"requestId":"..." }。
+         *     错误码：1000 参数无效；9000 存储读取失败。
+         *     错误：{ "code":1000,"message":"参数无效","data":null,"requestId":"..." }。
+         *     返回的是本机保留窗口内的脱敏事实，缺口在 completeness 明示，不保证完整重放。
+         */
+        get: {
+            parameters: {
+                query?: {
+                    runId?: string;
+                    mediaItemId?: number | string;
+                    scanRunId?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 包含完整性标记的回放包 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfParseReplayExport"];
+                        "application/json": components["schemas"]["ApiResponseOfParseReplayExport"];
+                        "text/json": components["schemas"]["ApiResponseOfParseReplayExport"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/dashboard/stats": {
         parameters: {
             query?: never;
@@ -11751,6 +12366,13 @@ export interface components {
             data?: null | components["schemas"]["LibraryRelatedItem"][];
             requestId?: string;
         };
+        ApiResponseOfIReadOnlyListOfLocalAiModelDto: {
+            /** Format: int32 */
+            code?: number | string;
+            message?: string;
+            data?: null | components["schemas"]["LocalAiModelDto"][];
+            requestId?: string;
+        };
         ApiResponseOfIReadOnlyListOfMediaExtensionResponse: {
             /** Format: int32 */
             code?: number | string;
@@ -11828,6 +12450,20 @@ export interface components {
             data?: null | components["schemas"]["LibraryWorkDetailResponse"];
             requestId?: string;
         };
+        ApiResponseOfLocalAiSettingsDto: {
+            /** Format: int32 */
+            code?: number | string;
+            message?: string;
+            data?: null | components["schemas"]["LocalAiSettingsDto"];
+            requestId?: string;
+        };
+        ApiResponseOfLocalAiStatusDto: {
+            /** Format: int32 */
+            code?: number | string;
+            message?: string;
+            data?: null | components["schemas"]["LocalAiStatusDto"];
+            requestId?: string;
+        };
         ApiResponseOfLoginResponse: {
             /** Format: int32 */
             code?: number | string;
@@ -11882,6 +12518,13 @@ export interface components {
             code?: number | string;
             message?: string;
             data?: null | components["schemas"]["ParseAiProviderResponse"];
+            requestId?: string;
+        };
+        ApiResponseOfParseReplayExport: {
+            /** Format: int32 */
+            code?: number | string;
+            message?: string;
+            data?: null | components["schemas"]["ParseReplayExport"];
             requestId?: string;
         };
         ApiResponseOfParseRuleResponse: {
@@ -12773,6 +13416,10 @@ export interface components {
             applied?: string;
             appliedMigrationId?: null | string;
             needsMigration?: boolean;
+            historyAvailable?: boolean;
+            status?: string;
+            pendingMigrationIds?: string[];
+            unknownMigrationIds?: string[];
         };
         DecadeBucket: {
             /** Format: int32 */
@@ -13079,6 +13726,7 @@ export interface components {
             requiresRestart?: boolean;
             message?: null | string;
         };
+        JsonElement: unknown;
         LastUpdateCheckSnapshot: {
             /** Format: date-time */
             checkedAt: string;
@@ -13257,6 +13905,64 @@ export interface components {
             latestArchivedAt: null | string;
             files: components["schemas"]["LibraryFileItem"][];
         };
+        LocalAiDownloadRequest: {
+            modelId: string;
+        };
+        /** @enum {string} */
+        LocalAiMode: "Disabled" | "BeforeRules" | "AfterRules";
+        LocalAiModelDto: {
+            id: string;
+            name: string;
+            sourceUrl: string;
+            revision: null | string;
+            /** Format: int64 */
+            sizeBytes: null | number | string;
+            sha256: null | string;
+            canDownload: boolean;
+            unavailableReason: null | string;
+            installed: boolean;
+            canVerify: boolean;
+            fileName: string;
+            localPath: string;
+            conversionRevision?: null | string;
+        };
+        LocalAiSettingsDto: {
+            mode?: components["schemas"]["LocalAiMode"];
+            modelId?: string;
+            runtimeExecutablePath?: string;
+            /** Format: int32 */
+            port?: number | string;
+            /** Format: int32 */
+            threads?: number | string;
+            /** Format: int32 */
+            contextTokens?: number | string;
+            /** Format: int32 */
+            maxOutputTokens?: number | string;
+            /** Format: int32 */
+            timeoutSeconds?: number | string;
+            /** Format: int32 */
+            startupTimeoutSeconds?: number | string;
+            /** Format: int32 */
+            memoryLimitMb?: number | string;
+        };
+        LocalAiStatusDto: {
+            state: string;
+            modelId: null | string;
+            runtimeConfigured: boolean;
+            platformSupported: boolean;
+            message: string;
+            downloadModelId?: null | string;
+            /** @default Idle */
+            downloadState: string;
+            /**
+             * Format: int64
+             * @default 0
+             */
+            downloadedBytes: number | string;
+            /** Format: int64 */
+            downloadTotalBytes?: null | number | string;
+            downloadError?: null | string;
+        };
         LogEntryResponse: {
             /** Format: date-time */
             timestamp: string;
@@ -13432,6 +14138,32 @@ export interface components {
             successRate?: null | number | string;
             /** Format: int32 */
             avgLatency?: null | number | string;
+        };
+        ParseDiagnosticEvent: {
+            /** Format: int32 */
+            schemaVersion: number | string;
+            /** Format: date-time */
+            timestamp: string;
+            runId: string;
+            scanRunId: null | string;
+            /** Format: int64 */
+            mediaItemId: null | number | string;
+            /** Format: int64 */
+            sequence: number | string;
+            operation: string;
+            name: string;
+            data: components["schemas"]["JsonElement"];
+            /** @default false */
+            dataRedacted: boolean;
+        };
+        ParseReplayExport: {
+            /** Format: int32 */
+            schemaVersion: number | string;
+            /** Format: date-time */
+            exportedAt: string;
+            scope: string;
+            events: components["schemas"]["ParseDiagnosticEvent"][];
+            completeness: unknown;
         };
         /** @enum {string} */
         ParseRuleImportMode: "Merge" | "Replace";

@@ -2,15 +2,15 @@ using PersonalMediaManager.Application.Dtos.System;
 
 namespace PersonalMediaManager.Application.Contracts;
 
-/// <summary>版本号信息提供方：暴露 4 套版本号 + commit + buildTime + 数据库 target/applied 对比</summary>
+/// <summary>提供统一产品版本、构建信息和数据库迁移状态</summary>
 /// <remarks>
 /// 数据来源：
-/// 1. 静态字段（Product/Backend/Frontend/Commit/BuildTime/DbTarget）— 反射 entry assembly 的 AssemblyMetadataAttribute 与 AssemblyInformationalVersion
-/// 2. 动态字段（Db.Applied/NeedsMigration）— 查 __EFMigrationsHistory + 对照嵌入资源 version-map.json
+/// 1. 主版本来自 ProductVersion 元数据；Backend/Frontend 是同值兼容字段，commit 与构建时间单独提供。
+/// 2. 迁移目标来自 EF GetMigrations；动态状态比较完整 __EFMigrationsHistory 与代码迁移集合。
 ///
-/// 两端点对应：
-/// - GET /system/version（匿名）→ GetStatic() 不查 db，登录前可用
-/// - GET /system/info（Admin）   → GetFullAsync(ct) 包含 db 动态字段
+/// GetStatic 用于启动日志与匿名 GET /system/version，不访问数据库。
+/// GetFullAsync 由管理员 GET /system/info 返回完整迁移诊断。
+/// 数据库状态只读，不执行迁移；历史读取失败时明确返回 unknown。
 /// </remarks>
 public interface IVersionInfoProvider
 {

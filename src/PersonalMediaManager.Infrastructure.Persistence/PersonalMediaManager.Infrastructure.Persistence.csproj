@@ -15,15 +15,6 @@
     <ProjectReference Include="..\PersonalMediaManager.Domain\PersonalMediaManager.Domain.csproj" />
   </ItemGroup>
 
-  <!--
-    db/version-map.json 作为 EmbeddedResource 打包：运行时 Assembly.GetManifestResourceStream 读取，
-    避免依赖部署目录文件存在性。资源名称：PersonalMediaManager.Infrastructure.Persistence.version-map.json
-    （LogicalName 显式指定，避免目录路径变化导致资源名漂移）
-  -->
-  <ItemGroup>
-    <EmbeddedResource Include="..\..\db\version-map.json" LogicalName="PersonalMediaManager.Infrastructure.Persistence.version-map.json" />
-  </ItemGroup>
-
   <ItemGroup>
     <InternalsVisibleTo Include="PersonalMediaManager.Infrastructure.Persistence.Tests" />
   </ItemGroup>
