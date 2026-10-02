@@ -47,6 +47,54 @@ test('读取完整主版本，忽略注释示例和旧组件版本', (t) => {
   assert.equal(readProductVersion(f.propsPath), '0.4.0');
 });
 
+test('相邻、多行及空注释不影响独立完整的主版本标签', (t) => {
+  const f = fixture(t);
+  writeFileSync(f.propsPath, `<Project>
+    <!----><!-- first - comment --><!--
+      <PmmProductVersion>8.8.8</PmmProductVersion>
+    -->
+    <PmmProductVersion>0.4.0</PmmProductVersion>
+    <!-- last --><!---->
+  </Project>`);
+  assert.equal(readProductVersion(f.propsPath), '0.4.0');
+});
+
+test('拒绝嵌套、双连字符、尾连字符及未闭合 XML 注释', (t) => {
+  const f = fixture(t);
+  for (const comment of [
+    '<!-- outer <!-- nested --> -->',
+    '<!-- invalid -- body -->',
+    '<!-- invalid --->',
+    '<!-- not closed',
+  ]) {
+    // 即使已找到完整版本，也必须检查后续注释，不接受部分解析结果。
+    writeFileSync(f.propsPath, `<Project><PmmProductVersion>0.4.0</PmmProductVersion>${comment}</Project>`);
+    assert.throws(() => readProductVersion(f.propsPath), /XML 注释/, comment);
+  }
+});
+
+test('注释不能拼出新的版本标签、标签边界或版本值', (t) => {
+  const f = fixture(t);
+  for (const property of [
+    '<Pmm<!-- split -->ProductVersion>0.4.0</PmmProductVersion>',
+    '<<!-- split -->PmmProductVersion>0.4.0</PmmProductVersion>',
+    '<PmmProductVersion<!-- split -->>0.4.0</PmmProductVersion>',
+    '<PmmProductVersion>0.4.0</Pmm<!-- split -->ProductVersion>',
+    '<PmmProductVersion>0.4.0</PmmProductVersion<!-- split -->>',
+    '<PmmProductVersion>0.<!-- first --><!-- second -->4.0</PmmProductVersion>',
+    '<PmmProductVersion><!-- split -->0.4.0</PmmProductVersion>',
+  ]) {
+    writeFileSync(f.propsPath, `<Project>${property}</Project>`);
+    assert.throws(() => readProductVersion(f.propsPath), /必须且只能定义一个/, property);
+  }
+});
+
+test('相邻注释不能隐藏跨段的重复主版本定义', (t) => {
+  const f = fixture(t);
+  writeFileSync(f.propsPath, '<Project><PmmProductVersion>0.4.0</PmmProductVersion><!----><!-- gap --><PmmProductVersion>0.5.0</PmmProductVersion></Project>');
+  assert.throws(() => readProductVersion(f.propsPath), /必须且只能定义一个/);
+});
+
 test('预发布标识和构建元数据不能进入主版本源', (t) => {
   const f = fixture(t);
   for (const version of ['1.2.3-beta.2', '1.2.3+build.007', '1.2.3-beta.2+build.007']) {

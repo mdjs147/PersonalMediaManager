@@ -10,10 +10,37 @@ const productVersionPattern = new RegExp(
   `^${numericIdentifier}\\.${numericIdentifier}\\.${numericIdentifier}$`,
 );
 
+/** 注释外的原文分段独立读取，绝不拼接成原文件中不存在的标签或值。 */
+function xmlSegmentsOutsideComments(xml) {
+  const segments = [];
+  let cursor = 0;
+  while (cursor < xml.length) {
+    const start = xml.indexOf('<!--', cursor);
+    if (start === -1) {
+      segments.push(xml.slice(cursor));
+      break;
+    }
+    segments.push(xml.slice(cursor, start));
+    const end = xml.indexOf('-->', start + 4);
+    if (end === -1) {
+      throw new Error('Directory.Build.props 包含未闭合的 XML 注释。');
+    }
+    const comment = xml.slice(start + 4, end);
+    // XML 注释不能嵌套、包含双连字符，或以连字符结束。
+    if (comment.includes('--') || comment.endsWith('-')) {
+      throw new Error('Directory.Build.props 包含格式无效的 XML 注释。');
+    }
+    cursor = end + 3;
+  }
+  return segments;
+}
+
 /** 读取唯一人工维护的完整主版本号，配置异常时阻止构建。 */
 export function readProductVersion(propsPath = productPropsPath) {
-  const xml = readFileSync(propsPath, 'utf8').replace(/<!--[\s\S]*?-->/g, '');
-  const values = [...xml.matchAll(/<PmmProductVersion\b[^>]*>([^<]*)<\/PmmProductVersion\s*>/g)];
+  const segments = xmlSegmentsOutsideComments(readFileSync(propsPath, 'utf8'));
+  const values = segments.flatMap((segment) =>
+    [...segment.matchAll(/<PmmProductVersion\b[^>]*>([^<]*)<\/PmmProductVersion\s*>/g)],
+  );
   if (values.length !== 1) {
     throw new Error('Directory.Build.props 必须且只能定义一个 PmmProductVersion。');
   }

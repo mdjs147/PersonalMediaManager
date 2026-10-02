@@ -2,10 +2,13 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using PersonalMediaManager.Application.Common;
 using PersonalMediaManager.Application.Common.Diagnostics;
 using PersonalMediaManager.Host.Middleware;
+using PersonalMediaManager.Infrastructure.Persistence;
 using PersonalMediaManager.Infrastructure.Platform.Diagnostics;
 
 namespace PersonalMediaManager.Host.Tests.Controllers;
@@ -45,16 +48,25 @@ public sealed class ParseDiagnosticsControllerTests
     {
         string root = Path.Combine(Path.GetTempPath(), "pmm-diag-config-" + Guid.NewGuid().ToString("N"));
         PrivateFileSystem.EnsureDirectory(root);
+        SqliteConnection? databaseConnection = null;
         try
         {
             File.WriteAllText(Path.Combine(root, "local.json"), JsonSerializer.Serialize(new { ParseDiagnostics = new { Level = configured, MaxFiles = -4, MaxTextUtf8Bytes = 512 } }));
             using PmmHostFactory factory = new PmmHostFactory().UseFixedRoot(root);
             using HttpClient client = factory.CreateClient();
+            using PmmDbContext db = factory.Services.GetRequiredService<IDbContextFactory<PmmDbContext>>().CreateDbContext();
+            databaseConnection = (SqliteConnection)db.Database.GetDbConnection();
             ParseDiagnosticFileSink sink = factory.Services.GetRequiredService<ParseDiagnosticFileSink>();
             sink.Options.Level.Should().Be(expected); sink.Options.MaxFiles.Should().Be(1); sink.Options.MaxTextUtf8Bytes.Should().Be(512);
             using (ParseDiagnostics.Begin("parse", mediaItemId: 4, sink: sink)) ParseDiagnostics.Emit("synthetic.event");
             sink.Export(null, 4).Events.Count.Should().Be(expected == ParseDiagnosticLevel.Off ? 0 : 3);
         }
-        finally { if (Directory.Exists(root)) Directory.Delete(root, true); SetupGuardMiddleware.ResetCacheForTest(); }
+        finally
+        {
+            // Host 已释放，但池内原生连接仍可能占用 Windows 文件；只清本测试库的池，不干扰并行测试。
+            if (databaseConnection is not null) SqliteConnection.ClearPool(databaseConnection);
+            SetupGuardMiddleware.ResetCacheForTest();
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
     }
 }

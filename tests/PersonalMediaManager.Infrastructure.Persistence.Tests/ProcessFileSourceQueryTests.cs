@@ -29,23 +29,33 @@ public sealed partial class ProcessFileServiceTests
         await _archive.DidNotReceive().ArchiveAsync(Arg.Any<MediaItem>(), Arg.Any<CancellationToken>());
     }
 
-    [Fact]
-    public async Task UnverifiedTitleCannotEscapeThroughAiRematch()
+    [Theory]
+    [InlineData("Example", "Example")]
+    [InlineData("Example", "Example!")]
+    [InlineData("Example", "Example+")]
+    [InlineData("A+B", "AB")]
+    [InlineData("Numbered Story 2.22", "Numbered Story 222")]
+    [InlineData("Café", "Cafe\u0301")]
+    [InlineData("Example Show", "Example  Show")]
+    public async Task UnverifiedTitleCannotEscapeThroughAiRematch(string pendingTitle, string returnedTitle)
     {
-        RuleParseResult rule = new("Example Unverified Arc", null, "tv", 1, 3, null, 0.5, false, null,
-            AlternativeTitles: ["Example"], NamingEvidence: new("Example Unverified Arc", [],
-                TitleCandidateDecisions: [new("Example", "Candidate", "ArcBaseTitleNeedsCatalogue")]));
+        string primary = pendingTitle + " Unverified Arc";
+        RuleParseResult rule = new(primary, null, "tv", 1, 3, null, 0.5, false, null,
+            AlternativeTitles: [pendingTitle], NamingEvidence: new(primary, [],
+                TitleCandidateDecisions: [new(pendingTitle, "Candidate", "ArcBaseTitleNeedsCatalogue")]));
         _ruleEngine.ParseAsync(Arg.Any<FileParseContext>(), Arg.Any<CancellationToken>()).Returns(rule);
         _aiOrchestrator.ExecuteAsync(Arg.Any<AiParseRequest>(), Arg.Any<long?>(), Arg.Any<CancellationToken>())
-            .Returns(new AiCallOutcome(true, new AiParseResult("Example", null, "tv", 1, 3, null, 0.95), 1L, 1, null));
-        TmdbCandidate candidate = new(999, "tv", "Example", "Example", 2020, 999999, "en", null, null, null);
+            .Returns(new AiCallOutcome(true, new AiParseResult(returnedTitle, null, "tv", 1, 3, null, 0.95), 1L, 1, null));
+        TmdbCandidate candidate = new(999, "tv", returnedTitle, returnedTitle, 2020, 999999, "en", null, null, null);
         int lookups = 0;
         _tmdb.SearchAsync(Arg.Any<TmdbSearchRequest>(), Arg.Any<CancellationToken>())
             .Returns(_ => new TmdbSearchResult(++lookups == 1 ? [] : [candidate], null));
         ProcessFileOutcome result = await NewSut().ProcessAsync(new PendingFileItem(
-            Path.Combine(Path.GetTempPath(), "Example Unverified Arc S01E03.mkv"), 1, PendingFileSource.Watcher), CancellationToken.None);
-        result.Outcome.Should().Be(ProcessOutcome.AwaitingReview);
+            Path.Combine(Path.GetTempPath(), primary + " S01E03.mkv"), 1, PendingFileSource.Watcher), CancellationToken.None);
         ReadOne().TmdbId.Should().BeNull();
+        result.Outcome.Should().Be(ProcessOutcome.AwaitingReview);
+        await _tmdb.Received().SearchAsync(Arg.Is<TmdbSearchRequest>(request => request.Query == returnedTitle),
+            Arg.Any<CancellationToken>());
         await _aiOrchestrator.Received(1).ExecuteAsync(Arg.Any<AiParseRequest>(), Arg.Any<long?>(), Arg.Any<CancellationToken>());
         using PmmDbContext database = _dbFactory.CreateDbContext();
         database.ProcessSteps.Select(step => step.Detail).ToArray().Should()

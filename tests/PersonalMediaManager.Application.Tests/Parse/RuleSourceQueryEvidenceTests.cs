@@ -24,6 +24,39 @@ public sealed class RuleSourceQueryEvidenceTests
             AlternativeTitles: ["Example"], NamingEvidence: new("测试作品", [],
                 TitleCandidateDecisions: [new("Example", "Accepted", "SourceTitleSpan")]));
         RuleSourceQueryEvidence.RequiresReview(rule, "Example").Should().BeFalse();
+        RuleSourceQueryEvidence.RequiresReview(rule, "Example!").Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("Example", "Example!")]
+    [InlineData("Example Show", "Example  Show")]
+    [InlineData("Example Show", "Example\tShow")]
+    [InlineData("Example Show", "Example: Show")]
+    [InlineData("例子", "《例子》")]
+    [InlineData("Example", "Example+")]
+    [InlineData("A+B", "AB")]
+    [InlineData("Numbered Story 2.22", "Numbered Story 222")]
+    [InlineData("Numbered Story 2.22", "Numbered Story 2 22")]
+    [InlineData("Café", "Cafe\u0301")]
+    public void PresentationVariantsKeepPendingRelation(string candidate, string query)
+    {
+        RuleParseResult rule = new("Full source title", null, "unknown", null, null, null, 0.8, false, null,
+            AlternativeTitles: [candidate], NamingEvidence: new("Full source title", [],
+                TitleCandidateDecisions: [new(candidate, "Candidate", "UnverifiedRelation")]));
+        RuleSourceQueryEvidence.RequiresReview(rule, query).Should().BeTrue();
+        rule.AlternativeTitles.Should().Equal([candidate], "待审判断不应改写原始搜索词");
+    }
+
+    [Theory]
+    [InlineData("Example", "Example Other")]
+    [InlineData("Numbered Story 2.22", "Numbered Story 3.33")]
+    [InlineData("!", "?")]
+    public void DistinctTitlesDoNotSharePendingRelation(string candidate, string query)
+    {
+        RuleParseResult rule = new("Full source title", null, "unknown", null, null, null, 0.8, false, null,
+            NamingEvidence: new("Full source title", [],
+                TitleCandidateDecisions: [new(candidate, "Candidate", "UnverifiedRelation")]));
+        RuleSourceQueryEvidence.RequiresReview(rule, query).Should().BeFalse();
     }
 
     [Theory]
@@ -85,7 +118,8 @@ public sealed class RuleSourceQueryEvidenceTests
         RuleParseResult rule = new(variant.Title, null, "unknown", null, null, null, 0.5, false, null,
             NamingEvidence: new(variant.Title, [], TitleVariants: [variant]));
         RuleSourceQueryEvidence.RequiresReview(rule, token).Should().BeTrue();
-        RuleSourceQueryEvidence.RequiresReview(rule, variant.Title).Should().BeFalse();
+        RuleSourceQueryEvidence.RequiresReview(rule, variant.Title).Should().BeTrue(
+            "清除数字标点也不能让未核实的原题关系变成自动身份依据");
     }
 
     [Theory]

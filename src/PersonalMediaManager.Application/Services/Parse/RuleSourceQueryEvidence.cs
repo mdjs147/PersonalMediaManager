@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace PersonalMediaManager.Application.Services.Parse;
@@ -35,12 +36,33 @@ public static class RuleSourceQueryEvidence
         return result.Distinct(StringComparer.OrdinalIgnoreCase).Take(2).ToArray();
     }
 
-    /// <summary>精确原文变体只准核验，不凭搜索分数自动绑定</summary>
+    /// <summary>原文待核验关系不能借标点或空白变体绕过，也不凭搜索分数自动绑定</summary>
     public static bool RequiresReview(RuleParseResult rule, string query) =>
         rule.NamingEvidence?.TitleCandidateDecisions?.Any(decision => decision.Decision == "Candidate"
-            && string.Equals(decision.Candidate, query, StringComparison.OrdinalIgnoreCase)) == true
+            && MatchesPendingRelation(decision.Candidate, query)) == true
         || DecimalTitleQueries(rule.NamingEvidence?.TitleVariants, rule.RejectedFields)
-            .Contains(query, StringComparer.OrdinalIgnoreCase);
+            .Any(candidate => MatchesPendingRelation(candidate, query));
+
+    // 只传播待审核约束，绝不作为同一作品的正向证据，也不改查询原文或查询去重键。
+    private static bool MatchesPendingRelation(string candidate, string query)
+    {
+        if (string.Equals(candidate, query, StringComparison.OrdinalIgnoreCase)) return true;
+        string candidateKey = PendingRelationKey(candidate);
+        return candidateKey.Length > 0 && string.Equals(candidateKey, PendingRelationKey(query), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string PendingRelationKey(string title)
+    {
+        StringBuilder key = new(title.Length);
+        foreach (Rune rune in title.Normalize(NormalizationForm.FormC).EnumerateRunes())
+        {
+            // 包括符号及数字标点的变化也不能清除已有待审状态。
+            // 这里只形成否决约束；2.22/222、A+B/AB 的检索字符串仍彼此独立。
+            if (Rune.IsLetterOrDigit(rune))
+                key.Append(rune.ToString());
+        }
+        return key.ToString();
+    }
 
     /// <summary>尚未映射的来源编号不能被搜索分数或模型补值升级成正典字段</summary>
     public static IReadOnlyList<string> UnresolvedNumberingFields(RuleParseResult rule)
