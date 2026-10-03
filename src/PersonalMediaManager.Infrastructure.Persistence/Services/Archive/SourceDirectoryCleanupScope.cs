@@ -12,7 +12,8 @@ internal sealed class SourceDirectoryCleanupScope
         if (comparison is not (StringComparison.Ordinal or StringComparison.OrdinalIgnoreCase))
             throw new ArgumentOutOfRangeException(nameof(comparison), "清理路径只支持平台序数比较");
         Comparison = comparison;
-        Prefix = Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory)) + Path.DirectorySeparatorChar;
+        string normalized = Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory));
+        Prefix = Path.EndsInDirectorySeparator(normalized) ? normalized : normalized + Path.DirectorySeparatorChar;
         LikePattern = BuildLikePattern(Prefix, comparison);
     }
 

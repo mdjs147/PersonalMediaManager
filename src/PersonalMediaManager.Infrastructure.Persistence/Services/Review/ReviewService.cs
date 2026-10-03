@@ -530,6 +530,7 @@ internal sealed partial class ReviewService : IReviewService
 
     public async Task<TmdbDetailItem> TmdbDetailAsync(long mediaItemId, TmdbDetailQuery query, CancellationToken ct = default)
     {
+        using IDisposable trace = ParseDiagnostics.Begin("manual_metadata_refresh", mediaItemId: mediaItemId, sink: _diagnostics);
         ValidateMediaType(query.MediaType);
 
         await using PmmDbContext db = await _dbFactory.CreateDbContextAsync(ct);

@@ -237,6 +237,98 @@ public sealed class ArchiveSourceDirectoryCleanupTests : IDisposable
     }
 
     [Theory]
+    [InlineData("mixed/series/old.mkv")]
+    [InlineData("mixed\\series\\old.mkv")]
+    [InlineData("mixed/series\\old.mkv")]
+    [InlineData("mixed\\series/old.mkv")]
+    public async Task HistoricalCandidateSeparatorsFollowNativePathSemantics(string historicalRelativePath)
+    {
+        SeedMeta(1, "movie", null);
+        SeedMeta(2, "tv", "Returning Series");
+        MediaItem tv = SeedItem(historicalRelativePath, 2, "tv", realFile: false);
+        MediaItem movie = SeedItem(Path.Combine("mixed", "series", "movie.mkv"), 1, "movie", realFile: true);
+        var scope = SourceDirectoryCleanupScope.ForPlatform(Path.GetDirectoryName(movie.SourcePath)!);
+        bool expected = OperatingSystem.IsWindows() || !historicalRelativePath.Contains('\\');
+        scope.Contains(tv.SourcePath).Should().Be(expected, "Unix 的反斜杠是文件名字符，不能借 Windows 规范化扩大实际保护范围");
+        using PmmDbContext db = _factory.CreateDbContext();
+
+        TmdbMetadataCache? match = await OngoingSeriesDirectoryGuard.FindForDirectoryAsync(db, scope, movie, _clock.UtcNow, default);
+
+        (match is not null).Should().Be(expected, "SQL 宽筛不能遗漏平台支持的混合分隔符历史路径");
+    }
+
+    [Theory]
+    [InlineData(@"C:\downloads\_mission\%", @"C:/downloads\Émission/old.mkv", true)]
+    [InlineData(@"C:\downloads\_mission\%", @"C:\downloads/Émission\old.mkv", true)]
+    [InlineData(@"C:\downloads\_mission\%", @"C:/downloads\Émission-other/old.mkv", false)]
+    [InlineData(@"C:\downloads\the!_!%!!_mission\%", @"C:/downloads/the_%!Émission\old.mkv", true)]
+    [InlineData(@"C:\downloads\the!_!%!!_mission\%", @"C:/downloads/the_anythingÉmission/old.mkv", false)]
+    [InlineData(@"\\server\share\%", @"//server/share/Émission/old.mkv", true)]
+    [InlineData(@"\\server\share\%", @"\\server/share\Émission/old.mkv", true)]
+    [InlineData(@"\\server\share\%", @"//server/share-other/Émission/old.mkv", false)]
+    public async Task SqliteWindowsPathPrefilterRequiresSeparatorNormalization(string pattern, string historicalPath, bool expected)
+    {
+        // 在任意系统复现 SQL 边界；只写字符串，不将此测试冒充 Windows 文件系统验证。
+        using PmmDbContext db = _factory.CreateDbContext();
+        db.MediaItems.Add(MediaItem.CreateFixture(historicalPath, "old.mkv", 10,
+            status: MediaItemStatus.Completed, tmdbId: 2, tmdbMediaType: "tv"));
+        db.SaveChanges();
+
+        int originalCount = await db.MediaItems.CountAsync(m => EF.Functions.Like(m.SourcePath, pattern, "!"));
+        int normalizedCount = await db.MediaItems.CountAsync(m => EF.Functions.Like(m.SourcePath.Replace("/", "\\"), pattern, "!"));
+
+        originalCount.Should().Be(0, "SQLite 不会将正反斜杠视为相同分隔符");
+        normalizedCount.Should().Be(expected ? 1 : 0, "规范化后仍须保留参数转义与目录边界");
+    }
+
+    [Fact]
+    public async Task FilesystemRootScopeIncludesHistoricalSeriesWithoutDuplicateSeparator()
+    {
+        SeedMeta(2, "tv", "Returning Series");
+        string root = Path.GetPathRoot(_watch)!;
+        var scope = SourceDirectoryCleanupScope.ForPlatform(root);
+        MediaItem tv = SeedItem("series/old.mkv", 2, "tv", realFile: false);
+        MediaItem movie = SeedItem("movie.mkv", 1, "movie", realFile: true);
+        scope.Prefix.Should().Be(root);
+        scope.Contains(tv.SourcePath).Should().BeTrue();
+        using PmmDbContext db = _factory.CreateDbContext();
+
+        TmdbMetadataCache? match = await OngoingSeriesDirectoryGuard.FindForDirectoryAsync(db, scope, movie, _clock.UtcNow, default);
+
+        match.Should().NotBeNull();
+        match!.TmdbId.Should().Be(2);
+    }
+
+    [WindowsTheory]
+    [InlineData(@"C:\", @"C:/Émission/old.mkv", true)]
+    [InlineData(@"C:\downloads\émission", @"C:/downloads\Émission/old.mkv", true)]
+    [InlineData(@"C:\downloads\émission", @"C:\downloads/Émission\old.mkv", true)]
+    [InlineData(@"C:\downloads\émission", @"C:/downloads\Émission-other/old.mkv", false)]
+    [InlineData(@"C:\downloads\the_%!émission", @"C:/downloads/the_%!Émission\old.mkv", true)]
+    [InlineData(@"C:\downloads\the_%!émission", @"C:/downloads/the_anythingÉmission/old.mkv", false)]
+    [InlineData(@"\\server\share", @"//server/share/Émission/old.mkv", true)]
+    [InlineData(@"\\server\share\", @"\\server/share\Émission/old.mkv", true)]
+    [InlineData(@"\\server\share\", @"//server/share-other/Émission/old.mkv", false)]
+    public async Task WindowsDriveAndUncCandidatesPreserveScopeBoundaries(string directory, string historicalPath, bool expected)
+    {
+        SeedMeta(2, "tv", "Returning Series");
+        var scope = SourceDirectoryCleanupScope.ForPlatform(directory);
+        scope.Contains(historicalPath).Should().Be(expected);
+        // 只写合成历史行，不访问盘符或 UNC 共享，也不在这些路径执行清理。
+        MediaItem tv = MediaItem.CreateFixture(historicalPath, "old.mkv", 10,
+            status: MediaItemStatus.Completed, tmdbId: 2, tmdbMediaType: "tv");
+        MediaItem movie = MediaItem.CreateFixture(Path.Combine(directory, "movie.mkv"), "movie.mkv", 10,
+            status: MediaItemStatus.Archiving, tmdbId: 1, tmdbMediaType: "movie");
+        using PmmDbContext db = _factory.CreateDbContext();
+        db.MediaItems.Add(tv);
+        db.SaveChanges();
+
+        TmdbMetadataCache? match = await OngoingSeriesDirectoryGuard.FindForDirectoryAsync(db, scope, movie, _clock.UtcNow, default);
+
+        (match is not null).Should().Be(expected);
+    }
+
+    [Theory]
     [InlineData("Émission", "émission", StringComparison.OrdinalIgnoreCase, "Returning Series", true)]
     [InlineData("Émission", "émission", StringComparison.Ordinal, "Returning Series", false)]
     [InlineData("Show", "show", StringComparison.OrdinalIgnoreCase, "Returning Series", true)]
@@ -359,6 +451,14 @@ public sealed class ArchiveSourceDirectoryCleanupTests : IDisposable
         public WindowsFactAttribute()
         {
             if (!OperatingSystem.IsWindows()) Skip = "需要 Windows 实际文件系统；Linux 仅验证独立路径比较与 SQLite 查询语义";
+        }
+    }
+
+    private sealed class WindowsTheoryAttribute : TheoryAttribute
+    {
+        public WindowsTheoryAttribute()
+        {
+            if (!OperatingSystem.IsWindows()) Skip = "需要 Windows 路径规范化语义；不访问合成的盘符或 UNC 共享";
         }
     }
 

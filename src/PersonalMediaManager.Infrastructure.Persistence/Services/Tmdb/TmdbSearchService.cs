@@ -238,8 +238,8 @@ internal sealed partial class TmdbSearchService : ITmdbSearchService
         {
             ct.ThrowIfCancellationRequested();
             string error = SafeRefreshError(ex);
-            _logger.LogWarning("TMDB 详情刷新失败，保留原缓存：tmdbId={TmdbId}, type={Type}, error={Error}", tmdbId, normType, error);
-            ParseDiagnostics.Emit("tmdb.details_refresh_failed", new { tmdbId, mediaType = normType, error = ParseDiagnostics.CaptureText(ex.Message) });
+            _logger.LogWarning("TMDB 详情刷新失败，保留原缓存：tmdbId={TmdbId}, type={Type}, code=DetailsRefreshFailed", tmdbId, normType);
+            ParseDiagnostics.Emit("tmdb.details_refresh_failed", new { tmdbId, mediaType = normType, untrusted = true, error = ParseDiagnostics.CaptureText(ex.Message) });
             return hit is not null ? hit with { RefreshError = error }
                 : new TmdbDetailsResult(tmdbId, normType, null, null, null, null, null, null, null,
                     null, null, "{}", RefreshError: error);

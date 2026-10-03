@@ -30,13 +30,19 @@ internal static class OngoingSeriesDirectoryGuard
             if (IsConfirmedOngoing(currentCache, now, cacheHours.Value)) return currentCache;
         }
 
+        IQueryable<MediaItem> candidates = db.MediaItems.AsNoTracking()
+            .Where(m => m.Id != currentItem.Id && m.TmdbId != null && m.TmdbMediaType != null
+                && m.TmdbMediaType.ToLower() == "tv");
+        // Windows 历史路径可混用两种分隔符；先统一 SQL 路径，不能让宽筛漏掉 GetFullPath 可识别的同一路径。
+        candidates = OperatingSystem.IsWindows()
+            ? candidates.Where(m => EF.Functions.Like(m.SourcePath.Replace("/", "\\"), scope.LikePattern, "!"))
+            : candidates.Where(m => EF.Functions.Like(m.SourcePath, scope.LikePattern, "!"));
+
         long afterId = long.MinValue;
         while (true)
         {
             // LIKE 仅为路径超集；Windows 的 Unicode 大小写由 Contains 在宽筛后准确裁定。
-            List<SourceCandidate> page = await db.MediaItems.AsNoTracking()
-                .Where(m => m.Id > afterId && m.Id != currentItem.Id && m.TmdbId != null && m.TmdbMediaType != null
-                    && m.TmdbMediaType.ToLower() == "tv" && EF.Functions.Like(m.SourcePath, scope.LikePattern, "!"))
+            List<SourceCandidate> page = await candidates.Where(m => m.Id > afterId)
                 .OrderBy(m => m.Id)
                 .Select(m => new SourceCandidate(m.Id, m.SourcePath, m.TmdbId!.Value))
                 .Take(CandidatePageSize).ToListAsync(ct);

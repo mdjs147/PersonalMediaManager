@@ -67,8 +67,13 @@ internal sealed partial class TmdbSearchService
     {
         if (tmdbId <= 0) throw new BusinessException("TMDB 编号必须大于零");
         string normType = mediaType?.Trim().ToLowerInvariant() ?? string.Empty;
-        if (normType is not ("tv" or "movie")) throw new BusinessException("媒体类型必须是 movie 或 tv");
-        return normType;
+        // 验证后返回闭集字面量，避免外部自由文本继续流入请求、缓存键和普通日志。
+        return normType switch
+        {
+            "tv" => "tv",
+            "movie" => "movie",
+            _ => throw new BusinessException("媒体类型必须是 movie 或 tv"),
+        };
     }
 
     private static TmdbDetailsResult? RestoreDetails(TmdbMetadataCache? cached)

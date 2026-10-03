@@ -1,6 +1,7 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging.Abstractions;
+using PersonalMediaManager.Application.Common.Diagnostics;
+using PersonalMediaManager.Infrastructure.Platform.Diagnostics;
 using NSubstitute;
 using PersonalMediaManager.Application.Common;
 using PersonalMediaManager.Application.Contracts;
@@ -16,6 +17,7 @@ public sealed class TmdbCatalogueRefreshTests : IDisposable
     private readonly TestDbContextFactory _factory;
     private readonly ITmdbClient _client = Substitute.For<ITmdbClient>();
     private readonly TmdbSearchService _sut;
+    private readonly MetadataLogCapture<TmdbSearchService> _logger = new();
 
     public TmdbCatalogueRefreshTests()
     {
@@ -32,7 +34,7 @@ public sealed class TmdbCatalogueRefreshTests : IDisposable
         IProtectedFieldService protector = Substitute.For<IProtectedFieldService>();
         protector.Unprotect(Arg.Any<string>()).Returns("测试值");
         _sut = new TmdbSearchService(_factory, protector, _client, Substitute.For<IPosterDownloader>(),
-            AppPaths.ForRoot(Path.Combine(Path.GetTempPath(), "pmm-catalogue-tests")), NullLogger<TmdbSearchService>.Instance);
+            AppPaths.ForRoot(Path.Combine(Path.GetTempPath(), "pmm-catalogue-tests")), _logger);
         StubDetails(Details());
         StubSeason(Season());
     }
@@ -310,6 +312,57 @@ public sealed class TmdbCatalogueRefreshTests : IDisposable
         result.CachedAt.Should().Be(original.CachedAt);
         using PmmDbContext db = _factory.CreateDbContext();
         db.TmdbMetadataCaches.Single().RawJson.Should().Be(original.RawJson);
+    }
+
+    [Theory]
+    [InlineData("tv", "tv")]
+    [InlineData(" TV\r\n", "tv")]
+    [InlineData("Movie", "movie")]
+    [InlineData("\tMOVIE\u2028", "movie")]
+    public async Task Details_LogsOnlyCanonicalTypeAcrossRemoteCacheAndFailure(string input, string expected)
+    {
+        StubDetails(Details() with { MediaType = expected });
+        (await _sut.GetDetailsFreshAsync(42, input)).MediaType.Should().Be(expected);
+        (await _sut.GetDetailsFreshAsync(42, input)).FromCache.Should().BeTrue();
+        StubDetailsFailure(new IOException("合成故障\r\n伪造日志：OK\t\u001b[31m"));
+        (await _sut.GetDetailsFreshAsync(42, input, true)).FromCache.Should().BeTrue();
+        _logger.Entries.Should().HaveCount(3);
+        _logger.Entries.Should().OnlyContain(e => e.Message.Contains($"type={expected}") && e.Exception == null);
+        _logger.AssertSingleLineWithout("伪造日志");
+        _logger.Entries.Last().Message.Should().Contain("code=DetailsRefreshFailed");
+    }
+
+    [Theory]
+    [InlineData("tv\r\n伪造日志")]
+    [InlineData("tv\0")]
+    [InlineData("mo\u001bvie")]
+    [InlineData("tv\u2029movie")]
+    public async Task Details_InvalidTypeIsRejectedWithoutRemoteCallOrOrdinaryLog(string input)
+    {
+        await _sut.Invoking(s => s.GetDetailsFreshAsync(42, input)).Should().ThrowAsync<BusinessException>();
+        await _client.DidNotReceiveWithAnyArgs().GetDetailsAsync(default, default!, default!, default!, default);
+        _logger.Entries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Details_UntrustedErrorStaysInFullArtifactWithoutInjectingOrdinaryLogs()
+    {
+        const string raw = "合成故障\r\n伪造日志：OK\t\u001b[31m";
+        string root = PrivateFileSystem.CreateTemporaryDirectory("pmm-log-safety-");
+        try
+        {
+            using ParseDiagnosticFileSink sink = new(root, new() { Level = ParseDiagnosticLevel.Full });
+            string run = Guid.NewGuid().ToString("N");
+            StubDetailsFailure(new TmdbClientException(raw, 503));
+            using (ParseDiagnostics.Begin("metadata_log_test", run, sink: sink))
+                (await _sut.GetDetailsFreshAsync(42, "TV", true)).RefreshError.Should().Contain("503");
+            ParseReplayExport exported = sink.Export(run, null);
+            exported.Artifacts.Should().ContainSingle(a => a.State == "recorded" && a.Text == raw);
+            exported.Events.Single(e => e.Name == "tmdb.details_refresh_failed").Data.GetProperty("untrusted").GetBoolean().Should().BeTrue();
+            _logger.AssertSingleLineWithout("伪造日志");
+            _logger.Entries.Should().ContainSingle().Which.Exception.Should().BeNull();
+        }
+        finally { Directory.Delete(root, true); }
     }
 
     private void StubDetails(TmdbDetailsResult details) => _client.GetDetailsAsync(Arg.Any<int>(), Arg.Any<string>(),

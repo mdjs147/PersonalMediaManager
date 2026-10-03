@@ -59,7 +59,14 @@ internal sealed partial class ReviewService
             catch (Exception ex)
             {
                 error ??= "媒体库元数据刷新失败，已保留已有资料，可稍后重试";
-                _logger.LogWarning(ex, "人工所选元数据刷新失败：TmdbId={TmdbId} Type={Type} Season={Season}", details.TmdbId, details.MediaType, season);
+                // 普通日志只写固定代码、闭集类型和数值；异常正文由受控诊断保存，不能伪造日志行。
+                string logType = details.MediaType switch { "tv" => "tv", "movie" => "movie", _ => "unknown" };
+                _logger.LogWarning("人工所选元数据刷新失败：TmdbId={TmdbId} Type={Type} Season={Season} Code=LibraryRefreshFailed", details.TmdbId, logType, season);
+                ParseDiagnostics.Emit("manual.metadata_refresh_failed", new
+                {
+                    details.TmdbId, mediaType = logType, season, untrusted = true,
+                    error = ParseDiagnostics.CaptureText(ex.Message),
+                });
             }
         }
         ParseDiagnostics.Emit("manual.metadata_refreshed", new

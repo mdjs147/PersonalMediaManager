@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using PersonalMediaManager.Application.Common.Diagnostics;
 namespace PersonalMediaManager.Application.Common;
 
@@ -19,13 +18,16 @@ public static class AiBatchPipeline
         if (inputBytes is < 0 or > AiBatchOptions.MaxItemInputBytes)
             throw new ArgumentException("AI 单项准备输入超出上限", nameof(inputBytes));
         if (maxBatchItems is < 1 or > 128) throw new ArgumentOutOfRangeException(nameof(maxBatchItems));
-        Operation<TInput, TResult> operation = new(compatibilityKey, input, execute, ct, responseReady, inputBytes, maxBatchItems, slot.FallbackBudget.TryTake);
+        Operation<TInput, TResult> operation = new(compatibilityKey, input, execute, ct, responseReady, inputBytes, maxBatchItems, slot.FallbackBudget.TryTake, slot.TimeProvider);
         slot.Waiting = operation;
         slot.Paused.TrySetResult();
         return operation.Completion.Task;
     }
-    public static async Task RunAsync(IReadOnlyList<Func<CancellationToken, Task>> jobs,
-        AiBatchOptions options, CancellationToken ct = default)
+    public static Task RunAsync(IReadOnlyList<Func<CancellationToken, Task>> jobs,
+        AiBatchOptions options, CancellationToken ct = default) => RunAsync(jobs, options, TimeProvider.System, ct);
+
+    internal static async Task RunAsync(IReadOnlyList<Func<CancellationToken, Task>> jobs,
+        AiBatchOptions options, TimeProvider timeProvider, CancellationToken ct = default)
     {
         options.Validate();
         if (jobs.Count > options.MaxItems) throw new ArgumentException("批次项数超出上限", nameof(jobs));
@@ -37,7 +39,7 @@ public static class AiBatchPipeline
             foreach (Func<CancellationToken, Task> job in jobs)
             {
                 ct.ThrowIfCancellationRequested();
-                Slot slot = new() { FallbackBudget = fallbackBudget };
+                Slot slot = new() { FallbackBudget = fallbackBudget, TimeProvider = timeProvider };
                 slots.Add(slot);
                 slot.Task = StartAsync(slot, job, ct);
                 await AwaitPauseAsync(slot);
@@ -102,8 +104,8 @@ public static class AiBatchPipeline
             {
                 Operation[] pending = slots.Select(s => s.Waiting).OfType<Operation>().Where(o => !o.Executed).ToArray();
                 if (pending.Length == 0) { await Task.WhenAny(active.Task, active.Paused.Task); continue; }
-                double oldest = pending.Max(o => o.Wait.Elapsed.TotalMilliseconds);
-                Task timer = Task.Delay(TimeSpan.FromMilliseconds(Math.Max(0, options.MaxWaitMilliseconds - oldest)), ct);
+                double oldest = pending.Max(o => o.Wait.TotalMilliseconds);
+                Task timer = Task.Delay(TimeSpan.FromMilliseconds(Math.Max(0, options.MaxWaitMilliseconds - oldest)), timeProvider, ct);
                 Task ready = await Task.WhenAny(active.Task, active.Paused.Task, timer);
                 if (ready == timer) { ct.ThrowIfCancellationRequested(); await FlushAsync(); }
             }
@@ -145,19 +147,21 @@ public static class AiBatchPipeline
     private sealed class Slot
     {
         public FallbackBudget FallbackBudget { get; init; } = new();
+        public TimeProvider TimeProvider { get; init; } = TimeProvider.System;
         public Task Task { get; set; } = Task.CompletedTask;
         public TaskCompletionSource Paused { get; set; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public Operation? Waiting { get; set; }
     }
-    private abstract class Operation(string key, CancellationToken ct, Action? responseReady, int inputBytes, int maxBatchItems)
+    private abstract class Operation(string key, CancellationToken ct, Action? responseReady, int inputBytes, int maxBatchItems, TimeProvider timeProvider)
     {
         public string Id { get; } = Guid.NewGuid().ToString("N");
         public string Key { get; } = key;
         public int InputBytes { get; } = inputBytes;
         public int MaxBatchItems { get; } = maxBatchItems;
         public CancellationToken Token { get; } = ct;
-        public Stopwatch Wait { get; } = Stopwatch.StartNew();
-        public long EnqueuedAt { get; } = Stopwatch.GetTimestamp();
+        // 入队、计时与唤醒共用单调时钟，避免测试依赖宿主的墙钟调度。
+        public long EnqueuedAt { get; } = timeProvider.GetTimestamp();
+        public TimeSpan Wait => timeProvider.GetElapsedTime(EnqueuedAt);
         protected bool Terminal { get; private set; }
         public void FinishTerminal() { Terminal = true; FinishResponse(); }
         public Action<string, object?> Emit { get; } = ParseDiagnostics.CaptureEmitter();
@@ -173,7 +177,7 @@ public static class AiBatchPipeline
     }
     private sealed class Operation<TInput, TResult>(string key, TInput input,
         Func<IReadOnlyList<AiBatchEntry<TInput>>, CancellationToken, Task<IReadOnlyDictionary<string, TResult>>> execute,
-        CancellationToken ct, Action? responseReady, int inputBytes, int maxBatchItems, Func<bool> tryTakeFallback) : Operation(key, ct, responseReady, inputBytes, maxBatchItems)
+        CancellationToken ct, Action? responseReady, int inputBytes, int maxBatchItems, Func<bool> tryTakeFallback, TimeProvider timeProvider) : Operation(key, ct, responseReady, inputBytes, maxBatchItems, timeProvider)
     {
         public TaskCompletionSource<TResult> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private TResult? _result;
@@ -193,7 +197,7 @@ public static class AiBatchPipeline
                 string batchId = Guid.NewGuid().ToString("N");
                 foreach (Operation<TInput, TResult> operation in active)
                     operation.Emit("ai.batch_scheduled", new { BatchId = batchId, ItemId = operation.Id,
-                        ItemCount = active.Length, FirstItemWaitMs = active.Max(o => o.Wait.ElapsedMilliseconds) });
+                        ItemCount = active.Length, FirstItemWaitMs = active.Max(o => (long)o.Wait.TotalMilliseconds) });
                 IReadOnlyDictionary<string, TResult> results = await execute(active.Select(o => new AiBatchEntry<TInput>(o.Id, o._input, o.Token, o.FinishResponse, o._tryTakeFallback, o.FinishTerminal)).ToArray(), shared.Token);
                 foreach (Operation<TInput, TResult> operation in active)
                     if (results.TryGetValue(operation.Id, out TResult? result)) operation._result = result;

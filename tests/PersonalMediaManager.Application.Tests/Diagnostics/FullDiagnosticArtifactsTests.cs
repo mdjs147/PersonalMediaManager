@@ -72,13 +72,69 @@ public sealed class FullDiagnosticArtifactsTests
             exported.Artifacts.Should().HaveCount(6).And.OnlyContain(a => a.State == "recorded" && a.Text == raw);
             exported.Artifacts!.Select(a => a.ArtifactId).Distinct().Should().HaveCount(6);
             exported.Events.Where(e => e.Name == "raw").Should().OnlyContain(e => e.RequestId == "request1" && e.BatchId == "batch1" && e.ItemId == "item2" && e.Attempt == 2);
-            string lines = string.Concat(Directory.GetFiles(root, "parse-*.jsonl").Select(File.ReadAllText));
+            string lines = string.Concat(Directory.GetFiles(root, "parse-*.jsonl").Select(ReadActiveEventFile));
             lines.Should().NotContain("剧");
             if (!OperatingSystem.IsWindows())
                 foreach (string path in Directory.GetFiles(root))
                     (File.GetUnixFileMode(path) & UnixFileMode.OtherRead).Should().Be(0);
         }
         finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public void FullExportReadsActiveWriterSnapshotAndKeepsLaterArtifactsForNextExport()
+    {
+        string root = PrivateFileSystem.CreateTemporaryDirectory("pmm-full-active-export-");
+        try
+        {
+            Action afterSnapshot = () => { };
+            using ParseDiagnosticFileSink sink = new(root, new() { Level = ParseDiagnosticLevel.Full })
+            {
+                BeforeExportReadForTest = () => afterSnapshot(),
+            };
+            string run = Guid.NewGuid().ToString("N");
+            const string raw = "{\r\n  \"title\" : \"剧😀\"\r\n}";
+            const string cleaned = "{\"title\":\"剧😀\"}";
+            using (ParseDiagnostics.Begin("parse", run, 1, sink))
+            {
+                ParseDiagnostics.Emit("raw", new { content = ParseDiagnostics.CaptureText(raw) });
+                string active = Directory.GetFiles(root, "parse-*.jsonl").Should().ContainSingle().Which;
+                long snapshotLength = new FileInfo(active).Length;
+                afterSnapshot = () =>
+                {
+                    afterSnapshot = () => { };
+                    // 生产导出句柄仍打开时继续写同一文件，不能靠提前释放 writer 避开 Windows 共享约束。
+                    ParseDiagnostics.Emit("cleaned", new { content = ParseDiagnostics.CaptureText(cleaned) });
+                };
+
+                ParseReplayExport first = sink.Export(run, null);
+                first.Events.Should().Contain(e => e.Name == "raw").And.NotContain(e => e.Name == "cleaned");
+                first.Artifacts.Should().ContainSingle(a => a.State == "recorded" && a.Text == raw);
+                Directory.GetFiles(root, "parse-*.jsonl").Should().ContainSingle().Which.Should().Be(active);
+                new FileInfo(active).Length.Should().BeGreaterThan(snapshotLength);
+
+                ParseReplayExport next = sink.Export(run, null);
+                next.Events.Should().Contain(e => e.Name == "raw").And.Contain(e => e.Name == "cleaned");
+                next.Artifacts.Should().HaveCount(2).And.OnlyContain(a => a.State == "recorded");
+                next.Artifacts!.Select(a => a.Text).Should().BeEquivalentTo(raw, cleaned);
+                foreach (ParseReplayExport exported in new[] { first, next })
+                {
+                    JsonElement completeness = JsonSerializer.SerializeToElement(exported.Completeness);
+                    completeness.GetProperty("unreadableLines").GetInt32().Should().Be(0);
+                    completeness.GetProperty("storageWriteFailures").GetInt64().Should().Be(0);
+                    completeness.GetProperty("sourceReadTruncated").GetBoolean().Should().BeFalse();
+                }
+            }
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    private static string ReadActiveEventFile(string path)
+    {
+        // 只读测试检查沿用生产 Export 的双向共享约定，不改变 writer 的权限或生命周期。
+        using FileStream stream = new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using StreamReader reader = new(stream, Encoding.UTF8);
+        return reader.ReadToEnd();
     }
 
     [Fact]
