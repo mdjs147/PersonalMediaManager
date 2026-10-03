@@ -55,6 +55,53 @@ public sealed class EmptyDirectoryCleanerTests : IDisposable
         Directory.Exists(link).Should().BeTrue();
     }
 
+    [Fact]
+    public async Task AsyncGuardRejectsWholeSubtreeAndStopsUpwardCleanup()
+    {
+        string watch = Dir("watch");
+        string child = Dir("watch", "show", "season");
+        var visited = new List<string>();
+        IReadOnlyList<string> deleted = await _sut.CleanUpwardAsync(child, watch, Ignore(), (path, _) =>
+        {
+            visited.Add(path);
+            return Task.FromResult(false);
+        });
+        deleted.Should().BeEmpty();
+        visited.Should().ContainSingle();
+        Directory.Exists(child).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task FileArrivingDuringBusinessRecheckIsNotDeleted()
+    {
+        string watch = Dir("watch");
+        string child = Dir("watch", "show");
+        IReadOnlyList<string> deleted = await _sut.CleanUpwardAsync(child, watch, Ignore(".torrent"), (path, _) =>
+        {
+            Touch(path, "new-episode.mkv");
+            return Task.FromResult(true);
+        });
+        deleted.Should().BeEmpty();
+        File.Exists(Path.Combine(child, "new-episode.mkv")).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task LinkArrivingDuringBusinessRecheckIsNotFollowed()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        string watch = Dir("watch");
+        string child = Dir("watch", "show");
+        string outside = Dir("outside");
+        Touch(outside, "keep.torrent");
+        IReadOnlyList<string> deleted = await _sut.CleanUpwardAsync(child, watch, Ignore(".torrent"), (path, _) =>
+        {
+            Directory.CreateSymbolicLink(Path.Combine(path, "linked"), outside);
+            return Task.FromResult(true);
+        });
+        deleted.Should().BeEmpty();
+        File.Exists(Path.Combine(outside, "keep.torrent")).Should().BeTrue();
+    }
+
     private static IReadOnlySet<string> Ignore(params string[] exts)
         => new HashSet<string>(exts, StringComparer.OrdinalIgnoreCase);
 

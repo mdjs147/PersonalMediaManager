@@ -16,7 +16,7 @@ namespace PersonalMediaManager.Infrastructure.External.Ai.Protocols;
 ///   - <b>api-version</b>：从 Endpoint.ExtraOptions(JSON) 的 <c>"apiVersion"</c> 读，缺省 <see cref="DefaultApiVersion"/>。
 /// 节流按档 / JSON 模式按端点能力 / 失败映射均与其它协议一致。为不改动 OpenAiCompatibleProtocol（seed 产物），本类自带一份精简的 body / response 处理。
 /// </remarks>
-internal sealed class AzureOpenAiProtocol : IAiProtocol
+internal sealed class AzureOpenAiProtocol : IAiProtocol, IAiSendBoundaryProtocol
 {
     private const string ProtocolName = "AzureOpenAi";
 
@@ -66,10 +66,15 @@ internal sealed class AzureOpenAiProtocol : IAiProtocol
         req.Content = JsonContent.Create(BuildPayload(request));
 
         HttpResponseMessage resp;
+        await AiDiagnosticHttp.RecordPreparedRequestAsync(req, endpoint.ApiKey);
+        ct.ThrowIfCancellationRequested();
+        if (request.BeforeSend is not null) await request.BeforeSend(ct);
         DateTimeOffset sentAt = DateTimeOffset.UtcNow;
         try
         {
-            resp = await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+            Task<HttpResponseMessage> sending = client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+            AiDiagnosticHttp.RecordDispatch();
+            resp = await sending;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
         {
@@ -79,7 +84,9 @@ internal sealed class AzureOpenAiProtocol : IAiProtocol
         using (resp)
         {
             string body;
-            try { body = await resp.Content.ReadAsStringAsync(ct); }
+            try { body = await AiResponseReader.ReadAsync(resp.Content, request.MaxResponseBytes, ct, endpoint.ApiKey, (int)resp.StatusCode); }
+            catch (OperationCanceledException) { throw; }
+            catch (AiProviderLogicalException) { throw; }
             catch { body = string.Empty; }
 
             AiHttpFailureMapper.ThrowForStatus(ProtocolName, resp.StatusCode, body);
@@ -159,7 +166,8 @@ internal sealed class AzureOpenAiProtocol : IAiProtocol
                 completionTokens = TryGetTokenCount(usage, "completion_tokens");
             }
 
-            return new AiCompletion(text, promptTokens, completionTokens);
+            return new AiCompletion(text, promptTokens, completionTokens,
+                first.TryGetProperty("finish_reason", out JsonElement finish) && finish.ValueKind == JsonValueKind.String ? finish.GetString() : null);
         }
         catch (JsonException ex)
         {

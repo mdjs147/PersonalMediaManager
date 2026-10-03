@@ -31,7 +31,7 @@ namespace PersonalMediaManager.Infrastructure.Persistence.Services.Tmdb;
 /// 重试（修复③④——旧版 FallbackLanguage 只进缓存键从不真正回退）。每层缓存键含 year+language 互不
 /// 污染；零结果同样写缓存，重复任务不会反复打远端。
 /// </remarks>
-internal sealed class TmdbSearchService : ITmdbSearchService
+internal sealed partial class TmdbSearchService : ITmdbSearchService
 {
     private const long TmdbSettingId = 1;
 
@@ -201,38 +201,49 @@ internal sealed class TmdbSearchService : ITmdbSearchService
         }
     }
 
-    private async Task<TmdbDetailsResult> GetDetailsCoreAsync(int tmdbId, string mediaType, CancellationToken ct)
+    private async Task<TmdbDetailsResult> GetDetailsCoreAsync(int tmdbId, string mediaType, CancellationToken ct,
+        bool forceRefresh = false, bool allowStaleOnError = false)
     {
+        ct.ThrowIfCancellationRequested();
+        string normType = NormalizeDetailsIdentity(tmdbId, mediaType);
         await using PmmDbContext ctx = await _dbFactory.CreateDbContextAsync(ct);
         TmdbSetting setting = await LoadSettingAsync(ctx, ct);
-        string apiKey = DecryptApiKey(setting);
-
         DateTimeOffset metaExpiry = DateTimeOffset.UtcNow.AddHours(-setting.MetadataCacheHours);
-        string normType = mediaType.ToLowerInvariant();
-
-        TmdbMetadataCache? cached = await ctx.TmdbMetadataCaches
-            .AsNoTracking()
-            .FirstOrDefaultAsync(c => c.TmdbId == tmdbId && c.MediaType == normType && c.CachedAt >= metaExpiry, ct);
-
-        if (cached is not null && cached.RawJson is not null)
+        TmdbMetadataCache? cached = await ctx.TmdbMetadataCaches.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.TmdbId == tmdbId && c.MediaType == normType, ct);
+        TmdbDetailsResult? hit = RestoreDetails(cached);
+        if (!forceRefresh && hit is not null && cached!.CachedAt >= metaExpiry)
         {
-            // 第 11 位是 Overview（此前误填 RawJson，致缓存命中时 Overview 被污染成整段 JSON，一并修正）
-            TmdbDetailsResult hit = new(
-                cached.TmdbId, cached.MediaType, cached.Title, cached.OriginalTitle, cached.Year,
-                cached.TotalSeasons, cached.PosterPath, cached.OriginCountry, cached.OriginalLanguage,
-                cached.Genres, cached.Overview, cached.RawJson, TmdbSeasonsParser.Parse(cached.RawJson),
-                FromCache: true);
             _logger.LogInformation("TMDB 详情命中本地缓存(DB)，不计远端额度：tmdbId={TmdbId}, type={Type}", tmdbId, normType);
             await TryCachePosterAsync(hit.TmdbId, hit.PosterPath, ct);
+            ct.ThrowIfCancellationRequested();
             return hit;
         }
-
-        // 限流速率随设置流入客户端（修复「RateLimitPerSecond 死旋钮」）
-        TmdbDetailsResult fresh = await _client.GetDetailsAsync(tmdbId, normType, apiKey, setting.Language, setting.RateLimitPerSecond, ct);
-        _logger.LogInformation("TMDB 详情远端拉取：tmdbId={TmdbId}, type={Type}", tmdbId, normType);
-        await UpsertMetadataCacheAsync(ctx, fresh, ct);
-        await TryCachePosterAsync(fresh.TmdbId, fresh.PosterPath, ct);
-        return fresh;
+        try
+        {
+            string apiKey = DecryptApiKey(setting);
+            TmdbDetailsResult fresh = await _client.GetDetailsAsync(tmdbId, normType, apiKey,
+                setting.Language, setting.RateLimitPerSecond, ct);
+            ct.ThrowIfCancellationRequested();
+            ValidateDetailsIdentity(fresh, tmdbId, normType);
+            fresh = fresh with { MediaType = normType, FromCache = false, CachedAt = CacheTimestampUtcNow(), RefreshError = null };
+            await UpsertMetadataCacheAsync(ctx, fresh, ct);
+            await TryCachePosterAsync(fresh.TmdbId, fresh.PosterPath, ct);
+            ct.ThrowIfCancellationRequested();
+            _logger.LogInformation("TMDB 详情远端拉取：tmdbId={TmdbId}, type={Type}", tmdbId, normType);
+            return fresh;
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex) when (allowStaleOnError)
+        {
+            ct.ThrowIfCancellationRequested();
+            string error = SafeRefreshError(ex);
+            _logger.LogWarning("TMDB 详情刷新失败，保留原缓存：tmdbId={TmdbId}, type={Type}, error={Error}", tmdbId, normType, error);
+            ParseDiagnostics.Emit("tmdb.details_refresh_failed", new { tmdbId, mediaType = normType, error = ParseDiagnostics.CaptureText(ex.Message) });
+            return hit is not null ? hit with { RefreshError = error }
+                : new TmdbDetailsResult(tmdbId, normType, null, null, null, null, null, null, null,
+                    null, null, "{}", RefreshError: error);
+        }
     }
 
     public async Task<TmdbEpisodeGroup> GetEpisodeGroupAsync(string episodeGroupId, CancellationToken ct = default)
@@ -350,7 +361,7 @@ internal sealed class TmdbSearchService : ITmdbSearchService
         + (req.Year is null ? string.Empty : $"({req.Year})")
         + (string.IsNullOrEmpty(req.Language) ? string.Empty : $"[{req.Language}]");
 
-    private static async Task UpsertSearchCacheAsync(PmmDbContext ctx, string hash, string raw, string resultsJson, CancellationToken ct)
+    private static async Task UpsertSearchCacheAsync(PmmDbContext ctx, string hash, string raw, string resultsJson, CancellationToken ct, DateTimeOffset? cachedAt = null)
     {
         TmdbSearchCache? existing = await ctx.TmdbSearchCaches.FirstOrDefaultAsync(c => c.QueryHash == hash, ct);
         if (existing is null)
@@ -360,14 +371,14 @@ internal sealed class TmdbSearchService : ITmdbSearchService
                 QueryHash = hash,
                 QueryRaw = raw,
                 Results = resultsJson,
-                CachedAt = DateTimeOffset.UtcNow,
+                CachedAt = cachedAt ?? DateTimeOffset.UtcNow,
             });
         }
         else
         {
             existing.QueryRaw = raw;
             existing.Results = resultsJson;
-            existing.CachedAt = DateTimeOffset.UtcNow;
+            existing.CachedAt = cachedAt ?? DateTimeOffset.UtcNow;
         }
         await ctx.SaveChangesAsync(ct);
     }
@@ -393,7 +404,7 @@ internal sealed class TmdbSearchService : ITmdbSearchService
                 Genres = details.GenresJson,
                 Overview = details.Overview,
                 RawJson = details.RawJson,
-                CachedAt = DateTimeOffset.UtcNow,
+                CachedAt = details.CachedAt ?? DateTimeOffset.UtcNow,
             });
         }
         else
@@ -408,7 +419,7 @@ internal sealed class TmdbSearchService : ITmdbSearchService
             existing.Genres = details.GenresJson;
             existing.Overview = details.Overview;
             existing.RawJson = details.RawJson;
-            existing.CachedAt = DateTimeOffset.UtcNow;
+            existing.CachedAt = details.CachedAt ?? DateTimeOffset.UtcNow;
         }
         await ctx.SaveChangesAsync(ct);
     }

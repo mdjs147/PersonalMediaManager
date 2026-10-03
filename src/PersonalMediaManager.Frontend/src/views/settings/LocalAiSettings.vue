@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted } from 'vue';
 import { localAiApi } from '@/api/localAi';
 import PmmPageHeader from '@/components/PmmPageHeader.vue';
+import AiBatchSettings from '@/components/AiBatchSettings.vue';
 import {
   createLocalAiSettingsController, downloadPercent, localAiLimits, localAiModes, modelVerificationLabel,
 } from '@/composables/useLocalAiSettings';
@@ -86,6 +87,8 @@ onBeforeUnmount(() => controller.dispose());
         <el-button :loading="loading || refreshing" :disabled="busy" @click="refresh(true)">刷新状态</el-button>
       </template>
     </PmmPageHeader>
+
+    <AiBatchSettings />
 
     <el-alert type="info" show-icon :closable="false" class="page-alert">
       <template #title>本地模型只提供建议，规则与证据负责裁决</template>

@@ -19,7 +19,7 @@ namespace PersonalMediaManager.Infrastructure.Persistence.Services.Parse;
 /// - 告警经 IAlertService（复用抑制窗口，自身吞异常不阻断解析/对话主流程）；alertKey 按 provider 粒度隔离
 /// - QuotaExpiresAt（套餐到期）不在此评估：到期禁用是纯查询过滤，由 AiProviderResolver 剔除
 /// </remarks>
-internal sealed class AiProviderQuotaTracker : IAiProviderQuotaTracker
+internal sealed class AiProviderQuotaTracker : IAiProviderQuotaTracker, IAiProviderQuotaReservationTracker
 {
     private readonly IDbContextFactory<PmmDbContext> _dbFactory;
     private readonly IClock _clock;
@@ -77,6 +77,57 @@ internal sealed class AiProviderQuotaTracker : IAiProviderQuotaTracker
                         p => (p.QuotaPeriodResetAt == null || p.QuotaPeriodResetAt <= now) ? (DateTimeOffset?)newBoundary : p.QuotaPeriodResetAt), ct);
         }
 
+        await EvaluateAsync(ctx, providerId, now, ct);
+    }
+
+    public async Task<AiProviderQuotaReservation?> TryReserveCallAsync(long providerId, CancellationToken ct = default)
+    {
+        DateTimeOffset now = _clock.UtcNow;
+        await using PmmDbContext ctx = await _dbFactory.CreateDbContextAsync(ct);
+        var config = await ctx.ParseAiProviders.AsNoTracking().Where(p => p.Id == providerId)
+            .Select(p => new { p.QuotaPeriod, p.QuotaPeriodTimeZone, p.QuotaPeriodResetAt }).FirstOrDefaultAsync(ct);
+        if (config is null) return null;
+        bool periodic = config.QuotaPeriod != AiQuotaPeriod.None;
+        DateTimeOffset boundary = periodic && config.QuotaPeriodResetAt > now ? config.QuotaPeriodResetAt.Value
+            : periodic ? QuotaPeriodMath.NextBoundary(now, config.QuotaPeriod, config.QuotaPeriodTimeZone) : now;
+        // 条件和计次在同一 SQL UPDATE 内完成：独立 scope、拆批及回退均不能复用剩余额度。
+        int changed = await ctx.ParseAiProviders.Where(p => p.Id == providerId && p.Enabled
+            && (p.DisabledUntil == null || p.DisabledUntil <= now)
+            && p.QuotaExceededAt == null && (p.QuotaExpiresAt == null || p.QuotaExpiresAt > now)
+            && (p.QuotaCallLimit == null || p.QuotaUsedCalls < p.QuotaCallLimit)
+            && (p.QuotaTokenLimit == null || p.QuotaUsedTokens < p.QuotaTokenLimit)
+            && p.QuotaPeriod == config.QuotaPeriod && p.QuotaPeriodTimeZone == config.QuotaPeriodTimeZone
+            && p.QuotaPeriodResetAt == config.QuotaPeriodResetAt
+            && (!periodic || p.QuotaPeriodResetAt == null || p.QuotaPeriodResetAt <= now
+                || ((p.QuotaPeriodCallLimit == null || p.QuotaPeriodUsedCalls < p.QuotaPeriodCallLimit)
+                    && (p.QuotaPeriodTokenLimit == null || p.QuotaPeriodUsedTokens < p.QuotaPeriodTokenLimit))))
+            .ExecuteUpdateAsync(update => update
+                .SetProperty(p => p.QuotaUsedCalls, p => p.QuotaUsedCalls + 1)
+                .SetProperty(p => p.QuotaPeriodUsedCalls, p => !periodic ? p.QuotaPeriodUsedCalls
+                    : p.QuotaPeriodResetAt == null || p.QuotaPeriodResetAt <= now ? 1 : p.QuotaPeriodUsedCalls + 1)
+                .SetProperty(p => p.QuotaPeriodUsedTokens, p => periodic && (p.QuotaPeriodResetAt == null || p.QuotaPeriodResetAt <= now)
+                    ? 0 : p.QuotaPeriodUsedTokens)
+                .SetProperty(p => p.QuotaPeriodResetAt, p => periodic && (p.QuotaPeriodResetAt == null || p.QuotaPeriodResetAt <= now)
+                    ? (DateTimeOffset?)boundary : p.QuotaPeriodResetAt), ct);
+        return changed == 1 ? new(config.QuotaPeriod, periodic ? boundary : null) : null;
+    }
+
+    public async Task SettleTokensAsync(long providerId, AiProviderQuotaReservation reservation, int? promptTokens, int? completionTokens, CancellationToken ct = default)
+    {
+        long tokens = Math.Max(0, (long)(promptTokens ?? 0)) + Math.Max(0, (long)(completionTokens ?? 0));
+        DateTimeOffset now = _clock.UtcNow;
+        await using PmmDbContext ctx = await _dbFactory.CreateDbContextAsync(ct);
+        // 调用次数已在发送前持久化，响应及取消续行只补 token，不能再次加次数。
+        await ctx.ParseAiProviders.Where(p => p.Id == providerId).ExecuteUpdateAsync(update => update
+            .SetProperty(p => p.QuotaUsedTokens, p => p.QuotaUsedTokens + tokens)
+            .SetProperty(p => p.QuotaPeriodUsedTokens, p => reservation.Period != AiQuotaPeriod.None
+                && p.QuotaPeriod == reservation.Period && p.QuotaPeriodResetAt == reservation.PeriodResetAt
+                ? p.QuotaPeriodUsedTokens + tokens : p.QuotaPeriodUsedTokens), ct);
+        await EvaluateAsync(ctx, providerId, now, ct);
+    }
+
+    private async Task EvaluateAsync(PmmDbContext ctx, long providerId, DateTimeOffset now, CancellationToken ct)
+    {
         // 第二步：读回该行评估超限（未配置限额 = 不限，永不置位）
         var row = await ctx.ParseAiProviders.AsNoTracking()
             .Where(p => p.Id == providerId)

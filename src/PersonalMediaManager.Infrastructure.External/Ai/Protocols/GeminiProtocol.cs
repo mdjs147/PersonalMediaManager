@@ -20,7 +20,7 @@ namespace PersonalMediaManager.Infrastructure.External.Ai.Protocols;
 ///   - <b>不做解析</b>：只返回 candidates[0].content.parts 拼接文本，内容解析交给上层。
 /// 失败映射统一走 <see cref="AiHttpFailureMapper"/>，与 IAiProtocol 契约口径一致。
 /// </remarks>
-internal sealed class GeminiProtocol : IAiProtocol
+internal sealed class GeminiProtocol : IAiProtocol, IAiSendBoundaryProtocol
 {
     private const string ProtocolName = "Gemini";
 
@@ -67,10 +67,15 @@ internal sealed class GeminiProtocol : IAiProtocol
         req.Content = JsonContent.Create(BuildPayload(request));
 
         HttpResponseMessage resp;
+        await AiDiagnosticHttp.RecordPreparedRequestAsync(req, endpoint.ApiKey);
+        ct.ThrowIfCancellationRequested();
+        if (request.BeforeSend is not null) await request.BeforeSend(ct);
         DateTimeOffset sentAt = DateTimeOffset.UtcNow;
         try
         {
-            resp = await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+            Task<HttpResponseMessage> sending = client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+            AiDiagnosticHttp.RecordDispatch();
+            resp = await sending;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
         {
@@ -80,7 +85,9 @@ internal sealed class GeminiProtocol : IAiProtocol
         using (resp)
         {
             string body;
-            try { body = await resp.Content.ReadAsStringAsync(ct); }
+            try { body = await AiResponseReader.ReadAsync(resp.Content, request.MaxResponseBytes, ct, endpoint.ApiKey, (int)resp.StatusCode); }
+            catch (OperationCanceledException) { throw; }
+            catch (AiProviderLogicalException) { throw; }
             catch { body = string.Empty; }
 
             // 状态错误统一映射（429 → 限流 / 5xx → 瞬时 / 4xx → 逻辑）
@@ -165,7 +172,8 @@ internal sealed class GeminiProtocol : IAiProtocol
                 completionTokens = TryGetTokenCount(usage, "candidatesTokenCount");
             }
 
-            return new AiCompletion(text, promptTokens, completionTokens);
+            return new AiCompletion(text, promptTokens, completionTokens,
+                first.TryGetProperty("finishReason", out JsonElement finish) && finish.ValueKind == JsonValueKind.String ? finish.GetString() : null);
         }
         catch (JsonException ex)
         {

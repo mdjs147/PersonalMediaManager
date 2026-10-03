@@ -1,6 +1,7 @@
 using System.Linq;
 using System.Text.Json;
 using PersonalMediaManager.Application.Contracts;
+using PersonalMediaManager.Application.Common.Diagnostics;
 
 namespace PersonalMediaManager.Infrastructure.External.Ai;
 
@@ -155,6 +156,7 @@ internal static partial class AiPromptHelpers
     private static AiParseResult ParseContentCore(string content, bool allowUnknown, bool preserveEpisodicFields = false)
     {
         string json = StripMarkdownFences(content).Trim();
+        if (ParseDiagnostics.IsFull) ParseDiagnostics.Emit("ai.cleanup", new { stage = "json_input", extraction = "strict_whole_json_no_substring_recovery", content = ParseDiagnostics.CaptureText(json) });
         if (string.IsNullOrWhiteSpace(json))
             throw new AiProviderLogicalException("AI 返回 content 为空");
 
@@ -198,8 +200,25 @@ internal static partial class AiPromptHelpers
                 episodeEnd = null; // 范围非法时丢弃 end，保留单集 start
             }
 
-            return new AiParseResult(title ?? "", year, type!, season, episode, episodeEnd,
+            AiParseResult parsed = new(title ?? "", year, type!, season, episode, episodeEnd,
                 double.IsFinite(confidence) ? Math.Clamp(confidence, 0, 1) : 0, aliases);
+            if (ParseDiagnostics.IsFull) ParseDiagnostics.Emit("ai.cleanup", new
+            {
+                stage = "field_filter", rules = new[] { "numeric_range", "movie_episodic_null", "episode_end_order", "confidence_range", "alias_filter" },
+                ignoredFields = root.EnumerateObject().Where(p => p.Name is not ("title" or "type" or "year" or "season" or "episode" or "episodeEnd" or "confidence" or "aliases")).Select(p => p.Name).ToArray(),
+                ignoredFieldReason = "not_part_of_legacy_parse_schema",
+                rejectedFields = new[]
+                {
+                    new { field = "year", changed = TryGetInt(root, "year") != year, reason = "numeric_range_1900_2100" },
+                    new { field = "season", changed = TryGetInt(root, "season") != season, reason = type == "movie" && !preserveEpisodicFields ? "movie_has_no_episodic_fields" : "numeric_range_0_99" },
+                    new { field = "episode", changed = TryGetInt(root, "episode") != episode, reason = type == "movie" && !preserveEpisodicFields ? "movie_has_no_episodic_fields" : "numeric_range_0_9999" },
+                    new { field = "episodeEnd", changed = TryGetInt(root, "episodeEnd") != episodeEnd, reason = type == "movie" && !preserveEpisodicFields ? "movie_has_no_episodic_fields" : "numeric_range_or_end_before_start" },
+                    new { field = "confidence", changed = !double.IsFinite(confidence) || confidence < 0 || confidence > 1, reason = "finite_range_0_1" },
+                }.Where(change => change.changed).ToArray(),
+                supplied = ParseDiagnostics.CaptureText(root.GetRawText()),
+                result = ParseDiagnostics.CaptureText(JsonSerializer.Serialize(parsed)),
+            });
+            return parsed;
         }
         catch (JsonException ex)
         {
@@ -222,7 +241,9 @@ internal static partial class AiPromptHelpers
     public static AiParseResult GroundYear(AiParseResult result, AiParseRequest request)
     {
         if (result.Year is not int year) return result;              // AI 未给年份：无需校验
-        return YearAppearsInSource(year, request) ? result : result with { Year = null };
+        bool grounded = YearAppearsInSource(year, request);
+        if (!grounded && ParseDiagnostics.IsFull) ParseDiagnostics.Emit("ai.cleanup", new { stage = "field_rejected", field = "year", reason = "not_present_in_source", rejectedYear = year });
+        return grounded ? result : result with { Year = null };
     }
 
     /// <summary>年份是否以独立数字形态出现在文件名 / 路径段 / 父目录名任一处</summary>
@@ -243,6 +264,7 @@ internal static partial class AiPromptHelpers
             if (firstNewline > 0) t = t[(firstNewline + 1)..];
             if (t.EndsWith("```", StringComparison.Ordinal)) t = t[..^3];
         }
+        if (ParseDiagnostics.IsFull) ParseDiagnostics.Emit("ai.cleanup", new { stage = "markdown_fences", changed = t != s, content = ParseDiagnostics.CaptureText(t) });
         return t;
     }
 

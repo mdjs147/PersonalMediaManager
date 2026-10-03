@@ -12,6 +12,7 @@ public static class DiagnosticPrivacy
     private static readonly Regex ReasoningKey = Pattern(@"^(reasoning.*|thinking.*|chain.?of.?thought|thoughts?)$");
     private static readonly Regex PrivatePathKey = Pattern(@"^(fullPath|sourcePath|targetPath|watchRoot|conflictTarget|absolutePath)$");
     private static readonly Regex ThinkBlock = Pattern(@"<(think|thinking|reasoning|analysis)>[\s\S]*?(</\1>|$)");
+    private static readonly Regex RemainingThinkTag = Pattern(@"</?(think|thinking|reasoning|analysis)\b");
     private static readonly Regex Header = Pattern(@"\b(authorization|proxy-authorization|cookie|set-cookie|x-api-key)\s*[:=]\s*[^\r\n]+");
     private static readonly Regex InlineSecret = Pattern(@"\b(api[_-]?key|access[_-]?token|refresh[_-]?token|id[_-]?token|token|client[_-]?secret|password|secret|sig|signature)\s*[:=]\s*[""']?[^\s&""',;}]+");
     private static readonly Regex SensitiveStructure = Pattern(@"""(authorization|proxy.?authorization|cookie|set.?cookie|headers?|api.?key|access.?token|refresh.?token|id.?token|token|password|passwd|pwd|secret|client.?secret|credentials?)""\s*:");
@@ -44,6 +45,7 @@ public static class DiagnosticPrivacy
     {
         if (depth > 12) return "[嵌套超限，内容未记录]";
         string value = ThinkBlock.Replace(text, "[私有推理已省略]");
+        if (RemainingThinkTag.IsMatch(value)) return "[推理标签不完整，内容未记录]";
         string trimmed = value.TrimStart();
         bool structured = trimmed.StartsWith('{') || trimmed.StartsWith('[');
         if (!structured && (SensitiveStructure.IsMatch(value) || PrivateStructure.IsMatch(value)))

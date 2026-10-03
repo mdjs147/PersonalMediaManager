@@ -9,7 +9,7 @@ namespace PersonalMediaManager.Infrastructure.Platform.FileSystem;
 /// 算法：
 /// - 从 startDirectory 起逐层向父目录上溯，到 boundary（监控根）为止，绝不删除 boundary 本身。
 /// - 每层判「可视为空」：目录内除 ignoreExtensions（如 .torrent）外无其它文件，且子目录递归同样可视为空。
-///   命中即 Directory.Delete(recursive)，连可忽略残留与空子目录一并删除。
+///   命中后逐项清理可忽略残留与空子目录；目录使用非递归删除，避免吞掉新到达文件。
 /// - 一旦遇到含真实内容的目录立即停止上溯（它非空，其祖先更不可能空）。
 /// - 起点不在 boundary 之下 / 枚举失败 / 删除失败：一律保守跳过或停止，绝不误删 boundary 外或含内容的目录。
 ///
@@ -32,52 +32,94 @@ internal sealed class EmptyDirectoryCleaner : IEmptyDirectoryCleaner
         CancellationToken ct = default)
     {
         List<string> deleted = new();
-        if (string.IsNullOrWhiteSpace(startDirectory) || string.IsNullOrWhiteSpace(boundary))
-            return deleted;
+        foreach (string candidate in EnumerateCandidates(startDirectory, boundary, ignoreExtensions, ct))
+        {
+            if (!TryDelete(candidate, boundary, ignoreExtensions, ct)) break;
+            deleted.Add(candidate);
+        }
+        return deleted;
+    }
 
+    public async Task<IReadOnlyList<string>> CleanUpwardAsync(
+        string startDirectory,
+        string boundary,
+        IReadOnlySet<string> ignoreExtensions,
+        Func<string, CancellationToken, Task<bool>> canDeleteDirectory,
+        CancellationToken ct = default)
+    {
+        List<string> deleted = new();
+        foreach (string candidate in EnumerateCandidates(startDirectory, boundary, ignoreExtensions, ct))
+        {
+            // 判断覆盖整个子树，不能只检查触发归档的最后一集或最后一部电影。
+            if (!await canDeleteDirectory(candidate, ct)) break;
+            ct.ThrowIfCancellationRequested();
+            if (!TryDelete(candidate, boundary, ignoreExtensions, ct)) break;
+            deleted.Add(candidate);
+        }
+        return deleted;
+    }
+
+    private IEnumerable<string> EnumerateCandidates(
+        string startDirectory, string boundary, IReadOnlySet<string> ignoreExtensions, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(startDirectory) || string.IsNullOrWhiteSpace(boundary)) yield break;
         string boundaryFull = Normalize(boundary);
         string? current = Normalize(startDirectory);
-
-        // 起点必须严格位于 boundary 之下：防越界删到监控根外，亦防把监控根自身当空目录删
         if (!IsStrictlyUnder(current, boundaryFull) || HasLinkedAncestor(current, boundaryFull))
         {
-            _logger.LogDebug("源目录不在监控根之下，跳过空目录清理：{Start}（根 {Boundary}）", startDirectory, boundary);
-            return deleted;
+            _logger.LogDebug("源目录不在监控根之下或包含链接，跳过空目录清理：{Start}（根 {Boundary}）", startDirectory, boundary);
+            yield break;
         }
-
-        while (current is not null
-            && !PathEquals(current, boundaryFull)
-            && IsStrictlyUnder(current, boundaryFull))
+        while (current is not null && IsStrictlyUnder(current, boundaryFull))
         {
             ct.ThrowIfCancellationRequested();
-            string? parent = Path.GetDirectoryName(current);
-
-            if (!Directory.Exists(current))
+            if (Directory.Exists(current))
             {
-                // 目录已不存在（外部并发清理 / 上一轮已删）：继续上溯检查父目录
-                current = parent;
-                continue;
+                if (!IsEffectivelyEmpty(current, ignoreExtensions)) yield break;
+                yield return current;
             }
-
-            if (!IsEffectivelyEmpty(current, ignoreExtensions))
-                break; // 含真实内容：它非空，祖先更不可能空，停止上溯
-
-            try
-            {
-                Directory.Delete(current, recursive: true); // 连可忽略残留 + 空子目录一并删
-                deleted.Add(current);
-                _logger.LogInformation("回收源端空目录：{Path}", current);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "空目录删除失败（跳过，停止上溯）：{Path}", current);
-                break;
-            }
-
-            current = parent;
+            current = Path.GetDirectoryName(current);
         }
+    }
 
-        return deleted;
+    /// <summary>业务复核后再次检查边界和内容，逐项删除残留并用非递归删除保留新到达文件</summary>
+    private bool TryDelete(string directory, string boundary, IReadOnlySet<string> ignoreExtensions, CancellationToken ct)
+    {
+        try
+        {
+            if (!IsStrictlyUnder(directory, Normalize(boundary))
+                || HasLinkedAncestor(directory, Normalize(boundary))
+                || !IsEffectivelyEmpty(directory, ignoreExtensions)) return false;
+            DeleteEmptyTree(directory, Normalize(boundary), ignoreExtensions, ct);
+            _logger.LogInformation("回收源端空目录：{Path}", directory);
+            return true;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "空目录删除失败（跳过，停止上溯）：{Path}", directory);
+            return false;
+        }
+    }
+
+    private static void DeleteEmptyTree(
+        string directory, string boundary, IReadOnlySet<string> ignoreExtensions, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (HasLinkedAncestor(directory, boundary) || !IsEffectivelyEmpty(directory, ignoreExtensions))
+            throw new IOException("源目录内容或链接发生变化，停止清理");
+        foreach (string child in Directory.EnumerateDirectories(directory))
+            DeleteEmptyTree(child, boundary, ignoreExtensions, ct);
+        foreach (string file in Directory.EnumerateFiles(directory))
+        {
+            ct.ThrowIfCancellationRequested();
+            if ((File.GetAttributes(file) & FileAttributes.ReparsePoint) != 0
+                || !ignoreExtensions.Contains(Path.GetExtension(file)))
+                throw new IOException("源目录出现不可忽略文件，停止清理");
+            File.Delete(file);
+        }
+        // 不做递归删除：枚举后新出现的文件 / 子目录由操作系统阻止删除。
+        Directory.Delete(directory, recursive: false);
     }
 
     /// <summary>目录是否「可视为空」：仅含可忽略扩展名文件，且所有子目录递归同样可视为空</summary>

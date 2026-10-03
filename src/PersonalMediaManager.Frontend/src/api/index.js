@@ -53,6 +53,9 @@ export const api = {
     overview: (params) => unwrap(client.GET('/api/statistics/overview', { params: { query: params } })),
   },
   review: {
+    libraryCandidates: (id, params, options = {}) => unwrap(client.GET('/api/review/{id}/library-candidates', { params: { path: { id }, query: params }, ...options })),
+    episodeHints: (payload, options = {}) => unwrap(client.POST('/api/review/episode-hints', { body: payload, ...options })),
+    episodeMappingPreview: (payload, options = {}) => unwrap(client.POST('/api/review/episode-mapping-preview', { body: payload, ...options })),
     list: (params) => unwrap(client.GET('/api/review', { params: { query: params } })),
     confirm: (id, payload) => unwrap(client.POST('/api/review/{id}/confirm', {
       params: { path: { id } }, body: payload,

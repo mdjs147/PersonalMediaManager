@@ -41,13 +41,19 @@ internal sealed class GeneralSettingsService : IGeneralSettingsService
     };
 
     /// <summary>已知设置项元数据：填充 ValueType/Options 让前端渲染合适控件；DB 缺失时合并默认项让设置页可见可编辑</summary>
-    /// <remarks>归档配置 key 须与 ArchiveService 常量一致（Archive_ConflictPolicy / Archive_MinFreeSpaceMB / File.CleanEmptyDir / File.CleanEmptyDirIgnoreExts）。</remarks>
+    /// <remarks>归档配置 key 须与 ArchiveService 常量一致（Archive_ConflictPolicy / Archive_MinFreeSpaceMB / File.CleanEmptyDir / File.CleanEmptyDirIgnoreExts / File.CleanEmptyDirKeepOngoingSeries）。</remarks>
     private static readonly IReadOnlyDictionary<string, SettingMeta> KnownSettings = new Dictionary<string, SettingMeta>(StringComparer.Ordinal)
     {
         // 空目录清理：总开关（bool，前端 el-switch）+ 可忽略扩展名清单（string，前端文本框）
         ["File.CleanEmptyDir"] = new(
             Category: "General",
             Description: "归档（移动）完成后回收源端空目录；配合下方「可忽略扩展名」可把仅剩残留文件的目录也视为空一并删除",
+            ValueType: "bool",
+            Options: null,
+            Default: "false"),
+        ["File.CleanEmptyDirKeepOngoingSeries"] = new(
+            Category: "General",
+            Description: "保留未完结剧集的源文件夹（可选）：仅 TMDB 有效详情明确未完结时保留；未知、过期、已完结及电影沿用原清理规则",
             ValueType: "bool",
             Options: null,
             Default: "false"),

@@ -6,7 +6,7 @@ using PersonalMediaManager.Application.Common.Diagnostics;
 namespace PersonalMediaManager.Infrastructure.Platform.Diagnostics;
 
 /// <summary>有容量上限的本地 JSONL 诊断存储</summary>
-public sealed class ParseDiagnosticFileSink : IParseDiagnosticSink, IDisposable
+public sealed partial class ParseDiagnosticFileSink : IParseDiagnosticSink, IParseDiagnosticArtifactSink, IDisposable
 {
     private readonly string _directory;
     private readonly object _gate = new();
@@ -22,6 +22,7 @@ public sealed class ParseDiagnosticFileSink : IParseDiagnosticSink, IDisposable
         _directory = Path.GetFullPath(directory);
         Options = options;
         Options.Normalize();
+        LoadLevelOverride();
     }
 
     public void Write(ParseDiagnosticEvent value)
@@ -31,8 +32,10 @@ public sealed class ParseDiagnosticFileSink : IParseDiagnosticSink, IDisposable
         {
             lock (_gate)
             {
+                if (Options.Level == ParseDiagnosticLevel.Off) return;
                 CheckDirectory();
                 PrivateFileSystem.EnsureDirectory(_directory);
+                PruneArtifacts(0, 0);
                 string line = JsonSerializer.Serialize(value, ParseDiagnostics.JsonOptions);
                 int bytes = Encoding.UTF8.GetByteCount(line) + 1;
                 if (bytes > Options.MaxEventUtf8Bytes)
@@ -86,6 +89,7 @@ public sealed class ParseDiagnosticFileSink : IParseDiagnosticSink, IDisposable
             lock (_gate)
             {
                 CheckDirectory();
+                PruneArtifacts(0, 0);
                 long remaining = Math.Min(Options.MaxTotalBytes, 32 * 1024 * 1024);
                 FileInfo[] files = Files().OrderByDescending(f => f.LastWriteTimeUtc).ToArray();
                 if (files.Length > 128) sourceTruncated = true;
@@ -143,7 +147,8 @@ public sealed class ParseDiagnosticFileSink : IParseDiagnosticSink, IDisposable
                     trace.Any(e => e.Name == "operation.ended"), parse ? available ? "captured_inputs_available" : "incomplete" : "not_applicable");
             }).ToArray();
             bool inputCaptured = perRun.Any(r => r.IsParseRun) && perRun.Where(r => r.IsParseRun).All(r => r.RuleInputReplay == "captured_inputs_available");
-            return new(1, DateTimeOffset.UtcNow, "retained_local_evidence_only", events, new
+            IReadOnlyList<ParseDiagnosticArtifactExport> artifacts = ExportArtifacts(events, ct);
+            return new(2, DateTimeOffset.UtcNow, "retained_local_evidence_only", events, new
             {
                 started = perRun.Length > 0 && perRun.All(r => r.Started), ended = perRun.Length > 0 && perRun.All(r => r.Ended),
                 inputCaptured, runs = perRun,
@@ -152,9 +157,14 @@ public sealed class ParseDiagnosticFileSink : IParseDiagnosticSink, IDisposable
                 notRecordedEvents = events.Count(e => ContainsFlag(e.Data, "state", "not_recorded")),
                 unreadableLines, exportTruncated, sourceReadTruncated = sourceTruncated,
                 storageWriteFailures = Interlocked.Read(ref _writeFailures), completePipelineReplay = false,
+                artifactCount = artifacts.Count, incompleteArtifacts = artifacts.Count(a => a.State != "recorded"),
+                aiEvidence = artifacts.Count > 0 && artifacts.All(a => a.State == "recorded")
+                    && !sourceTruncated && !exportTruncated && Interlocked.Read(ref _writeFailures) == 0
+                    && !events.Any(e => ContainsFlag(e.Data, "state", "not_recorded") || ContainsFlag(e.Data, "truncated", "true"))
+                    ? "retained_redacted_artifacts_available" : "incomplete_or_not_enabled",
                 ruleInputReplay = inputCaptured && !sourceTruncated && !exportTruncated ? "captured_inputs_available" : "incomplete",
                 caveats = new[] { "保留窗口以外或进程中断前未落盘的事件无法恢复", "未记录、缺失、未知不等于空值或未发生", "AI正文按级别保存；脱敏/截断内容不能声称完整回放", "人工修正是人工来源，不是自动识别真值" },
-            });
+            }, artifacts);
         }
         finally { foreach ((FileStream stream, _) in snapshot) stream.Dispose(); }
     }
@@ -222,7 +232,7 @@ public sealed class ParseDiagnosticFileSink : IParseDiagnosticSink, IDisposable
 
     private void Prune(int incomingBytes)
     {
-        List<FileInfo> files = Files().OrderBy(f => f.LastWriteTimeUtc).ThenBy(f => f.Name, StringComparer.Ordinal).ToList();
+        List<FileInfo> files = Files().Where(f => IsOwnedEventFile(f.Name)).OrderBy(f => f.LastWriteTimeUtc).ThenBy(f => f.Name, StringComparer.Ordinal).ToList();
         long total = files.Sum(f => f.Length) + incomingBytes;
         int count = files.Count + (_active is not null && !File.Exists(_active) ? 1 : 0);
         foreach (FileInfo file in files)
@@ -230,7 +240,7 @@ public sealed class ParseDiagnosticFileSink : IParseDiagnosticSink, IDisposable
             if (file.FullName == _active) continue;
             if (file.LastWriteTimeUtc >= DateTime.UtcNow.AddDays(-Options.RetentionDays) && total <= Options.MaxTotalBytes && count <= Options.MaxFiles) continue;
             PrivateFileSystem.RejectSymbolicLink(file.FullName);
-            file.Delete(); total -= file.Length; count--;
+            long length = file.Length; file.Delete(); total -= length; count--;
         }
     }
 
@@ -239,7 +249,7 @@ public sealed class ParseDiagnosticFileSink : IParseDiagnosticSink, IDisposable
 
 /// <summary>本地可移交回放包</summary>
 public sealed record ParseReplayExport(int SchemaVersion, DateTimeOffset ExportedAt, string Scope,
-    IReadOnlyList<ParseDiagnosticEvent> Events, object Completeness);
+    IReadOnlyList<ParseDiagnosticEvent> Events, object Completeness, IReadOnlyList<ParseDiagnosticArtifactExport>? Artifacts = null);
 
 /// <summary>逐运行的输入完整性</summary>
 public sealed record ParseReplayRunCompleteness(string RunId, bool IsParseRun, bool Started, bool Ended, string RuleInputReplay);

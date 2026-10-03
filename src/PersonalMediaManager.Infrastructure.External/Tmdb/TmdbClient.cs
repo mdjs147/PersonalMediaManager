@@ -189,6 +189,13 @@ internal sealed class TmdbClient : ITmdbClient
         }
     }
 
+    public Task<TmdbSeasonDetail> GetSeasonAsync(int tmdbId, int seasonNumber, string apiKey,
+        string language, int? rateLimitPerSecond, CancellationToken ct)
+    {
+        ApplyRateLimit(rateLimitPerSecond);
+        return GetSeasonAsync(tmdbId, seasonNumber, apiKey, language, ct);
+    }
+
     public async Task<TmdbSeasonDetail> GetSeasonAsync(int tmdbId, int seasonNumber, string apiKey, string language = "zh-CN", CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(apiKey)) throw new TmdbClientException("ApiKey 不能为空");
@@ -388,22 +395,21 @@ internal sealed class TmdbClient : ITmdbClient
     {
         using JsonDocument doc = JsonDocument.Parse(body);
         JsonElement root = doc.RootElement;
+        if (root.ValueKind != JsonValueKind.Object || GetInt(root, "season_number") != seasonNumber)
+            throw new TmdbClientException("TMDB 季详情返回的季号与请求不一致");
+        if (!root.TryGetProperty("episodes", out JsonElement arr) || arr.ValueKind != JsonValueKind.Array)
+            throw new TmdbClientException("TMDB 季详情缺少有效分集目录");
         List<TmdbEpisodeRef> episodes = new();
-        if (root.TryGetProperty("episodes", out JsonElement arr) && arr.ValueKind == JsonValueKind.Array)
+        HashSet<int> seen = new();
+        foreach (JsonElement e in arr.EnumerateArray())
         {
-            foreach (JsonElement e in arr.EnumerateArray())
-            {
-                int? en = GetInt(e, "episode_number");
-                if (en is null) continue;
-                episodes.Add(new TmdbEpisodeRef(
-                    en.Value,
-                    GetStr(e, "name"),
-                    GetStr(e, "overview"),
-                    GetStr(e, "still_path"),
-                    ExtractDate(e, "air_date"),
-                    GetInt(e, "runtime"),
-                    GetDouble(e, "vote_average")));
-            }
+            int? en = e.ValueKind == JsonValueKind.Object ? GetInt(e, "episode_number") : null;
+            if (en is null or <= 0 || !seen.Add(en.Value))
+                throw new TmdbClientException("TMDB 季详情存在缺失、重复或非法集号");
+            if (e.TryGetProperty("season_number", out _) && GetInt(e, "season_number") != seasonNumber)
+                throw new TmdbClientException("TMDB 分集所属季号与请求不一致");
+            episodes.Add(new TmdbEpisodeRef(en.Value, GetStr(e, "name"), GetStr(e, "overview"),
+                GetStr(e, "still_path"), ExtractDate(e, "air_date"), GetInt(e, "runtime"), GetDouble(e, "vote_average")));
         }
         return new TmdbSeasonDetail(
             seasonNumber,

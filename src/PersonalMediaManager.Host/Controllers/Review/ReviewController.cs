@@ -241,4 +241,45 @@ public sealed class ReviewController : ApiControllerBase
         CheckFilesResult data = await _service.CheckFilesAsync(req, ct);
         return Ok(Wrap(data));
     }
+    /// <summary>EpisodeHints / 规则提取</summary>
+    /// <remarks>
+    /// 请求：{ "items":[ { "id":200, "rowVersion":3 } ] }。
+    /// 响应：{ "code":0, "message":"ok", "data":{ "items":[] }, "requestId":"..." }。
+    /// - 1000：参数无效；逐项冲突在 error 中返回。
+    /// 错误：{ "code":1000, "message":"参数无效", "data":null, "requestId":"..." }。
+    /// 只读运行本地规则，不调用 AI，不绑定或归档媒体。
+    /// </remarks>
+    /// <response code="200">可复核规则提取结果</response>
+    [HttpPost("episode-hints")]
+    [ProducesResponseType<ApiResponse<ReviewEpisodeHintsResult>>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> EpisodeHints([FromBody] ReviewEpisodeHintsRequest req, CancellationToken ct)
+        => Ok(Wrap(await _service.EpisodeHintsAsync(req, ct)));
+
+    /// <summary>LibraryCandidates / 库内候选</summary>
+    /// <remarks>
+    /// 查询：query 为可选的库内标题或原名，不代理远端搜索。
+    /// 响应：{ "code":0, "message":"ok", "data":{ "items":[] }, "requestId":"..." }。
+    /// - 1000：记录不存在或关键词过长。
+    /// 错误：{ "code":1000, "message":"记录不存在", "data":null, "requestId":"..." }。
+    /// </remarks>
+    /// <response code="200">需人工选择的库内候选</response>
+    [HttpGet("{id:long}/library-candidates")]
+    [ProducesResponseType<ApiResponse<ReviewLibraryCandidatesResult>>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> LibraryCandidates([FromRoute] long id, [FromQuery] string? query, CancellationToken ct)
+        => Ok(Wrap(await _service.LibraryCandidatesAsync(id, query, ct)));
+
+    /// <summary>EpisodeMapping / 累计编号预览</summary>
+    /// <remarks>
+    /// 请求：{ "tmdbId":100, "mediaType":"tv", "season":2, "items":[ { "id":200, "rowVersion":3, "episode":12 } ] }。
+    /// 响应：{ "code":0, "message":"ok", "data":{ "items":[], "cachedAt":null, "refreshError":null }, "requestId":"..." }。
+    /// - 1000：请求无效；身份、季内编号或目录冲突逐项返回 error。
+    /// 错误：{ "code":1000, "message":"请求无效", "data":null, "requestId":"..." }。
+    /// 调用表示用户声明源编号为全剧累计编号；只预览，不保存。确认时须提交原编号及 mappingToken 重新校验。
+    /// </remarks>
+    /// <response code="200">原编号、目标编号与目录依据</response>
+    [HttpPost("episode-mapping-preview")]
+    [ProducesResponseType<ApiResponse<ReviewEpisodeMappingResult>>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> EpisodeMappingPreview([FromBody] ReviewEpisodeMappingRequest req, CancellationToken ct)
+        => Ok(Wrap(await _service.PreviewEpisodeMappingAsync(req, ct)));
+
 }

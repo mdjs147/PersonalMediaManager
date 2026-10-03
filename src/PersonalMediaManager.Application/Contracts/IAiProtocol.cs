@@ -38,7 +38,11 @@ public interface IAiProtocol
 public sealed record AiCompletion(
     string Text,
     int? PromptTokens = null,
-    int? CompletionTokens = null);
+    int? CompletionTokens = null,
+    string? FinishReason = null)
+{
+    public bool IsTruncated => FinishReason is "length" or "max_tokens" or "MAX_TOKENS";
+}
 
 /// <summary>协议补全入参（调用端配置 + 对话消息 + 生成参数）</summary>
 /// <param name="Endpoint">调用端配置（BaseUrl / ApiKey / Model / 超时 / 代理 / 免费档 / 结构化 JSON / 扩展参数）</param>
@@ -51,7 +55,10 @@ public sealed record AiProtocolRequest(
     IReadOnlyList<AiChatMessage> Messages,
     bool JsonMode,
     double Temperature = 0,
-    int? MaxTokens = null);
+    int? MaxTokens = null,
+    int MaxResponseBytes = 262144,
+    Func<CancellationToken, Task>? BeforeSend = null,
+    bool DisableThinking = false);
 
 /// <summary>单条对话消息</summary>
 /// <param name="Role">角色："system" | "user" | "assistant"</param>
@@ -59,3 +66,6 @@ public sealed record AiProtocolRequest(
 public sealed record AiChatMessage(
     string Role,
     string Content);
+
+/// <summary>协议在节流及组包后、HTTP 发送前调用 BeforeSend</summary>
+public interface IAiSendBoundaryProtocol { }

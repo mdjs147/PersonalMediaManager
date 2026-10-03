@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\PersonalMediaManager.Infrastructure.External\PersonalMediaManager.Infrastructure.External.csproj" />
+    <ProjectReference Include="..\..\src\PersonalMediaManager.Infrastructure.Platform\PersonalMediaManager.Infrastructure.Platform.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -303,7 +303,7 @@ internal sealed class ArchiveService : IArchiveService
         {
             try
             {
-                await TryCleanEmptySourceDirAsync(item.SourcePath, db, ct);
+                await TryCleanEmptySourceDirAsync(item, db, ct);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -333,11 +333,13 @@ internal sealed class ArchiveService : IArchiveService
     /// 目录仅剩这些扩展名残留 + 子目录递归为空即视为空，连残留一并删；清单清空则退化为「仅真正的空目录」。
     /// 上溯下界 = 源路径所属的最深监控根（WatchFolder.Path），绝不删除监控根本身；源不在任何监控根下则跳过。
     /// </remarks>
-    private async Task TryCleanEmptySourceDirAsync(string sourcePath, PmmDbContext db, CancellationToken ct)
+    private async Task TryCleanEmptySourceDirAsync(MediaItem item, PmmDbContext db, CancellationToken ct)
     {
-        // 一次查询取回两项设置
+        string sourcePath = item.SourcePath;
+        // 总开关与新条件分开读取；缺失新配置时与旧版保持一致。
         Dictionary<string, string?> settings = await db.SystemSettings.AsNoTracking()
-            .Where(s => s.Key == CleanEmptyDirKey || s.Key == CleanEmptyDirIgnoreExtsKey)
+            .Where(s => s.Key == CleanEmptyDirKey || s.Key == CleanEmptyDirIgnoreExtsKey
+                || s.Key == OngoingSeriesDirectoryGuard.SettingKey)
             .ToDictionaryAsync(s => s.Key, s => s.Value, ct);
 
         settings.TryGetValue(CleanEmptyDirKey, out string? enabledRaw);
@@ -362,10 +364,35 @@ internal sealed class ArchiveService : IArchiveService
         settings.TryGetValue(CleanEmptyDirIgnoreExtsKey, out string? ignoreRaw);
         IReadOnlySet<string> ignoreExts = ParseIgnoreExtensions(ignoreRaw);
 
-        IReadOnlyList<string> deleted = _emptyDirCleaner.CleanUpward(sourceDir, boundary, ignoreExts, ct);
+        settings.TryGetValue(OngoingSeriesDirectoryGuard.SettingKey, out string? keepOngoingRaw);
+        bool keepOngoing = string.Equals(keepOngoingRaw?.Trim(), "true", StringComparison.OrdinalIgnoreCase);
+        IReadOnlyList<string> deleted = keepOngoing
+            ? await _emptyDirCleaner.CleanUpwardAsync(sourceDir, boundary, ignoreExts,
+                (directory, token) => CanDeleteSourceDirectoryAsync(directory, item, db, token), ct)
+            : _emptyDirCleaner.CleanUpward(sourceDir, boundary, ignoreExts, ct);
         if (deleted.Count > 0)
             _logger.LogInformation("归档后回收源端空目录 {Count} 个（根 {Boundary}）：{Source}",
                 deleted.Count, boundary, sourcePath);
+    }
+
+    /// <summary>删除每个候选子树前，重读开关与该范围内整剧详情</summary>
+    private async Task<bool> CanDeleteSourceDirectoryAsync(
+        string directory, MediaItem currentItem, PmmDbContext db, CancellationToken ct)
+    {
+        Dictionary<string, string?> settings = await db.SystemSettings.AsNoTracking()
+            .Where(s => s.Key == CleanEmptyDirKey || s.Key == OngoingSeriesDirectoryGuard.SettingKey)
+            .ToDictionaryAsync(s => s.Key, s => s.Value, ct);
+        if (!settings.TryGetValue(CleanEmptyDirKey, out string? clean)
+            || !string.Equals(clean?.Trim(), "true", StringComparison.OrdinalIgnoreCase)) return false;
+        if (!settings.TryGetValue(OngoingSeriesDirectoryGuard.SettingKey, out string? keep)
+            || !string.Equals(keep?.Trim(), "true", StringComparison.OrdinalIgnoreCase)) return true;
+
+        TmdbMetadataCache? ongoing = await OngoingSeriesDirectoryGuard.FindForDirectoryAsync(
+            db, SourceDirectoryCleanupScope.ForPlatform(directory), currentItem, _clock.UtcNow, ct);
+        if (ongoing is null) return true;
+        _logger.LogInformation("保留源端目录：有效 TMDB 整剧详情明确未完结，TmdbId={TmdbId}，缓存时间={CachedAt}，目录={Directory}",
+            ongoing.TmdbId, ongoing.CachedAt, directory);
+        return false;
     }
 
     /// <summary>在监控根列表里找 sourceDir 所属的最深根（Path 为 sourceDir 祖先或自身、规范化后路径最长）</summary>

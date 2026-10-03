@@ -22,7 +22,7 @@ namespace PersonalMediaManager.Infrastructure.External.Ai.Protocols;
 ///   - <b>响应为内容块数组</b>：取 <c>content[]</c> 中首个 type=="text" 块的 <c>text</c>；token 用量读 usage.input_tokens / output_tokens。
 /// 失败映射统一走 <see cref="AiHttpFailureMapper"/>，与 IAiProtocol 契约口径一致。
 /// </remarks>
-internal sealed class AnthropicProtocol : IAiProtocol
+internal sealed class AnthropicProtocol : IAiProtocol, IAiSendBoundaryProtocol
 {
     private const string ProtocolName = "Anthropic";
 
@@ -73,10 +73,15 @@ internal sealed class AnthropicProtocol : IAiProtocol
         req.Content = JsonContent.Create(BuildPayload(request));
 
         HttpResponseMessage resp;
+        await AiDiagnosticHttp.RecordPreparedRequestAsync(req, endpoint.ApiKey);
+        ct.ThrowIfCancellationRequested();
+        if (request.BeforeSend is not null) await request.BeforeSend(ct);
         DateTimeOffset sentAt = DateTimeOffset.UtcNow;
         try
         {
-            resp = await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+            Task<HttpResponseMessage> sending = client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+            AiDiagnosticHttp.RecordDispatch();
+            resp = await sending;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
         {
@@ -86,7 +91,9 @@ internal sealed class AnthropicProtocol : IAiProtocol
         using (resp)
         {
             string body;
-            try { body = await resp.Content.ReadAsStringAsync(ct); }
+            try { body = await AiResponseReader.ReadAsync(resp.Content, request.MaxResponseBytes, ct, endpoint.ApiKey, (int)resp.StatusCode); }
+            catch (OperationCanceledException) { throw; }
+            catch (AiProviderLogicalException) { throw; }
             catch { body = string.Empty; }
 
             // 状态错误统一映射（429 → 限流 / 5xx → 瞬时 / 4xx → 逻辑）
@@ -179,7 +186,8 @@ internal sealed class AnthropicProtocol : IAiProtocol
                 completionTokens = TryGetTokenCount(usage, "output_tokens");
             }
 
-            return new AiCompletion(text!, promptTokens, completionTokens);
+            return new AiCompletion(text!, promptTokens, completionTokens,
+                root.TryGetProperty("stop_reason", out JsonElement finish) && finish.ValueKind == JsonValueKind.String ? finish.GetString() : null);
         }
         catch (JsonException ex)
         {

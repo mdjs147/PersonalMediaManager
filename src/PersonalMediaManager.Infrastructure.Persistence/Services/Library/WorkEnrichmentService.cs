@@ -1,8 +1,12 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using PersonalMediaManager.Application.Common;
 using PersonalMediaManager.Application.Contracts;
 using PersonalMediaManager.Application.Services.Library;
+using PersonalMediaManager.Application.Services.Tmdb;
+using PersonalMediaManager.Infrastructure.Persistence.Services.Tmdb;
 using PersonalMediaManager.Domain.Aggregates.MediaWorks;
 using PersonalMediaManager.Domain.Entities;
 using PersonalMediaManager.Domain.Enums;
@@ -28,6 +32,8 @@ internal sealed class WorkEnrichmentService : IWorkEnrichmentService
     private readonly IPosterDownloader _poster;
     private readonly AppPaths _paths;
     private readonly WorkEnrichmentBackoff _backoff;
+    private readonly ITmdbSearchService _catalogue;
+    private readonly bool _usesSharedCatalogue;
     private readonly ILogger<WorkEnrichmentService> _logger;
 
     public WorkEnrichmentService(
@@ -37,7 +43,8 @@ internal sealed class WorkEnrichmentService : IWorkEnrichmentService
         IPosterDownloader poster,
         AppPaths paths,
         WorkEnrichmentBackoff backoff,
-        ILogger<WorkEnrichmentService> logger)
+        ILogger<WorkEnrichmentService> logger,
+        ITmdbSearchService? catalogue = null)
     {
         _dbFactory = dbFactory;
         _protector = protector;
@@ -46,6 +53,9 @@ internal sealed class WorkEnrichmentService : IWorkEnrichmentService
         _paths = paths;
         _backoff = backoff;
         _logger = logger;
+        _usesSharedCatalogue = catalogue is not null;
+        _catalogue = catalogue ?? new TmdbSearchService(dbFactory, protector, client, poster, paths,
+            NullLogger<TmdbSearchService>.Instance);
     }
 
     public async Task<bool> EnrichAsync(int tmdbId, string mediaType, bool force, CancellationToken ct = default)
@@ -82,6 +92,9 @@ internal sealed class WorkEnrichmentService : IWorkEnrichmentService
             token => _client.GetEnrichedDetailsAsync(tmdbId, mt, apiKey, setting.Language, token),
             ct);
 
+        ct.ThrowIfCancellationRequested();
+        ValidateEnrichedIdentity(d, tmdbId, mt);
+
         // 3) 取/建 tracked 作品（新作品先存一次拿 Id）
         MediaWork work;
         if (meta is null)
@@ -99,7 +112,6 @@ internal sealed class WorkEnrichmentService : IWorkEnrichmentService
                 .Include(w => w.Networks)
                 .Include(w => w.Keywords)
                 .Include(w => w.Seasons);
-            if (force) q = q.Include(w => w.Episodes);
             // 多集合 Include 必须 AsSplitQuery，避免单条 SQL 笛卡尔积膨胀
             work = await q.AsSplitQuery().FirstAsync(w => w.Id == meta.Id, ct);
         }
@@ -113,7 +125,7 @@ internal sealed class WorkEnrichmentService : IWorkEnrichmentService
 
         // 5) 标量 + 关联原子替换
         work.UpsertScalars(
-            d.Title, d.OriginalTitle, d.Year, d.Overview, d.Tagline,
+            d.Title, d.OriginalTitle, d.Year, KeepText(d.Overview, work.Overview), d.Tagline,
             d.PosterPath, d.BackdropPath, d.Runtime, d.VoteAverage, d.VoteCount,
             d.ReleaseDate, d.TmdbStatus, d.OriginalLanguage, d.OriginCountry?.ToList(),
             d.Homepage, d.TotalSeasons, d.TotalEpisodes);
@@ -125,8 +137,8 @@ internal sealed class WorkEnrichmentService : IWorkEnrichmentService
         work.ReplaceCompanies(d.Companies.Select(c => c.Id));
         work.ReplaceNetworks(d.Networks.Select(n => n.Id));
         work.ReplaceKeywords(d.Keywords.Select(k => k.Id));
-        work.ReplaceSeasons(d.Seasons.Select(s => new SeasonSeed(s.SeasonNumber, s.Name, s.Overview, s.PosterPath, s.AirDate, s.EpisodeCount)));
-        if (force) work.ClearEpisodes();
+        // 库内简介与已抓取分集是独立缓存；详情刷新不能在季请求成功前清空它们。
+        work.ReplaceSeasons(MergeSeasonSummaries(work.Seasons, d.Seasons));
         work.MarkEnriched(DateTimeOffset.UtcNow);
 
         // 6) 同步分类（最近归档代表行 CategoryId）
@@ -191,33 +203,84 @@ internal sealed class WorkEnrichmentService : IWorkEnrichmentService
             if (work is null) return;
         }
 
-        bool hasSeason = work.Episodes.Any(e => e.SeasonNumber == seasonNumber);
-        if (hasSeason && !force)
-        {
-            _logger.LogInformation("分季命中本地缓存(已存集)，跳过远端：tmdbId={TmdbId}, season={Season}", tmdbId, seasonNumber);
-            return;
-        }
-
         string backoffKey = $"season:{tmdbId}:{seasonNumber}";
-        if (!force && _backoff.IsBackedOff(backoffKey))
+        // 注入统一目录时先读它的新鲜缓存；人工刚刷新成功不能被此前库内失败退避挡住。
+        if (!_usesSharedCatalogue && !force && _backoff.IsBackedOff(backoffKey))
         {
             _logger.LogInformation("分季处于失败退避窗口，跳过远端（降级返回已有数据）：tmdbId={TmdbId}, season={Season}", tmdbId, seasonNumber);
             return;
         }
 
-        TmdbSetting setting = await LoadSettingAsync(db, ct);
-        string apiKey = DecryptApiKey(setting);
-        _logger.LogInformation("分季远端拉取 /tv/{TmdbId}/season/{Season}", tmdbId, seasonNumber);
-        TmdbSeasonDetail season = await CallRemoteAsync(
-            backoffKey,
-            token => _client.GetSeasonAsync(tmdbId, seasonNumber, apiKey, setting.Language, token),
-            ct);
-
-        work.ReplaceSeasonEpisodes(
-            seasonNumber,
-            season.Episodes.Select(e => new EpisodeSeed(
-                seasonNumber, e.EpisodeNumber, e.Name, e.Overview, e.StillPath, e.AirDate, e.Runtime, e.VoteAverage)));
+        // 目录服务统一判断 TTL，不能仅因库内已有分集就永久跳过远端。
+        TmdbSeasonCatalogueResult result = await CallRemoteAsync(backoffKey, async token =>
+        {
+            TmdbSeasonCatalogueResult refreshed = await _catalogue.GetSeasonCatalogueAsync(tmdbId, seasonNumber, force, token);
+            if (refreshed.RefreshError is not null)
+                throw new TmdbClientException(refreshed.RefreshError);
+            if (refreshed.TmdbId != tmdbId || refreshed.MediaType != "tv"
+                || refreshed.Season?.SeasonNumber != seasonNumber)
+                throw new TmdbClientException("TMDB 季目录身份与库内作品不一致");
+            return refreshed;
+        }, ct);
+        ct.ThrowIfCancellationRequested();
+        TmdbSeasonDetail season = result.Season!;
+        work.ReplaceSeasonEpisodes(seasonNumber, MergeSeasonEpisodes(work.Episodes, seasonNumber, season.Episodes));
         await db.SaveChangesAsync(ct);
+    }
+
+    private static void ValidateEnrichedIdentity(TmdbEnrichedDetails details, int tmdbId, string mediaType)
+    {
+        if (details.TmdbId != tmdbId || !string.Equals(details.MediaType, mediaType, StringComparison.OrdinalIgnoreCase))
+            throw new TmdbClientException("TMDB 富化结果与请求作品身份不一致");
+        if (string.IsNullOrWhiteSpace(details.Title) && string.IsNullOrWhiteSpace(details.OriginalTitle))
+            throw new TmdbClientException("TMDB 富化详情缺少作品名称，保留已有资料");
+        try
+        {
+            using JsonDocument doc = JsonDocument.Parse(details.RawJson);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object
+                || (doc.RootElement.TryGetProperty("id", out JsonElement id)
+                    && (id.ValueKind != JsonValueKind.Number || !id.TryGetInt32(out int responseId) || responseId != tmdbId)))
+                throw new TmdbClientException("TMDB 富化原始详情身份或格式不正确");
+        }
+        catch (JsonException ex)
+        {
+            throw new TmdbClientException("TMDB 富化原始详情格式不正确", inner: ex);
+        }
+    }
+
+    /// <summary>仅库内显示保留缺失的旧简介，不修改正典目录</summary>
+    private static string? KeepText(string? fresh, string? old)
+        => string.IsNullOrWhiteSpace(fresh) ? old : fresh;
+
+    private static IReadOnlyList<SeasonSeed> MergeSeasonSummaries(
+        IReadOnlyCollection<MediaSeason> existing, IReadOnlyList<TmdbSeasonSummary> fresh)
+    {
+        Dictionary<int, SeasonSeed> merged = existing.ToDictionary(s => s.SeasonNumber,
+            s => new SeasonSeed(s.SeasonNumber, s.Name, s.Overview, s.PosterPath, s.AirDate, s.EpisodeCount));
+        foreach (TmdbSeasonSummary s in fresh)
+        {
+            merged.TryGetValue(s.SeasonNumber, out SeasonSeed old);
+            merged[s.SeasonNumber] = new SeasonSeed(s.SeasonNumber, KeepText(s.Name, old.Name),
+                KeepText(s.Overview, old.Overview), KeepText(s.PosterPath, old.PosterPath),
+                s.AirDate ?? old.AirDate, s.EpisodeCount);
+        }
+        return merged.Values.OrderBy(s => s.SeasonNumber).ToList();
+    }
+
+    private static IReadOnlyList<EpisodeSeed> MergeSeasonEpisodes(
+        IReadOnlyCollection<MediaEpisode> existing, int seasonNumber, IReadOnlyList<TmdbEpisodeRef> fresh)
+    {
+        Dictionary<int, EpisodeSeed> merged = existing.Where(e => e.SeasonNumber == seasonNumber)
+            .ToDictionary(e => e.EpisodeNumber, e => new EpisodeSeed(seasonNumber, e.EpisodeNumber,
+                e.Name, e.Overview, e.StillPath, e.AirDate, e.Runtime, e.VoteAverage));
+        foreach (TmdbEpisodeRef e in fresh)
+        {
+            merged.TryGetValue(e.EpisodeNumber, out EpisodeSeed old);
+            merged[e.EpisodeNumber] = new EpisodeSeed(seasonNumber, e.EpisodeNumber,
+                KeepText(e.Name, old.Name), KeepText(e.Overview, old.Overview), KeepText(e.StillPath, old.StillPath),
+                e.AirDate ?? old.AirDate, e.Runtime ?? old.Runtime, e.VoteAverage ?? old.VoteAverage);
+        }
+        return merged.Values.OrderBy(e => e.EpisodeNumber).ToList();
     }
 
     // ---------- 远端调用限时 + 失败退避 ----------

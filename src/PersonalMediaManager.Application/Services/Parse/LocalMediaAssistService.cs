@@ -28,8 +28,9 @@ public sealed class LocalMediaSuggestionCache
 }
 
 /// <summary>保留原始证据的候选生成与有限检索</summary>
-public sealed class LocalMediaAssistService(ILocalAiSettingsService settings, ILocalAiInferenceClient client,
-    ITmdbSearchService tmdb, LocalMediaSuggestionCache cache, IClock clock) : ILocalMediaAssistService
+public sealed partial class LocalMediaAssistService(ILocalAiSettingsService settings, ILocalAiInferenceClient client,
+    ITmdbSearchService tmdb, LocalMediaSuggestionCache cache, IClock clock,
+    AiBatchOptions? batchOptions = null, IAiBatchSettingsService? batchSettings = null) : ILocalMediaAssistService
 {
     private const int MaxCandidates = 1;
     private const string PromptVersion = LocalTitleSpanProtocol.Version;
@@ -38,6 +39,7 @@ public sealed class LocalMediaAssistService(ILocalAiSettingsService settings, IL
         LocalAiMode expectedMode, CancellationToken ct = default)
     {
         using IDisposable? diagnosticScope = ParseDiagnostics.CurrentRunId is null ? ParseDiagnostics.Begin("local_ai_assist") : null;
+        if (ParseDiagnostics.IsFull) ParseDiagnostics.Emit("local_ai.input", new { content = ParseDiagnostics.CaptureText(JsonSerializer.Serialize(new { source, rule, expectedMode })) });
         Stopwatch elapsed = Stopwatch.StartNew();
         try
         {
@@ -50,6 +52,7 @@ public sealed class LocalMediaAssistService(ILocalAiSettingsService settings, IL
                 result.ProtocolVersion, CandidateCount = result.Candidates.Count,
                 OfferedCount = result.OfferedCandidates?.Count,
                 Candidates = ParseDiagnostics.CaptureText(JsonSerializer.Serialize(result.Candidates)),
+                Structured = ParseDiagnostics.IsFull ? ParseDiagnostics.CaptureText(JsonSerializer.Serialize(result)) : null,
             });
             return result;
         }
@@ -69,7 +72,12 @@ public sealed class LocalMediaAssistService(ILocalAiSettingsService settings, IL
     {
         ct.ThrowIfCancellationRequested();
         LocalAiSettingsDto configuration;
-        try { configuration = await settings.GetAsync(ct); }
+        AiBatchOptions options;
+        try
+        {
+            configuration = await settings.GetAsync(ct);
+            options = batchSettings is null ? batchOptions ?? new() : (await batchSettings.GetAsync(ct)).ToOptions();
+        }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
@@ -94,7 +102,8 @@ public sealed class LocalMediaAssistService(ILocalAiSettingsService settings, IL
         // 与冻结协议相同：仅文件名、直接父目录和程序生成的原文区间，不传规则 hint 或绝对路径。
         string user = LocalTitleSpanProtocol.UserPrompt(fileName, parent, pool.Rows);
         string key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
-            PromptVersion + JsonSerializer.Serialize(configuration) + parentIndex + ":" + user)));
+            PromptVersion + "/batch-envelope-v1:" + options.LocalMaxItems
+            + JsonSerializer.Serialize(configuration) + parentIndex + ":" + user)));
         LocalMediaAssistResult? cached = cache.Get(key, clock.UtcNow);
         DiagnosticText systemText = ParseDiagnostics.CaptureText(LocalTitleSpanProtocol.SystemPrompt);
         DiagnosticText userText = ParseDiagnostics.CaptureText(user);
@@ -109,13 +118,24 @@ public sealed class LocalMediaAssistService(ILocalAiSettingsService settings, IL
         }))));
         ParseDiagnostics.Emit("local_ai.request", new
         {
-            ProtocolVersion = PromptVersion, Fingerprint = fingerprint, CacheHit = cached is not null,
+            ProtocolVersion = PromptVersion, Fingerprint = fingerprint, Stage = "prepared_or_cache_hit_not_yet_sent", CacheHit = cached is not null,
             Model = modelText, System = systemText, User = userText, RequestedMaxTokens = 32,
             AllowedSpanCount = pool.Rows.Count,
         });
         if (cached is not null) return cached;
         LocalAiInferenceResult inference;
-        try { inference = await client.GenerateAsync(new(LocalTitleSpanProtocol.SystemPrompt, user, 32, pool.Rows.Count), ct).WaitAsync(ct); }
+        try
+        {
+            LocalAiInferenceRequest request = new(LocalTitleSpanProtocol.SystemPrompt, user, 32, pool.Rows.Count);
+            string batchKey = PromptVersion + JsonSerializer.Serialize(configuration) + options.LocalMaxItems;
+            using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromSeconds(configuration.TimeoutSeconds));
+            Task<LocalAiInferenceResult>? pending = options.LocalMaxItems == 1 ? null : AiBatchPipeline.Schedule(batchKey,
+                new LocalBatchInput(request, configuration, ParseDiagnostics.CaptureEmitter(), ParseDiagnostics.CaptureActivation(), options), GenerateBatchAsync, timeout.Token,
+                () => timeout.CancelAfter(Timeout.InfiniteTimeSpan), maxBatchItems: options.LocalMaxItems);
+            // 暂停任务只能由调度器放行，不能通过 WaitAsync(ct) 并发启动续行。
+            inference = pending is null ? await client.GenerateAsync(request, ct).WaitAsync(ct) : await pending;
+        }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
@@ -123,6 +143,9 @@ public sealed class LocalMediaAssistService(ILocalAiSettingsService settings, IL
             return new(expectedMode, "Unavailable", [], ["InferenceUnavailable"], configuration.ModelId);
         }
         ct.ThrowIfCancellationRequested();
+        if (inference.FailureReason == "batch_retry_deferred")
+            return new(expectedMode, "Deferred", [], ["BatchRetryBudgetExceeded"], configuration.ModelId,
+                InferenceAttempted: inference.Attempted);
         ParseDiagnostics.Emit("local_ai.response", new
         {
             Fingerprint = fingerprint, inference.Success, inference.Attempted, inference.ElapsedMilliseconds,

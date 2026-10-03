@@ -63,9 +63,13 @@ public sealed record ConfirmRequest(
     int? Season,
     int? Episode,
     long RowVersion,
-    int? EpisodeEnd = null);
+    int? EpisodeEnd = null,
+    string DecisionSource = "ManualForm",
+    int? SourceEpisode = null,
+    int? SourceEpisodeEnd = null,
+    string? MappingToken = null);
 
-public sealed record ConfirmResult(long Id, MediaItemStatus Status, long RowVersion);
+public sealed record ConfirmResult(long Id, MediaItemStatus Status, long RowVersion, string? MetadataRefreshError = null);
 
 // ---------- Ignore ----------
 
@@ -90,12 +94,17 @@ public sealed record BatchConfirmItem(
     int? Season,
     int? Episode,
     long RowVersion,
-    int? EpisodeEnd = null);
+    int? EpisodeEnd = null,
+    string DecisionSource = "ManualForm",
+    int? SourceEpisode = null,
+    int? SourceEpisodeEnd = null,
+    string? MappingToken = null);
 
 /// <summary>批量确认结果（部分失败也返 200，失败明细放 Failed 数组）</summary>
 public sealed record BatchConfirmResult(
     IReadOnlyList<long> Succeeded,
-    IReadOnlyList<BatchConfirmFailure> Failed);
+    IReadOnlyList<BatchConfirmFailure> Failed,
+    IReadOnlyList<BatchConfirmFailure>? MetadataWarnings = null);
 
 public sealed record BatchConfirmFailure(long Id, string Message);
 
@@ -141,14 +150,14 @@ public sealed record TmdbSearchListItem(
 
 // ---------- Bind TMDB ----------
 
-public sealed record BindTmdbRequest(int TmdbId, string MediaType, long RowVersion);
+public sealed record BindTmdbRequest(int TmdbId, string MediaType, long RowVersion, int? Season = null);
 
-public sealed record BindTmdbResult(long Id, int TmdbId, string? Title, int? Year, long RowVersion);
+public sealed record BindTmdbResult(long Id, int TmdbId, string? Title, int? Year, long RowVersion, string? MetadataRefreshError = null);
 
 // ---------- TMDB Detail (按 ID 取详情) ----------
 
 /// <summary>按 TMDB ID 取详情查询参数（人工填 ID 预览用）</summary>
-public sealed record TmdbDetailQuery(int TmdbId, string MediaType);
+public sealed record TmdbDetailQuery(int TmdbId, string MediaType, int? Season = null, bool ForceRefresh = false);
 
 /// <summary>剧集单季集数 + 季名（前端绝对集号换算 + 篇章对照用）</summary>
 /// <remarks>SeasonNumber=0 为特别篇；EpisodeCount 来自 TMDB seasons[].episode_count，未播季可能为 0；Name 为季名（zh-CN 优先），供前端拿篇章标题（如「锻刀村篇」）对照选季。</remarks>
@@ -164,7 +173,9 @@ public sealed record TmdbDetailItem(
     string? PosterUrl,
     int? TotalSeasons,
     IReadOnlyList<string>? OriginCountry,
-    IReadOnlyList<ReviewSeasonEpisodeCount>? Seasons = null);
+    IReadOnlyList<ReviewSeasonEpisodeCount>? Seasons = null,
+    DateTimeOffset? CachedAt = null, bool FromCache = false, string? RefreshError = null,
+    PersonalMediaManager.Application.Contracts.TmdbSeasonCatalogueResult? Catalogue = null);
 
 // ---------- Preview Path (去向预览) ----------
 

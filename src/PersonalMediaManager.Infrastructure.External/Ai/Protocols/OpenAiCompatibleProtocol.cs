@@ -1,3 +1,4 @@
+using PersonalMediaManager.Application.Common;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -20,7 +21,7 @@ namespace PersonalMediaManager.Infrastructure.External.Ai.Protocols;
 ///   - <b>JSON 模式按端点能力</b>：JsonMode 且 Endpoint.StructuredJson 为真才下发 response_format=json_object（兼容不识别该字段的代理）。
 /// 失败映射统一走 <see cref="AiHttpFailureMapper"/>，与 IAiProtocol 契约口径一致。
 /// </remarks>
-internal sealed class OpenAiCompatibleProtocol : IAiProtocol
+internal sealed class OpenAiCompatibleProtocol : IAiProtocol, IAiSendBoundaryProtocol
 {
     private const string ProtocolName = "OpenAiCompatible";
 
@@ -64,10 +65,15 @@ internal sealed class OpenAiCompatibleProtocol : IAiProtocol
         req.Content = JsonContent.Create(BuildPayload(request));
 
         HttpResponseMessage resp;
+        await AiDiagnosticHttp.RecordPreparedRequestAsync(req, endpoint.ApiKey);
+        ct.ThrowIfCancellationRequested();
+        if (request.BeforeSend is not null) await request.BeforeSend(ct);
         DateTimeOffset sentAt = DateTimeOffset.UtcNow;
         try
         {
-            resp = await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+            Task<HttpResponseMessage> sending = client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+            AiDiagnosticHttp.RecordDispatch();
+            resp = await sending;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
         {
@@ -77,7 +83,9 @@ internal sealed class OpenAiCompatibleProtocol : IAiProtocol
         using (resp)
         {
             string body;
-            try { body = await resp.Content.ReadAsStringAsync(ct); }
+            try { body = await AiResponseReader.ReadAsync(resp.Content, request.MaxResponseBytes, ct, endpoint.ApiKey, (int)resp.StatusCode); }
+            catch (OperationCanceledException) { throw; }
+            catch (AiProviderLogicalException) { throw; }
             catch { body = string.Empty; }
 
             // 状态错误统一映射（429 → 限流 / 5xx → 瞬时 / 4xx → 逻辑）
@@ -109,6 +117,9 @@ internal sealed class OpenAiCompatibleProtocol : IAiProtocol
             payload["response_format"] = new { type = "json_object" };
         if (request.MaxTokens is int max && max > 0)
             payload["max_tokens"] = max;
+        if (request.DisableThinking && AiBatchProviderPresets.Describe(1, "", AiProviderType.OpenAiCompatible,
+            request.Endpoint.BaseUrl, request.Endpoint.Model).RecommendedSettings is not null)
+            payload["thinking"] = new { type = "disabled" };
 
         return payload;
     }
@@ -136,7 +147,8 @@ internal sealed class OpenAiCompatibleProtocol : IAiProtocol
                 completionTokens = TryGetTokenCount(usage, "completion_tokens");
             }
 
-            return new AiCompletion(text, promptTokens, completionTokens);
+            return new AiCompletion(text, promptTokens, completionTokens,
+                first.TryGetProperty("finish_reason", out JsonElement finish) && finish.ValueKind == JsonValueKind.String ? finish.GetString() : null);
         }
         catch (JsonException ex)
         {

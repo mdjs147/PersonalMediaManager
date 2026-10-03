@@ -7,7 +7,7 @@ namespace PersonalMediaManager.Application.Contracts;
 /// ApiKey 从调用方（TmdbSearchService）每次显式传入，避免 External 反向依赖 Persistence 读 Tmdb_Setting。
 /// 限流速率同理由调用方传入（rateLimitPerSecond，对应 Tmdb_Setting.RateLimitPerSecond）：
 /// 传 null 表示沿用当前速率；速率在客户端单例上具有粘性，SearchAsync / GetDetailsAsync 应用后，
-/// GetEnrichedDetailsAsync / GetSeasonAsync 复用最近一次生效的速率（这两个方法签名保持不变）。
+/// GetEnrichedDetailsAsync / GetSeasonAsync 旧签名复用最近一次生效的速率；单季新重载显式注入速率。
 /// 失败语义：网络异常 / 4xx / 5xx 一律抛 TmdbClientException（含 HttpStatus + Message），调用方决定降级。
 /// </remarks>
 public interface ITmdbClient
@@ -44,6 +44,17 @@ public interface ITmdbClient
         string apiKey,
         string language = "zh-CN",
         CancellationToken ct = default);
+
+    /// <summary>按配置速率读单季分集</summary>
+    /// <remarks>默认转发旧签名，保持既有客户端实现兼容；正式客户端覆盖此重载以应用限流配置。</remarks>
+    Task<TmdbSeasonDetail> GetSeasonAsync(
+        int tmdbId,
+        int seasonNumber,
+        string apiKey,
+        string language,
+        int? rateLimitPerSecond,
+        CancellationToken ct)
+        => GetSeasonAsync(tmdbId, seasonNumber, apiKey, language, ct);
 
     /// <summary>读剧集组（/tv/episode_group/{id}）：把"重制版/特殊编组的集号"翻译回正典季集</summary>
     /// <remarks>
@@ -106,7 +117,9 @@ public sealed record TmdbDetailsResult(
     string? Overview,
     string RawJson,
     IReadOnlyList<TmdbSeasonInfo>? Seasons = null,
-    bool FromCache = false);   // true=命中本地元数据缓存(Tmdb_MetadataCache)；false=远端拉取
+    bool FromCache = false,
+    DateTimeOffset? CachedAt = null,
+    string? RefreshError = null);   // true=命中本地元数据缓存(Tmdb_MetadataCache)；false=远端拉取
 
 /// <summary>剧集单季集数 + 季名 + 季首播年（绝对集号换算 + 篇章对照 + 归档季文件夹/季年份用）</summary>
 /// <remarks>SeasonNumber=0 为特别篇；EpisodeCount 取自 TMDB seasons[].episode_count，未播季可能为 0；

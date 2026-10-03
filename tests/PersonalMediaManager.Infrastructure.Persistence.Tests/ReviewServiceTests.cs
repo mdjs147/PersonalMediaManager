@@ -238,6 +238,8 @@ public sealed partial class ReviewServiceTests : IDisposable
         long itemId = SeedItem(MediaItemStatus.AwaitingReview, ParseSource.Ai);
         long rv = ReadItem(itemId).RowVersion;
 
+        _tmdb.GetDetailsAsync(1, "tv", Arg.Any<CancellationToken>())
+            .Returns(new TmdbDetailsResult(1, "tv", "Show", null, 2020, null, null, null, null, null, null, "{}"));
         Func<Task> act = async () => await _sut.ConfirmAsync(itemId,
             new ConfirmRequest(1, "tv", catId, "Show", 2020, Season: null, Episode: 1, rv));
         await act.Should().ThrowAsync<BusinessException>().WithMessage("*剧集*季号*集号*");
@@ -251,7 +253,7 @@ public sealed partial class ReviewServiceTests : IDisposable
         long itemId = SeedItem(MediaItemStatus.AwaitingReview, ParseSource.Ai);
         long rv = ReadItem(itemId).RowVersion;
         _tmdb.GetDetailsAsync(95479, "tv", Arg.Any<CancellationToken>())
-            .Returns(new TmdbDetailsResult(95479, "tv", "JJK", "呪術廻戦", 2020, 1, null, ["JP"], "ja", null, null, "{}"));
+            .Returns(new TmdbDetailsResult(95479, "tv", "JJK", "呪術廻戦", 2020, 1, null, ["JP"], "ja", null, null, "{}", [new TmdbSeasonInfo(1, 59)]));
         _archive.ArchiveAsync(Arg.Any<MediaItem>(), Arg.Any<CancellationToken>())
             .Returns(new ArchiveResult("/Tv/JJK/S01E59.mkv", ArchiveOutcome.Completed));
 

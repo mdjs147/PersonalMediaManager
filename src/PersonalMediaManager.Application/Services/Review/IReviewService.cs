@@ -12,6 +12,10 @@ namespace PersonalMediaManager.Application.Services.Review;
 /// </remarks>
 public interface IReviewService
 {
+    Task<ReviewEpisodeHintsResult> EpisodeHintsAsync(ReviewEpisodeHintsRequest req, CancellationToken ct = default);
+    Task<ReviewLibraryCandidatesResult> LibraryCandidatesAsync(long mediaItemId, string? query, CancellationToken ct = default);
+    Task<ReviewEpisodeMappingResult> PreviewEpisodeMappingAsync(ReviewEpisodeMappingRequest req, CancellationToken ct = default);
+
     Task<ReviewListPage> ListAsync(ReviewListQuery query, CancellationToken ct = default);
 
     Task<ConfirmResult> ConfirmAsync(long mediaItemId, ConfirmRequest req, CancellationToken ct = default);

@@ -975,6 +975,8 @@ internal sealed class ProcessFileService : IProcessFileService
                     AiParseRequest aiRequest = BuildAiTaskRequest(media.FileName, parseContext, rule, tmdb,
                         scoreWeights, preferredLanguage, cachedSeries);
                     aiTaskContext = aiRequest.Context;
+                    if (localSuggestion?.Status == "Deferred")
+                        throw new AiProviderBatchDeferredException("本批自动回退预算已用尽，规则仍未解决该项，请核对后重试");
                     AiCallOutcome ai = ValidateAiOutcome(
                         await _aiOrchestrator.ExecuteAsync(aiRequest, media.Id, ct), aiRequest, rule);
 
@@ -1014,6 +1016,8 @@ internal sealed class ProcessFileService : IProcessFileService
                 AiParseRequest aiRequest = BuildAiTaskRequest(media.FileName, parseContext, rule, tmdb,
                     scoreWeights, preferredLanguage);
                 aiTaskContext = aiRequest.Context;
+                if (localSuggestion?.Status == "Deferred")
+                    throw new AiProviderBatchDeferredException("本批自动回退预算已用尽，规则仍未解决该项，请核对后重试");
                 AiCallOutcome ai = ValidateAiOutcome(
                     await _aiOrchestrator.ExecuteAsync(aiRequest, media.Id, ct), aiRequest, rule);
 
@@ -1540,6 +1544,27 @@ internal sealed class ProcessFileService : IProcessFileService
         RecordExit(MediaItemStatus.Classifying, new { categoryId = cls.CategoryId.Value, decision = "命中分类规则 → Archiving" });
         media.Transition(MediaItemStatus.Archiving);
         await db.SaveChangesAsync(ct);
+
+        // 批次准备可能早于首项归档；续行前复查有效副本，不把失败或目标丢失当备份。
+        if (media.FileHash is not null)
+        {
+            List<DuplicateCandidate> completedCopies = await db.MediaItems.AsNoTracking()
+                .Where(m => m.FileHash == media.FileHash && m.Status == MediaItemStatus.Completed && m.Id != media.Id)
+                .Select(m => new DuplicateCandidate(m.Id, m.TargetPath)).ToListAsync(ct);
+            DuplicateCandidate? liveCopy = completedCopies.FirstOrDefault(copy =>
+                !string.IsNullOrWhiteSpace(copy.TargetPath) && _fileProbe.FileExists(copy.TargetPath));
+            if (liveCopy is not null)
+            {
+                RecordExit(MediaItemStatus.Archiving, new { fileHash = media.FileHash, duplicateOf = liveCopy.Id,
+                    decision = "续行前内容去重命中 → Skipped（未做文件操作）" });
+                media.Transition(MediaItemStatus.Skipped);
+                RecordTerminal(MediaItemStatus.Skipped, new { reason = "内容与已归档记录重复", duplicateOf = liveCopy.Id });
+                await db.SaveChangesAsync(ct);
+                await NotifyAsync(media, MediaItemStatus.Archiving, ct);
+                await EmitSkippedAsync(media, "内容与已归档记录重复", ct);
+                return new ProcessFileOutcome(media.Id, ProcessOutcome.Skipped);
+            }
+        }
 
         // 6.0 音频不兼容轨探测 + 处理决策（av3a Audio Vivid 等）：归档前探测源文件音轨，回写 MediaItem（History 打标），
         //     并据设置决定是否构造重混计划交归档层就近目标盘 ffmpeg 流复制丢轨（详见 ResolveAudioDecisionAsync）。

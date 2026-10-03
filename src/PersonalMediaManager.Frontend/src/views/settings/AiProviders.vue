@@ -5,6 +5,8 @@ import { useRouter } from 'vue-router';
 import { api } from '@/api';
 import PmmIcon from '@/components/PmmIcon.vue';
 import PmmPageHeader from '@/components/PmmPageHeader.vue';
+import AiBatchSettings from '@/components/AiBatchSettings.vue';
+import AiDiagnosticSettings from '@/components/AiDiagnosticSettings.vue';
 import { formatQuota } from '@/utils/format';
 
 const router = useRouter();
@@ -416,6 +418,9 @@ onMounted(load);
         </button>
       </template>
     </PmmPageHeader>
+
+    <AiBatchSettings />
+    <AiDiagnosticSettings />
 
     <div v-if="list.length" class="ladder">
       <div class="ladder-summary">
