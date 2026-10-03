@@ -5,19 +5,19 @@
 // 写入契约（POST /api/settings/general/update）：
 //   { items: [{ key, value }] }
 // 注意：
-// 1) 后端 setting 表 key 由后端定义（System_TargetRoot 等），前端不硬编码任何字段名；
+// 1) 由后端定义设置项，源目录清理条件在总开关下方展示；
 // 2) 后端目前未返回 valueType，若返回则按 string/int/number/bool/boolean 渲染对应控件，未返回时一律 string 输入框；
 // 3) value 永远以字符串发回后端（System_Setting KV 为字符串存储）。
 import { computed, onMounted, reactive, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { api } from '@/api';
 import PmmPageHeader from '@/components/PmmPageHeader.vue';
+import { KEEP_ONGOING_KEY, orderCleanupSettings, isCleanupConditionDisabled } from '@/utils/sourceCleanupSettings';
 
 // form: { [groupName]: { [key]: { value, originalValue, description, valueType, category } } }
 const form = reactive({});
 const loading = ref(false);
 const saving = ref(false);
-
 // 分组标题中文映射（Category 字段在 DB 中保持英文做 GroupBy 与索引，仅展示时翻译）
 // 未在表中的新分组按原文展示，提示开发者补齐
 const GROUP_LABELS = {
@@ -234,9 +234,10 @@ onMounted(load);
       >
         <header class="section-head"><h3>{{ groupLabel(groupName) }}</h3></header>
         <div
-          v-for="(item, key) in items"
+          v-for="[key, item] in orderCleanupSettings(items)"
           :key="key"
           class="form-row"
+          :class="{ 'cleanup-condition': key === KEEP_ONGOING_KEY }"
         >
           <div>
             <div class="label">{{ item.description || key }}</div>
@@ -265,6 +266,8 @@ onMounted(load);
             <el-switch
               v-else-if="item.valueType === 'bool' || item.valueType === 'boolean'"
               v-model="item.value"
+              :disabled="isCleanupConditionDisabled(items, key)"
+              :aria-label="key === KEEP_ONGOING_KEY ? '仅明确未完结时保留源文件夹' : (item.description || key)"
             />
             <el-select
               v-else-if="item.valueType === 'enum'"
@@ -295,6 +298,12 @@ onMounted(load);
 </template>
 
 <style scoped lang="scss">
+.cleanup-condition {
+  margin-left: 20px;
+  padding-left: 12px;
+  border-left: 2px solid var(--el-border-color);
+}
+
 .toolbar {
   display: flex;
   justify-content: space-between;

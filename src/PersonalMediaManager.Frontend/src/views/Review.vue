@@ -22,6 +22,8 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { ElMessage, ElMessageBox, ElTag, ElSelect, ElOption, ElInput, ElInputNumber } from 'element-plus';
 
 import { api } from '@/api';
+import { createReviewAssist, createReviewSubmission } from '@/composables/useReviewAssist';
+import { defaultEpisodeOptions, episodeLabel, episodeProblems, readEpisodeInfo } from '@/utils/reviewEpisodePlan';
 import PmmIcon from '@/components/PmmIcon.vue';
 import PmmPoster from '@/components/PmmPoster.vue';
 import PmmPageHeader from '@/components/PmmPageHeader.vue';
@@ -46,7 +48,12 @@ const selected = ref(new Set());
 const submitting = ref(false);
 
 // 批量归档进度遮罩：confirm 同步归档（逐条移动文件 + 查 TMDB），分片实时推进进度条避免「点了没反应」误判
-const batchProgress = ref({ visible: false, done: 0, total: 0 });
+const submission = createReviewSubmission(api.review);
+const batchProgress = submission.progress;
+const confirmBusy = submission.busy;
+const submitErrors = ref({});
+const submissionUncertain = ref(false);
+const metadataWarnings = ref([]);
 const batchProgressPercent = computed(() =>
   batchProgress.value.total > 0
     ? Math.round((batchProgress.value.done / batchProgress.value.total) * 100)
@@ -308,14 +315,70 @@ const idQuerying = ref(false);
 // 季数 / 逐季集数缓存（按 tmdbId 懒查复用）
 const seasonDetailCache = ref({});
 const seasonEpisodeCache = ref({});
-const seasonFetchInFlight = new Set();
 
 // 去向预览 { [String(itemId)]: { relativePath, fullPath, error } }
 const previewMap = ref({});
 let previewTimer = null;
+let pathPreviewRequest = 0;
 
-// 批量套用季号
-const bulkSeason = ref(null);
+const assist = createReviewAssist(api.review);
+const { libraryCandidates, libraryLoading, libraryError, preview: episodePlan,
+  preparing: preparingEpisodes, error: assistError, applicableCount } = assist;
+const libraryQuery = ref('');
+const episodeOptions = ref(defaultEpisodeOptions());
+const mappingAcknowledged = ref(false);
+const metadataSeason = ref(null);
+const metadataLoading = ref(false);
+const metadataError = ref('');
+const metadataSnapshot = ref(null);
+const groupDecisionSource = ref('ManualForm');
+const mixedGroupAcknowledged = ref(false);
+const selectedTitles = computed(() => [...new Set((openGroup.value?.items || []).filter((row) => episodeEdits.value[row.id]?.checked).map((row) => readEpisodeInfo(row.parsedInfo).title?.normalize('NFC').trim()).filter(Boolean))]);
+let metadataRequest = 0;
+
+function episodeSnapshot() {
+  return { rows: openGroup.value?.items || [], edits: episodeEdits.value, options: { ...episodeOptions.value, sameWorkConfirmed: mixedGroupAcknowledged.value && !!groupForm.value.tmdbId },
+    identity: `${tmdbCandidateKey(groupForm.value)}:${metadataSeason.value}:${mappingAcknowledged.value}` };
+}
+const episodePlanStale = computed(() => assist.isStale(episodeSnapshot()));
+const rowProblems = computed(() => groupForm.value.mediaType === 'Tv'
+  ? episodeProblems(openGroup.value?.items || [], episodeEdits.value) : {});
+function candidateSourceLabel(candidate) {
+  return { LibraryContext: '库内 · 上下文候选', LibraryTitle: '库内 · 标题 / 别名匹配',
+    LibraryRecent: '库内 · 最近更新未完结' }[candidate.source] || '库内备选';
+}
+function loadLibraryCandidates() {
+  const id = anyItemId();
+  if (id != null) return assist.loadLibrary(id, libraryQuery.value);
+}
+function onPickLibrary(candidate) {
+  if (!adoptCandidate(candidate)) return;
+  groupDecisionSource.value = 'LibrarySelection';
+}
+function clearMapping(edit) {
+  delete edit.mappingToken;
+  delete edit.sourceEpisode;
+  delete edit.sourceEpisodeEnd;
+  edit.decisionSource = 'ManualForm';
+}
+function onManualEpisodeChange(id) {
+  clearMapping(episodeEdits.value[id]);
+  delete submitErrors.value[id];
+}
+async function previewEpisodeEdits() {
+  await assist.prepare(episodeSnapshot());
+}
+async function previewAbsoluteMapping() {
+  await assist.prepare(episodeSnapshot(), { tmdbId: groupForm.value.tmdbId, season: metadataSeason.value,
+    acknowledged: mappingAcknowledged.value, forceRefresh: true });
+}
+function applyEpisodePlan() {
+  const result = assist.apply(episodeSnapshot());
+  if (!result) return;
+  episodeEdits.value = result.edits;
+  ElMessage.success(`已应用 ${result.count} 项到表单，请核对后再确认归档`);
+}
+
 
 function anyItemId() { return openGroup.value?.items?.[0]?.id ?? null; }
 
@@ -331,6 +394,13 @@ function defaultCategoryId(mt) {
 }
 
 function openGroupDrawer(g) {
+  assist.reset();
+  metadataRequest += 1;
+  metadataSnapshot.value = null;
+  metadataError.value = '';
+  metadataLoading.value = false;
+  submitErrors.value = {};
+  submissionUncertain.value = false;
   openGroup.value = g;
   const first = g.items[0];
   const info = parseInfo(first.parsedInfo);
@@ -338,11 +408,11 @@ function openGroupDrawer(g) {
   const candidates = g.items.flatMap((item) => item.tmdbCandidates || []);
   groupCandidates.value = mergeTmdbCandidates(candidates);
   hasInvalidCandidates.value = candidates.some((candidate) => !tmdbCandidateIdentity(candidate));
-  const initial = groupCandidates.value[0];
-  const mt = initial?.mediaType ?? inferMediaType(first);
+  // 所有候选均须人工点选，尤其不能把近期库内作品自动绑定给本组。
+  const mt = inferMediaType(first);
 
   groupForm.value = {
-    tmdbId: initial?.tmdbId ?? null,
+    tmdbId: null,
     mediaType: mt,
     categoryId: defaultCategoryId(mt),
   };
@@ -350,7 +420,7 @@ function openGroupDrawer(g) {
   const edits = {};
   for (const it of g.items) {
     const inf = parseInfo(it.parsedInfo);
-    edits[it.id] = { checked: true, season: inf.season ?? null, episode: inf.episode ?? null, episodeEnd: inf.episodeEnd ?? null };
+    edits[it.id] = { checked: true, season: inf.season ?? null, episode: inf.episode ?? null, episodeEnd: inf.episodeEnd ?? null, decisionSource: 'ManualForm' };
   }
   episodeEdits.value = edits;
 
@@ -359,17 +429,25 @@ function openGroupDrawer(g) {
   searchResults.value = [];
   searched.value = false;
   idForm.value = { tmdbId: null, type: mt === 'Tv' ? 'tv' : 'movie' };
-  bulkSeason.value = null;
+  episodeOptions.value = defaultEpisodeOptions();
+  metadataSeason.value = null;
+  mappingAcknowledged.value = false;
+  groupDecisionSource.value = 'ManualForm';
+  mixedGroupAcknowledged.value = false;
+  libraryQuery.value = '';
+  loadLibraryCandidates();
   sortKey.value = null;
   sortAsc.value = true;
   nameColWidth.value = null;
   previewMap.value = {};
 
-  if (groupForm.value.mediaType === 'Tv') ensureSeasonDetail();
   schedulePreview();
 }
 
 function closeGroup() {
+  if (confirmBusy.value || submitting.value) return;
+  assist.reset();
+  metadataRequest += 1;
   openGroup.value = null;
   if (previewTimer) { clearTimeout(previewTimer); previewTimer = null; }
 }
@@ -381,11 +459,20 @@ const openGroupReasons = computed(() =>
 function pickCandidate(c) {
   const identity = tmdbCandidateIdentity(c);
   if (!identity) return ElMessage.warning('候选缺少有效的媒体类型或 ID，请重新搜索或指定类型后查询 ID');
+  if (confirmBusy.value) return;
+  if (!sameTmdbCandidate(groupForm.value, identity)) {
+    for (const edit of Object.values(episodeEdits.value)) clearMapping(edit);
+    metadataSnapshot.value = null;
+    metadataSeason.value = null;
+    mappingAcknowledged.value = false;
+  }
+  groupDecisionSource.value = 'ManualForm';
   Object.assign(groupForm.value, identity);
 }
 
 const selectedCandidate = computed(() =>
   findTmdbCandidate(groupCandidates.value, groupForm.value));
+const displayTmdbCandidates = computed(() => groupCandidates.value.filter((candidate) => !candidate.source?.startsWith('Library')));
 
 // ---------- 季数 / 绝对集号换算 ----------
 
@@ -428,87 +515,35 @@ const seasonOptions = computed(() => {
 });
 const seasonSelectReady = computed(() => selectedSeasonCount.value != null && selectedSeasonCount.value >= 1);
 
-const seasonHint = computed(() => {
-  if (groupForm.value.mediaType !== 'Tv') return '';
-  const n = selectedSeasonCount.value;
-  if (n == null) return '剧集需填季 + 集；动漫常无季号时填季 1 + 集号。';
-  if (n === 1) return '该剧 TMDB 仅 1 季，缺季号的文件已默认第 1 季。';
-  return `该剧 TMDB 共 ${n} 季，用「统一季号」或「按绝对集号分季」批量补季。`;
-});
+const seasonHint = computed(() => '只补有证据的字段。先预览，再应用到表单；未填值不会默认为第 1 季。');
 
-/** 懒查所选剧集季数（候选未带 TotalSeasons 时）：写回候选 + 缓存，失败静默 */
-async function ensureSeasonDetail() {
-  if (groupForm.value.mediaType !== 'Tv') return;
-  const id = groupForm.value.tmdbId;
+/** 选作品或目标季即强刷目录，失败仍展示旧缓存及明确的失败状态。 */
+async function refreshCatalogue(forceRefresh = true) {
   const itemId = anyItemId();
-  if (id == null || itemId == null) return;
-  const cand = selectedCandidate.value;
-  if (cand?.totalSeasons != null) return;
-  const key = `tv-${id}`;
-  if (key in seasonDetailCache.value) {
-    if (cand) cand.totalSeasons = seasonDetailCache.value[key];
-    return;
-  }
-  if (seasonFetchInFlight.has(key)) return;
-  seasonFetchInFlight.add(key);
+  const identity = tmdbCandidateKey(groupForm.value);
+  const season = metadataSeason.value;
+  const request = ++metadataRequest;
+  metadataSnapshot.value = null;
+  metadataError.value = '';
+  if (groupForm.value.mediaType !== 'Tv' || !groupForm.value.tmdbId || itemId == null) { metadataLoading.value = false; return; }
+  metadataLoading.value = true;
   try {
-    const d = await api.review.tmdbDetail(itemId, { tmdbId: id, mediaType: 'tv' });
-    const ts = d?.totalSeasons ?? null;
-    seasonDetailCache.value = { ...seasonDetailCache.value, [key]: ts };
-    seasonEpisodeCache.value = { ...seasonEpisodeCache.value, [key]: d?.seasons ?? [] };
-    if (cand) cand.totalSeasons = ts;
-  } catch { /* 取季数失败：静默 */ } finally {
-    seasonFetchInFlight.delete(key);
+    const detail = await api.review.tmdbDetail(itemId, { tmdbId: groupForm.value.tmdbId, mediaType: 'tv', season: season ?? undefined, forceRefresh });
+    if (request !== metadataRequest || identity !== tmdbCandidateKey(groupForm.value) || season !== metadataSeason.value || !openGroup.value) return;
+    const key = `tv-${detail.tmdbId}`;
+    seasonDetailCache.value = { ...seasonDetailCache.value, [key]: detail.totalSeasons ?? null };
+    seasonEpisodeCache.value = { ...seasonEpisodeCache.value, [key]: detail.seasons || [] };
+    const candidate = selectedCandidate.value;
+    if (candidate) candidate.totalSeasons = detail.totalSeasons ?? null;
+    metadataSnapshot.value = detail;
+    metadataError.value = [detail.refreshError, detail.catalogue?.refreshError].filter(Boolean).join('；');
+  } catch (cause) {
+    if (request === metadataRequest) metadataError.value = `TMDB 刷新失败：${cause?.message || '请重试'}`;
+  } finally {
+    if (request === metadataRequest) metadataLoading.value = false;
   }
 }
-
-/** 懒查并返回当前剧集逐季集数（绝对集号换算用） */
-async function ensureSeasonEpisodeCounts() {
-  if (groupForm.value.mediaType !== 'Tv') return [];
-  const id = groupForm.value.tmdbId;
-  const itemId = anyItemId();
-  if (id == null || itemId == null) return [];
-  const key = `tv-${id}`;
-  if (key in seasonEpisodeCache.value) return seasonEpisodeCache.value[key];
-  try {
-    const d = await api.review.tmdbDetail(itemId, { tmdbId: id, mediaType: 'tv' });
-    const seasons = d?.seasons ?? [];
-    seasonEpisodeCache.value = { ...seasonEpisodeCache.value, [key]: seasons };
-    if (!(key in seasonDetailCache.value)) {
-      seasonDetailCache.value = { ...seasonDetailCache.value, [key]: d?.totalSeasons ?? null };
-    }
-    return seasons;
-  } catch {
-    return [];
-  }
-}
-
-/** 正片季逐季集数（排除特别篇季 0 与未播 0 集季，按季号升序） */
-const convertSeasons = computed(() => {
-  const id = groupForm.value.tmdbId;
-  if (id == null) return [];
-  const raw = seasonEpisodeCache.value[`tv-${id}`] || [];
-  return raw.filter((s) => s.seasonNumber >= 1 && s.episodeCount > 0).sort((a, b) => a.seasonNumber - b.seasonNumber);
-});
-
-/** 绝对集号 → {season, episode}；超出总集数或无季数据返回 null */
-function absoluteToSeasonEpisode(absolute, seasons) {
-  if (absolute == null || absolute < 1 || !seasons?.length) return null;
-  let remaining = absolute;
-  for (const s of seasons) {
-    if (remaining <= s.episodeCount) return { season: s.seasonNumber, episode: remaining };
-    remaining -= s.episodeCount;
-  }
-  return null;
-}
-
-// 选中候选 / 切到剧集 → 补取季数 + 逐季季名（季下拉显示季名供篇章对照）
-watch([() => groupForm.value.tmdbId, () => groupForm.value.mediaType], () => {
-  if (groupForm.value.mediaType === 'Tv') {
-    ensureSeasonDetail();
-    ensureSeasonEpisodeCounts();
-  }
-});
+watch([() => groupForm.value.tmdbId, () => groupForm.value.mediaType, metadataSeason], () => refreshCatalogue(true));
 
 // 媒体类型变化 → 分类按类型过滤：不符则清空并尝试自动选
 watch(() => groupForm.value.mediaType, (mt) => {
@@ -521,17 +556,9 @@ watch(() => groupForm.value.mediaType, (mt) => {
   }
 });
 
-// 单季剧：所有缺季号的勾选行自动补第 1 季
-watch(selectedSeasonCount, (n) => {
-  if (groupForm.value.mediaType !== 'Tv' || n !== 1) return;
-  for (const it of openGroup.value?.items || []) {
-    const e = episodeEdits.value[it.id];
-    if (e && e.season == null) e.season = 1;
-  }
-});
-
 // 决策 / 季集变化 → 防抖刷新去向预览
 watch([groupForm, episodeEdits], schedulePreview, { deep: true });
+watch([() => groupForm.value.tmdbId, () => groupForm.value.mediaType, selectedTitles], () => { mixedGroupAcknowledged.value = false; });
 
 // ---------- 抽屉内：手动搜索 TMDB + 选用 ----------
 
@@ -540,6 +567,8 @@ async function onTmdbSearch() {
   if (itemId == null) return;
   const query = (searchForm.value.query || '').trim();
   if (!query) return ElMessage.warning('请输入搜索关键词');
+  if (searching.value) return;
+  const context = openGroup.value;
   searching.value = true;
   try {
     const res = await api.review.tmdbSearch(itemId, {
@@ -547,6 +576,7 @@ async function onTmdbSearch() {
       type: searchForm.value.type,
       year: searchForm.value.year ?? undefined,
     });
+    if (context !== openGroup.value) return;
     const results = res?.items || [];
     searchResults.value = mergeTmdbCandidates(results);
     searched.value = true;
@@ -562,9 +592,12 @@ async function onTmdbIdQuery() {
   if (itemId == null) return;
   const tmdbId = idForm.value.tmdbId;
   if (!tmdbId) return ElMessage.warning('请输入 TMDB ID');
+  if (idQuerying.value) return;
+  const context = openGroup.value;
   idQuerying.value = true;
   try {
     const d = await api.review.tmdbDetail(itemId, { tmdbId, mediaType: idForm.value.type });
+    if (context !== openGroup.value) return;
     searchResults.value = mergeTmdbCandidates([{
       tmdbId: d.tmdbId,
       mediaType: d.mediaType,
@@ -632,7 +665,7 @@ const sortedRows = computed(() => {
     : (it) => fileStem(it.fileName).toLowerCase();
   const dir = sortAsc.value ? 1 : -1;
   return rows.slice().sort((a, b) =>
-    pick(a).localeCompare(pick(b), 'zh') * dir || (a.fileName || '').localeCompare(b.fileName || ''));
+    pick(a).localeCompare(pick(b), 'zh', { numeric: true }) * dir || (a.fileName || '').localeCompare(b.fileName || ''));
 });
 
 // ② 名称列手动拖宽：null = 用默认 fr 列宽；拖动后存固定 px，经 CSS 变量 --ep-name-w 覆盖 grid 模板（TV / 电影通用）
@@ -687,51 +720,6 @@ async function onCheckFiles() {
   }
 }
 
-/** 把统一季号套用到所有勾选行 */
-function applyBulkSeason() {
-  if (bulkSeason.value == null) return ElMessage.warning('请先选择要套用的季号');
-  let n = 0;
-  for (const it of checkedItems.value) { episodeEdits.value[it.id].season = bulkSeason.value; n += 1; }
-  if (n) ElMessage.success(`已把第 ${bulkSeason.value} 季套用到 ${n} 个文件`);
-  else ElMessage.info('没有勾选的文件');
-}
-
-/** 按绝对集号给勾选行自动分季：以各自集号为绝对集号，按 TMDB 季结构换算 */
-async function autoSplitSeasons() {
-  await ensureSeasonEpisodeCounts();
-  const seasons = convertSeasons.value;
-  if (!seasons.length) return ElMessage.warning('未取得该剧每季集数，无法自动分季（请确认已选定 TMDB 剧集）');
-  let ok = 0;
-  const failed = [];
-  for (const it of checkedItems.value) {
-    const e = episodeEdits.value[it.id];
-    const r = absoluteToSeasonEpisode(e.episode, seasons);
-    if (r) { e.season = r.season; e.episode = r.episode; ok += 1; } else failed.push(it.fileName);
-  }
-  if (ok) ElMessage.success(`已按绝对集号分季 ${ok} 项${failed.length ? `，${failed.length} 项超出范围未改` : ''}`);
-  else ElMessage.warning('没有可换算的集号（请确认各行已填绝对集号）');
-}
-
-/** 合并为单季连续编号：TMDB 仅 1 季但文件标了多季时，勾选行按 (季,集) 升序重编号为该季 E01.. */
-async function mergeToSingleSeason() {
-  if (selectedSeasonCount.value !== 1) return ElMessage.warning('该剧 TMDB 不止 1 季，请改用「按绝对集号分季」');
-  await ensureSeasonEpisodeCounts();
-  const season = convertSeasons.value[0]?.seasonNumber ?? 1;
-  const entries = checkedItems.value.map((it) => {
-    const e = episodeEdits.value[it.id];
-    return { id: it.id, season: e.season, episode: e.episode };
-  });
-  if (entries.length <= 1) return ElMessage.info('请先勾选要一并合并的多个文件');
-  entries.sort((a, b) => (a.season ?? 9e4) - (b.season ?? 9e4) || (a.episode ?? 9e4) - (b.episode ?? 9e4));
-  entries.forEach((en, idx) => {
-    const e = episodeEdits.value[en.id];
-    e.season = season;
-    e.episode = idx + 1;
-    e.episodeEnd = null;
-  });
-  ElMessage.success(`已合并为第 ${season} 季连续编号：共 ${entries.length} 项（E01–E${String(entries.length).padStart(2, '0')}）`);
-}
-
 // ---------- 去向预览 ----------
 
 function buildPreviewItems() {
@@ -763,15 +751,19 @@ function buildPreviewItems() {
 }
 
 function schedulePreview() {
+  pathPreviewRequest += 1;
   if (previewTimer) clearTimeout(previewTimer);
   previewTimer = setTimeout(runPreview, 300);
 }
 
 async function runPreview() {
+  const request = ++pathPreviewRequest;
+  const context = openGroup.value;
   const items = buildPreviewItems();
   if (!items.length) { previewMap.value = {}; return; }
   try {
     const res = await api.review.previewPaths({ items });
+    if (request !== pathPreviewRequest || context !== openGroup.value) return;
     const map = {};
     for (const e of (res?.entries || [])) map[e.key] = e;
     previewMap.value = map;
@@ -789,40 +781,20 @@ const footerPreview = computed(() => {
 
 // ---------- 确认 / 忽略 ----------
 
-/** 分片提交 batch-confirm 并实时刷新进度遮罩，返回聚合 { ok, fail } */
-async function runBatchConfirmWithProgress(items) {
-  const CHUNK = 5;
-  batchProgress.value = { visible: true, done: 0, total: items.length };
-  let ok = 0;
-  let fail = 0;
-  try {
-    for (let i = 0; i < items.length; i += CHUNK) {
-      const slice = items.slice(i, i + CHUNK);
-      const res = await api.review.batchConfirm({ items: slice });
-      ok += res?.succeeded?.length || 0;
-      fail += res?.failed?.length || 0;
-      batchProgress.value.done = Math.min(i + slice.length, items.length);
-    }
-  } finally {
-    batchProgress.value.visible = false;
-  }
-  return { ok, fail };
-}
-
 /** 确认归档可用：作品 + 分类已定，且至少一个勾选行（剧集还要季集齐全） */
 const canConfirm = computed(() => {
+  if (episodePlan.value || preparingEpisodes.value || submissionUncertain.value) return false;
+  if (selectedTitles.value.length > 1 && !mixedGroupAcknowledged.value) return false;
   if (!groupForm.value.tmdbId || !groupForm.value.categoryId) return false;
   if (!selectedCandidate.value) return false;
   if (!checkedCount.value) return false;
   if (groupForm.value.mediaType !== 'Tv') return true;
-  return checkedItems.value.some((it) => {
-    const e = episodeEdits.value[it.id];
-    return e?.season != null && e?.episode != null;
-  });
+  return checkedItems.value.every((it) => !rowProblems.value[it.id]);
 });
 
 /** 用组内选定的同一作品 + 分类，确认勾选项（剧集每项带各自季 / 集） */
 async function onConfirmGroup() {
+  if (confirmBusy.value || submitting.value || !canConfirm.value) return;
   const g = openGroup.value;
   if (!g) return;
   const { tmdbId, mediaType, categoryId } = groupForm.value;
@@ -849,6 +821,8 @@ async function onConfirmGroup() {
       episode: isTv ? e.episode : null,
       episodeEnd: isTv ? (e.episodeEnd ?? null) : null,
       rowVersion: it.rowVersion,
+      decisionSource: e.decisionSource !== 'ManualForm' ? e.decisionSource : groupDecisionSource.value,
+      sourceEpisode: e.sourceEpisode ?? null, sourceEpisodeEnd: e.sourceEpisodeEnd ?? null, mappingToken: e.mappingToken ?? null,
     });
   }
 
@@ -858,27 +832,27 @@ async function onConfirmGroup() {
   // 同名冲突项（reason=NameCollision）的「确认归档」= 人工裁定覆盖：提交前显式二次确认，避免误删目标已存在文件
   const payloadIds = new Set(items.map((p) => p.id));
   const overwriteCount = checkedItems.value.filter((it) => it.reason === 'NameCollision' && payloadIds.has(it.id)).length;
-  if (overwriteCount > 0) {
+  const result = await submission.submit(items, async () => {
+    if (!overwriteCount) return true;
     try {
       await ElMessageBox.confirm(
-        `选中含 ${overwriteCount} 个同名冲突项，确认归档将覆盖目标位置已存在的同名文件（旧文件连同其字幕 / nfo 一并删除，不可恢复）。是否继续？`,
-        '覆盖确认',
-        { confirmButtonText: '覆盖并归档', cancelButtonText: '取消', type: 'warning' });
-    } catch {
-      return; // 用户取消覆盖，不提交
-    }
-  }
+        `选中含 ${overwriteCount} 个同名冲突项，确认归档将覆盖目标位置已有文件及字幕 / nfo，旧文件不可恢复。是否继续？`,
+        '覆盖确认', { confirmButtonText: '覆盖并归档', cancelButtonText: '取消', type: 'warning' });
+      return true;
+    } catch { return false; }
+  });
+  if (!result) return;
+  metadataWarnings.value = result.metadataWarnings.map((warning) => ({ ...warning, fileName: g.items.find((item) => item.id === warning.id)?.fileName || String(warning.id) }));
+  const done = new Set(result.succeeded);
+  allItems.value = allItems.value.filter((item) => !done.has(item.id));
+  g.items = g.items.filter((item) => !done.has(item.id));
+  g.count = g.items.length;
+  submitErrors.value = Object.fromEntries(result.failed.map((entry) => [entry.id, entry.message]));
+  submissionUncertain.value = result.uncertain;
+  if (result.failed.length) ElMessage.warning(`确认完成：成功 ${done.size} 条 / 失败 ${result.failed.length} 条，请查看各行提示`);
+  else ElMessage.success(`已完成归档：${done.size} 条`);
+  if (!g.items.length) { closeGroup(); await load(); }
 
-  submitting.value = true;
-  try {
-    const { ok, fail } = await runBatchConfirmWithProgress(items);
-    if (fail) ElMessage.warning(`确认完成：成功 ${ok} 条 / 失败 ${fail} 条`);
-    else ElMessage.success(`已完成归档：${ok} 条`);
-    closeGroup();
-    await load();
-  } finally {
-    submitting.value = false;
-  }
 }
 
 /** 忽略勾选项 */
@@ -903,6 +877,7 @@ async function onIgnoreGroup() {
     const fail = res?.failed?.length || 0;
     if (fail) ElMessage.warning(`忽略完成：成功 ${ok} 条 / 失败 ${fail} 条`);
     else ElMessage.success(`已忽略 ${ok} 条`);
+    submitting.value = false;
     closeGroup();
     await load();
   } finally {
@@ -911,11 +886,12 @@ async function onIgnoreGroup() {
 }
 
 onMounted(load);
-onUnmounted(() => { if (previewTimer) clearTimeout(previewTimer); });
+onUnmounted(() => { assist.reset(); metadataRequest += 1; if (previewTimer) clearTimeout(previewTimer); });
 </script>
 
 <template>
   <div class="page" v-loading="loading">
+    <div v-if="metadataWarnings.length" class="card assist-error" role="alert" style="padding:12px;margin-bottom:12px"><b>归档已成功，以下 TMDB 元数据刷新失败</b><div v-for="warning in metadataWarnings" :key="warning.id">{{ warning.fileName }}：{{ warning.message }}</div><button class="btn btn-sm" @click="metadataWarnings = []">关闭提示</button></div>
     <!-- ===== 列表模式（未打开任何作品组时） ===== -->
     <template v-if="!openGroup">
     <PmmPageHeader eyebrow="待确认队列" :title="`${groups.length} 组 · ${filteredCount} 个文件待确认`">
@@ -1034,7 +1010,7 @@ onUnmounted(() => { if (previewTimer) clearTimeout(previewTimer); });
     <!-- ===== 详情模式（整页）：①作品 → ②文件/剧集 → ③分类 → sticky 确认 ===== -->
       <div v-else class="review-detail">
         <header class="rd-head">
-          <button class="btn btn-ghost btn-sm rd-back" @click="closeGroup">
+          <button class="btn btn-ghost btn-sm rd-back" :disabled="confirmBusy || submitting" @click="closeGroup">
             <PmmIcon name="chevronLeft" :size="14" /> 返回队列
           </button>
           <div class="rd-head-title">
@@ -1065,11 +1041,30 @@ onUnmounted(() => { if (previewTimer) clearTimeout(previewTimer); });
 
           <!-- ① 作品 -->
           <section class="rd-section">
-            <div class="eyebrow step">① 这是哪部作品 — 单选一个 TMDB 条目</div>
+            <div class="eyebrow step">① 这是哪部作品 · 先看库内备选，点选后才绑定</div>
 
-            <div v-if="groupCandidates.length" class="cand-grid">
+            <div class="library-assist">
+              <div class="assist-heading"><b>库内作品</b><span class="muted xs">按上下文、标题 / 别名匹配优先，最近更新的未完结剧作为备选</span></div>
+              <div class="library-search"><el-input v-model="libraryQuery" placeholder="搜索库内标题 / 别名（可留空）" clearable @keyup.enter="loadLibraryCandidates" />
+                <button class="btn btn-sm" :disabled="libraryLoading" @click="loadLibraryCandidates">{{ libraryLoading ? '加载中…' : '查库' }}</button></div>
+              <p v-if="libraryError" class="assist-error" role="alert">{{ libraryError }} <button class="btn btn-sm" @click="loadLibraryCandidates">重试</button></p>
+              <div v-if="libraryCandidates.length" class="cand-grid">
+                <button v-for="c in libraryCandidates" :key="tmdbCandidateKey(c)" class="card cand-card library-card" :class="{ active: sameTmdbCandidate(groupForm, c) }" @click="onPickLibrary(c)">
+                  <PmmPoster :title="c.title" :year="c.year" :src="c.posterUrl" size="sm" :show-text="false" />
+                  <span class="cand-meta"><span class="source-badge">{{ candidateSourceLabel(c) }}</span>
+                    <span class="cand-title">{{ c.title || c.originalTitle || '未命名作品' }} <span v-if="c.year" class="muted small">({{ c.year }})</span></span>
+                    <span v-if="c.originalTitle && c.originalTitle !== c.title" class="muted xs">{{ c.originalTitle }}</span>
+                    <span class="muted xs">{{ c.matchReason || c.tmdbStatus || '库内已有归档' }} · {{ c.mediaType === 'Tv' ? '剧集' : '电影' }} #{{ c.tmdbId }}</span>
+                    <span v-if="c.latestArchivedAt" class="muted xs">最近归档 {{ timeAgo(c.latestArchivedAt) }}</span>
+                  </span><span class="cand-pick" :class="{ on: sameTmdbCandidate(groupForm, c) }"><PmmIcon v-if="sameTmdbCandidate(groupForm, c)" name="check" :size="13" /></span>
+                </button>
+              </div>
+              <p v-else-if="!libraryLoading && !libraryError" class="muted small">暂无库内匹配或近期未完结剧，可继续查看解析候选或搜索 TMDB。</p>
+            </div>
+            <div class="assist-heading"><b>解析 / 手动搜索的 TMDB 候选</b><span class="muted xs">需人工核对作品与年份</span></div>
+            <div v-if="displayTmdbCandidates.length" class="cand-grid">
               <div
-                v-for="c in groupCandidates"
+                v-for="c in displayTmdbCandidates"
                 :key="tmdbCandidateKey(c)"
                 class="card cand-card"
                 :class="{ active: sameTmdbCandidate(groupForm, c) }"
@@ -1091,7 +1086,7 @@ onUnmounted(() => { if (previewTimer) clearTimeout(previewTimer); });
               </div>
             </div>
             <div v-else class="empty-cands muted small">
-              <PmmIcon name="warning" :size="16" /> TMDB 没有返回候选，请用下方手动搜索 / 填 ID。
+              <PmmIcon name="warning" :size="16" /> 解析阶段没有候选，可从上方库内作品选用，或在下方搜索 TMDB。
             </div>
             <p v-if="hasInvalidCandidates" class="muted small">部分旧候选缺少有效的媒体类型或 ID，已从可选列表排除；请手动搜索或指定类型后查询 ID。</p>
 
@@ -1153,25 +1148,48 @@ onUnmounted(() => { if (previewTimer) clearTimeout(previewTimer); });
             <div class="eyebrow step step-row">
               <span>② {{ groupForm.mediaType === 'Tv' ? '逐集核对季 / 集' : '确认文件' }}（{{ checkedCount }} / {{ openGroup.items.length }} 选中）</span>
               <div class="ep-tools">
-                <template v-if="groupForm.mediaType === 'Tv'">
-                  <el-select v-if="seasonSelectReady" v-model="bulkSeason" placeholder="统一季号" size="small" filterable clearable style="width: 124px">
-                    <el-option v-for="o in seasonOptions" :key="o.value" :label="o.label" :value="o.value" />
-                  </el-select>
-                  <el-input-number v-else v-model="bulkSeason" :min="0" :max="999" :value-on-clear="null" :controls="false" size="small" placeholder="季" style="width: 64px" />
-                  <button class="btn btn-ghost btn-sm" :disabled="!checkedCount" @click="applyBulkSeason">套用季号</button>
-                  <button v-if="selectedSeasonCount !== 1" class="btn btn-ghost btn-sm" :disabled="!groupForm.tmdbId || !checkedCount" @click="autoSplitSeasons" title="把各行集号当绝对集号，按 TMDB 季结构换算成各自季 / 集">
-                    按绝对集号分季
-                  </button>
-                  <button v-else class="btn btn-ghost btn-sm" :disabled="!groupForm.tmdbId || !checkedCount" @click="mergeToSingleSeason" title="TMDB 仅 1 季：勾选项按原季 / 集排序后合并重编号为该季连续集号">
-                    合并为单季
-                  </button>
-                </template>
                 <button class="btn btn-ghost btn-sm" :disabled="checkingFiles || !openGroup.items.length" @click="onCheckFiles" title="检查各文件源是否仍存在，已删除的从队列移除（转忽略）">
                   <PmmIcon name="search" :size="13" /> {{ checkingFiles ? '检查中…' : '检查文件' }}
                 </button>
               </div>
             </div>
 
+            <div v-if="groupForm.mediaType === 'Tv'" class="episode-assist">
+              <div class="assist-heading"><b>快速提取 / 批量填写</b><span class="muted xs">仅影响勾选的 {{ checkedCount }} 项，先预览再确认</span></div>
+              <div class="assist-controls">
+                <label>方式 <el-select v-model="episodeOptions.mode" size="small" style="width:150px"><el-option label="从本地规则提取" value="rules" /><el-option label="只填统一季号" value="season" /><el-option label="按文件自然排序编号" value="sequence" /></el-select></label>
+                <label v-if="episodeOptions.mode !== 'rules'">统一季号 <el-input-number v-model="episodeOptions.season" :min="0" :max="999" :value-on-clear="null" :controls="false" size="small" placeholder="可留空" /></label>
+                <template v-if="episodeOptions.mode === 'sequence'"><label>起始集号 <el-input-number v-model="episodeOptions.start" :min="0" :max="9999" :controls="false" size="small" /></label><label>步长 <el-input-number v-model="episodeOptions.step" :min="1" :max="9999" :controls="false" size="small" /></label></template>
+                <label class="keep-existing"><input v-model="episodeOptions.keepExisting" type="checkbox" /> 保留已有字段</label>
+                <button class="btn btn-primary btn-sm" :disabled="!checkedCount || preparingEpisodes || confirmBusy" @click="previewEpisodeEdits">{{ preparingEpisodes ? '提取中…' : '生成预览' }}</button>
+                <button v-if="preparingEpisodes" class="btn btn-sm" @click="assist.cancelPreview">取消提取</button>
+              </div>
+              <p class="muted xs">编号预览始终按文件名自然顺序（E2 在 E10 前），每个选中文件占一个编号位置。跨季、多剧、特别篇及合并多集文件会提示冲突，不会静默重编号。</p>
+              <div class="catalogue-box">
+                <div class="assist-controls"><b>TMDB 季目录核对</b>
+                  <el-select v-if="seasonSelectReady" v-model="metadataSeason" placeholder="选择目标季" size="small" clearable style="width:190px"><el-option v-for="o in seasonOptions" :key="o.value" :label="o.label" :value="o.value" /></el-select>
+                  <el-input-number v-else v-model="metadataSeason" :min="0" :max="999" :value-on-clear="null" :controls="false" placeholder="目标季" size="small" />
+                  <button class="btn btn-sm" :disabled="!groupForm.tmdbId || metadataLoading" @click="refreshCatalogue(true)">{{ metadataLoading ? '刷新中…' : '刷新 TMDB 元数据' }}</button>
+                </div>
+                <p v-if="metadataError" class="assist-error" role="alert">{{ metadataError }}。缓存内容仅供核对，不能证明目录已更新。</p>
+                <p v-if="metadataSnapshot" class="muted xs">作品{{ metadataSnapshot.fromCache ? '缓存' : '最新响应' }}：{{ metadataSnapshot.cachedAt ? fmtTime(metadataSnapshot.cachedAt) : '无缓存时间' }}<template v-if="metadataSnapshot.catalogue"> · 季目录{{ metadataSnapshot.catalogue.fromCache ? '缓存' : '最新响应' }}：{{ metadataSnapshot.catalogue.cachedAt ? fmtTime(metadataSnapshot.catalogue.cachedAt) : '无缓存时间' }} · {{ metadataSnapshot.catalogue.season?.episodes?.length ?? 0 }} 集</template></p>
+                <div class="assist-controls"><label><input v-model="mappingAcknowledged" type="checkbox" /> 这些是跨季累计编号</label><button class="btn btn-sm" :disabled="!mappingAcknowledged || !groupForm.tmdbId || metadataSeason == null || metadataSeason < 2 || !checkedCount || preparingEpisodes" @click="previewAbsoluteMapping">预览换算到目标季</button></div>
+                <p class="muted xs">仅用于已确认的跨季累计编号。明确的 SxxEyy、特别篇、跨季区间或目录不完整时停止换算。</p>
+              </div>
+              <p v-if="assistError" class="assist-error" role="alert">{{ assistError }}</p>
+              <div v-if="episodePlan" class="episode-plan">
+                <div class="assist-heading"><b>变更预览 · {{ episodePlan.entries.length }} 项</b><span class="muted xs">当前表单 → 提议值</span></div>
+                <p v-if="episodePlanStale" class="assist-error" role="alert">选中范围、作品或字段已变化，请重新生成预览</p>
+                <p v-if="episodePlan.refreshError" class="assist-error">{{ episodePlan.refreshError }}</p>
+                <div v-for="entry in episodePlan.entries" :key="entry.id" class="plan-row" :class="{ 'has-error': entry.error }">
+                  <span class="font-mono plan-file">{{ entry.fileName }}</span><span class="font-mono">{{ episodeLabel(entry.before) }} → {{ episodeLabel(entry.after) }}</span>
+                  <span class="xs">{{ ({ LocalRules: '本地规则 · ', ManualBulkSeason: '人工批填 · ', ManualBulkSequence: '人工编号 · ', AbsoluteMapping: '目录换算 · ' })[entry.source] || '' }}{{ entry.error || entry.warnings.join('；') || (entry.changed ? '待应用' : '保留原值') }}<span v-if="entry.evidence" class="muted"> · {{ Array.isArray(entry.evidence) ? entry.evidence.join('；') : entry.evidence }}</span></span>
+                </div>
+                <div class="assist-controls"><button class="btn btn-primary btn-sm" :disabled="episodePlanStale || !applicableCount || confirmBusy" @click="applyEpisodePlan">确认应用可用 {{ applicableCount }} 项到表单</button><button class="btn btn-sm" @click="assist.cancelPreview">取消预览</button><span class="muted xs">错误项保持原值；应用不会提交归档</span></div>
+              </div>
+            </div>
+            <div v-if="selectedTitles.length > 1" class="assist-error"><div>本组选中项含多个解析标题：{{ selectedTitles.join('、') }}。请确认没有混入其他作品。</div><label><input v-model="mixedGroupAcknowledged" type="checkbox" /> 已核对选中文件均属于当前选定作品</label></div>
+            <p v-if="submissionUncertain" class="assist-error" role="alert">提交连接中断，部分结果尚不确定。请返回队列并刷新，核对服务器状态后再提交。</p>
             <div class="ep-table" :class="groupForm.mediaType === 'Tv' ? 'tv' : 'movie'" :style="epTableStyle">
               <!-- 列头：名称 / 扩展名 与 季 / 集 / 末集 分列，便于逐集核对 -->
               <div class="ep-head">
@@ -1214,23 +1232,24 @@ onUnmounted(() => { if (previewTimer) clearTimeout(previewTimer); });
                 </div>
                 <template v-if="groupForm.mediaType === 'Tv' && episodeEdits[it.id]">
                   <div class="ep-cell">
-                    <el-input-number v-model="episodeEdits[it.id].season" :min="0" :max="999" :value-on-clear="null" controls-position="right" size="small" placeholder="季" />
+                    <el-input-number v-model="episodeEdits[it.id].season" @change="onManualEpisodeChange(it.id)" :min="0" :max="999" :value-on-clear="null" controls-position="right" size="small" placeholder="季" />
                   </div>
                   <div class="ep-cell">
-                    <el-input-number v-model="episodeEdits[it.id].episode" :min="0" :max="9999" :value-on-clear="null" controls-position="right" size="small" placeholder="集" />
+                    <el-input-number v-model="episodeEdits[it.id].episode" @change="onManualEpisodeChange(it.id)" :min="0" :max="9999" :value-on-clear="null" controls-position="right" size="small" placeholder="集" />
                   </div>
                   <div class="ep-cell">
-                    <el-input-number v-model="episodeEdits[it.id].episodeEnd" :min="0" :max="9999" :value-on-clear="null" controls-position="right" size="small" placeholder="末集" />
+                    <el-input-number v-model="episodeEdits[it.id].episodeEnd" @change="onManualEpisodeChange(it.id)" :min="0" :max="9999" :value-on-clear="null" controls-position="right" size="small" placeholder="末集" />
                   </div>
                 </template>
-                <div class="ep-dest" :class="{ err: previewMap[String(it.id)]?.error }" :title="previewMap[String(it.id)]?.fullPath || ''">
-                  <template v-if="previewMap[String(it.id)]?.error">⚠ {{ previewMap[String(it.id)].error }}</template>
+                <div class="ep-dest" :class="{ err: submitErrors[it.id] || rowProblems[it.id] || previewMap[String(it.id)]?.error }" :title="previewMap[String(it.id)]?.fullPath || ''">
+                  <template v-if="submitErrors[it.id] || rowProblems[it.id]">⚠ {{ submitErrors[it.id] || rowProblems[it.id] }}</template>
+                  <template v-else-if="previewMap[String(it.id)]?.error">⚠ {{ previewMap[String(it.id)].error }}</template>
                   <template v-else-if="previewMap[String(it.id)]?.relativePath">→ {{ previewMap[String(it.id)].relativePath }}</template>
                   <template v-else>—</template>
                 </div>
               </div>
             </div>
-            <div class="se-hint muted xs" v-if="groupForm.mediaType === 'Tv'">{{ seasonHint }} 动漫绝对编号用「按绝对集号分季」；多季合并成 1 季用「合并为单季」；「集」「末集」清空：删掉框内数字即可回到默认（末集仅合集 / 双集文件需填）。</div>
+            <div class="se-hint muted xs" v-if="groupForm.mediaType === 'Tv'">{{ seasonHint }} 「集」「末集」清空：删掉框内数字即可回到默认（末集仅合集 / 双集文件需填）。</div>
           </section>
 
           <!-- ③ 分类 -->
@@ -1278,10 +1297,10 @@ onUnmounted(() => { if (previewTimer) clearTimeout(previewTimer); });
             </template>
           </div>
           <div class="rd-foot-actions">
-            <button class="btn btn-ghost btn-sm" :disabled="submitting || !checkedCount" @click="onIgnoreGroup">
+            <button class="btn btn-ghost btn-sm" :disabled="submitting || confirmBusy || !checkedCount" @click="onIgnoreGroup">
               <PmmIcon name="ban" :size="13" /> 忽略选中
             </button>
-            <button class="btn btn-primary" :disabled="submitting || !canConfirm" @click="onConfirmGroup">
+            <button class="btn btn-primary" :disabled="submitting || confirmBusy || !canConfirm" @click="onConfirmGroup">
               <PmmIcon name="check" :size="14" /> 确认归档（{{ checkedCount }} 项）
             </button>
           </div>
@@ -1300,6 +1319,23 @@ onUnmounted(() => { if (previewTimer) clearTimeout(previewTimer); });
 </template>
 
 <style scoped lang="scss">
+.library-assist, .episode-assist { margin: 12px 0 18px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.assist-heading, .assist-controls, .library-search { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+.library-search { max-width: 560px; flex-wrap: nowrap; }
+.assist-controls label { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.assist-controls :deep(.el-input-number) { width: 82px; }
+.library-card { text-align: left; color: inherit; width: 100%; }
+.library-card .cand-meta { display: flex; flex-direction: column; gap: 4px; }
+.source-badge { font-size: 11px; color: var(--accent); font-weight: 600; }
+.assist-error { color: var(--danger, #b74343); font-size: 12px; line-height: 1.6; }
+.catalogue-box { border-top: 1px solid var(--border); margin-top: 12px; padding-top: 12px; }
+.episode-plan { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.plan-row { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(190px, auto) minmax(140px, 1fr); gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+.plan-row.has-error { color: var(--danger, #b74343); }
+.plan-file { overflow-wrap: anywhere; }
+.episode-plan > .assist-controls { margin-top: 12px; }
+@media (max-width: 760px) { .plan-row { grid-template-columns: 1fr; gap: 4px; } }
+
 .filter-bar {
   display: flex;
   gap: 12px;

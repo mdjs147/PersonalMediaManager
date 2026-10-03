@@ -155,6 +155,22 @@ internal sealed class AiCallOrchestrator : IAiCallOrchestrator
         using CancellationTokenSource linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         linkedCts.CancelAfter(chainTimeout);
         CancellationToken linkedCt = linkedCts.Token;
+        Stopwatch activeBudget = Stopwatch.StartNew();
+        TimeSpan remainingBudget = chainTimeout;
+        void PauseReadyResult()
+        {
+            if (linkedCt.IsCancellationRequested) return;
+            remainingBudget -= activeBudget.Elapsed;
+            activeBudget.Stop();
+            if (remainingBudget <= TimeSpan.Zero) linkedCts.Cancel();
+            else linkedCts.CancelAfter(Timeout.InfiniteTimeSpan);
+        }
+        void ResumeReadyResult()
+        {
+            if (linkedCt.IsCancellationRequested) return;
+            activeBudget.Restart();
+            linkedCts.CancelAfter(remainingBudget);
+        }
 
         // 级数上限 = 可用 provider 数（AiCallChain 内部再钳到 MaxHardCap 成本护栏）
         AiCallChain chain = new(ordered.Count);
@@ -207,7 +223,33 @@ internal sealed class AiCallOrchestrator : IAiCallOrchestrator
 
             chain.BeginProviderCall();
             // 登记一次实际发起的请求（滑动窗口计数 +1）：在真正调用前记，与限流判定同口径
-            _rpmGate.Record(res.ProviderId);
+            IAiProviderQuotaReservationTracker? reservation = _parser is IAiPhysicalRequestParser
+                ? _quotaTracker as IAiProviderQuotaReservationTracker : null;
+            List<AiProviderQuotaReservation> reservations = [];
+            using AiTransportScope transport = new AiTransportScope(async sendToken =>
+            {
+                if (_parser is IAiPhysicalRequestParser && _rpmGate.IsThrottled(res.ProviderId, res.RpmLimit))
+                    throw new AiProviderRateLimitException("AI 实际发送前达到本地 RPM 上限");
+                if (reservation is not null)
+                {
+                    AiProviderQuotaReservation? reserved = await reservation.TryReserveCallAsync(res.ProviderId, sendToken);
+                    if (reserved is null) throw new AiProviderRateLimitException("AI 实际发送前套餐额度已用尽或提供商不可用");
+                    reservations.Add(reserved);
+                }
+                _rpmGate.Record(res.ProviderId);
+            })
+            {
+                ProviderId = res.ProviderId, CallerCancellationToken = ct, OnResponseReady = PauseReadyResult, OnResponseReleased = ResumeReadyResult,
+                OnSettling = reservation is null ? null : (index, usage) => reservation.SettleTokensAsync(res.ProviderId,
+                    reservations[index], usage.PromptTokens, usage.CompletionTokens, CancellationToken.None),
+            }.Enter();
+            if (_parser is not IAiPhysicalRequestParser) await transport.StartedAsync(linkedCt);
+            async Task SettlePhysicalAsync(CancellationToken token)
+            {
+                if (reservation is not null) await transport.SettlePendingAsync();
+                else foreach (AiTransportUsage usage in transport.Usage)
+                    await _quotaTracker.RecordUsageAsync(res.ProviderId, usage.PromptTokens, usage.CompletionTokens, token);
+            }
             ProviderCallOutcome call;
             Stopwatch levelSw = Stopwatch.StartNew();
             ParseDiagnostics.Emit("ai.provider_started", new { ChainId = chainId, Level = level,
@@ -215,6 +257,9 @@ internal sealed class AiCallOrchestrator : IAiCallOrchestrator
             try
             {
                 call = await CallWithTransientRetryAsync(res, request, chain, linkedCt);
+                if (_parser is IAiPhysicalRequestParser)
+                    call = call with { PromptTokens = SumTokens(transport.Usage.Select(x => x.PromptTokens)),
+                        CompletionTokens = SumTokens(transport.Usage.Select(x => x.CompletionTokens)) };
             }
             catch (OperationCanceledException oce) when (linkedCt.IsCancellationRequested && !ct.IsCancellationRequested)
             {
@@ -232,9 +277,15 @@ internal sealed class AiCallOrchestrator : IAiCallOrchestrator
                     ErrorDetail: $"AI 调用链路总超时（{chainTimeout.TotalSeconds:F0} 秒），第 {level} 级 provider「{res.Name}」已等待 {levelSw.Elapsed.TotalSeconds:F1} 秒仍未返回",
                     Model: res.Endpoint.Model, ChainId: chainId, AttemptLevel: level, IsPrimary: res.IsPrimary), ct);
                 // 挂死的请求已实际发出（可能计费）：套餐配额同样计量（用原始 ct，与审计写入同口径）
-                await _quotaTracker.RecordUsageAsync(res.ProviderId, promptTokens: null, completionTokens: null, ct);
+                await SettlePhysicalAsync(CancellationToken.None);
                 throw new OperationCanceledException(
                     $"AI 调用链路超时（{chainTimeout.TotalSeconds:F0} 秒），当前提供商：{res.Name}", oce, linkedCt);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                // 已发送共享请求即使所属项取消仍只计一次。
+                await SettlePhysicalAsync(CancellationToken.None);
+                throw;
             }
             bool success = call.Success;
             AiParseResult? result = call.Result;
@@ -272,22 +323,30 @@ internal sealed class AiCallOrchestrator : IAiCallOrchestrator
             });
 
             // Audit 写入用原始 ct（即使链路超时也要落审计行）；含 token / 置信度 / 原文 / 升级链等监控维度
-            await _audit.WriteAsync(new AuditAiCallEntry(
-                res.ProviderId, mediaItemId, success, latencyMs, errorType, errorDetail,
-                Model: res.Endpoint.Model,
-                PromptTokens: call.PromptTokens,
-                CompletionTokens: call.CompletionTokens,
-                Confidence: confidence,
-                HttpStatus: httpStatus,
-                ChainId: chainId,
-                AttemptLevel: level,
-                IsPrimary: res.IsPrimary,
-                RequestText: call.RequestText,
-                ResponseText: call.ResponseText), ct);
-
-            // 套餐配额计量：成功/失败/低置信都计（实际 HTTP 调用已发出），token 与上面审计行同值；
-            // 成功路径 HealthTracker 不评估但配额必须计量
-            await _quotaTracker.RecordUsageAsync(res.ProviderId, call.PromptTokens, call.CompletionTokens, ct);
+            try
+            {
+                await _audit.WriteAsync(new AuditAiCallEntry(
+                    res.ProviderId, mediaItemId, success, latencyMs, errorType, errorDetail,
+                    Model: res.Endpoint.Model,
+                    PromptTokens: call.PromptTokens,
+                    CompletionTokens: call.CompletionTokens,
+                    Confidence: confidence,
+                    HttpStatus: httpStatus,
+                    ChainId: chainId,
+                    AttemptLevel: level,
+                    IsPrimary: res.IsPrimary,
+                    RequestText: call.RequestText,
+                    ResponseText: call.ResponseText), ct);
+            }
+            finally
+            {
+                // 审计取消或失败不抹去已发送请求；共享物理用量只属于一个项。
+                if (_parser is IAiPhysicalRequestParser)
+                {
+                    await SettlePhysicalAsync(CancellationToken.None);
+                }
+                else await _quotaTracker.RecordUsageAsync(res.ProviderId, call.PromptTokens, call.CompletionTokens, ct);
+            }
 
             if (success && result is not null)
             {
@@ -333,6 +392,7 @@ internal sealed class AiCallOrchestrator : IAiCallOrchestrator
             try
             {
                 attempt++;
+                using IDisposable diagnosticAttempt = ParseDiagnostics.BeginAttempt(attempt);
                 ParseDiagnostics.Emit("ai.attempt_started", new { res.ProviderId, Attempt = attempt });
                 AiParseOutcome o = await _parser.ParseAsync(res.Type, res.Endpoint, request, ct);
                 sw.Stop();
@@ -398,6 +458,12 @@ internal sealed class AiCallOrchestrator : IAiCallOrchestrator
         if (captured.Truncated)
             return captured.Text + $"\n[诊断正文已截断；捕获UTF-8={captured.CapturedUtf8Bytes}字节；SHA256={captured.Sha256}]";
         return captured.Text;
+    }
+
+    private static int? SumTokens(IEnumerable<int?> tokens)
+    {
+        int?[] values = tokens.ToArray();
+        return values.Any(x => x.HasValue) ? (int)Math.Min(int.MaxValue, values.Sum(x => (long)(x ?? 0))) : null;
     }
 
     private static string? RemoveCredential(string? text, AiProviderEndpoint endpoint) =>

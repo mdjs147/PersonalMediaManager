@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using PersonalMediaManager.Application.Common.Diagnostics;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
@@ -224,6 +225,7 @@ internal static partial class AiPromptHelpers
         }
         // 允许补字段任务只输出缺失字段，身份从绑定重建。
         if (context.SchemaVersion == 2) root["type"] ??= "unknown";
+        if (ParseDiagnostics.IsFull) ParseDiagnostics.Emit("ai.cleanup", new { stage = "task_schema_and_locked_fields", content = ParseDiagnostics.CaptureText(root.ToJsonString()), rejected, reasons });
         AiParseResult result = ParseContentCore(root.ToJsonString(), allowUnknown: context.SchemaVersion == 2,
             preserveEpisodicFields: true);
         if (context.SchemaVersion == 2)
@@ -246,7 +248,9 @@ internal static partial class AiPromptHelpers
         IncludeSchemaDiagnostics();
         result = result with { SelectedCandidateId = selected,
             Validation = new(accepted, rejected.Distinct().ToArray(), reasons.Distinct().ToArray(), outputFields, context.SchemaVersion == 2 ? schemaIssues : null) };
-        return applyGuard ? AiParseResultGuard.Validate(result, request) : result;
+        AiParseResult final = applyGuard ? AiParseResultGuard.Validate(result, request) : result;
+        if (ParseDiagnostics.IsFull) ParseDiagnostics.Emit("ai.cleanup", new { stage = "domain_field_guard", applied = applyGuard, result = ParseDiagnostics.CaptureText(JsonSerializer.Serialize(final)), validation = final.Validation });
+        return final;
     }
 
     private static int? ReadInt(JsonNode? node) => node is JsonValue value && value.TryGetValue<int>(out int number) ? number : null;

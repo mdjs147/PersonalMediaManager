@@ -90,6 +90,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IAccountService, AccountService>();
         services.AddScoped<IGeneralSettingsService, GeneralSettingsService>();
+        services.AddSingleton<IAiBatchSettingsService, AiBatchSettingsService>();
         // 归档命名模板（4 个 Archive_ key 读写 + 草稿预览；模板校验复用 NamingTemplateRenderer）
         services.AddScoped<IArchiveNamingService, ArchiveNamingService>();
         // 代理解析（单例：HttpClient handler lifetime 内复用同一 IWebProxy 实例，需线程安全 + 内部 60s 缓存）

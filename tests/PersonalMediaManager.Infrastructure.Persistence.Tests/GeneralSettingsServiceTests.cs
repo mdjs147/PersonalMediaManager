@@ -86,6 +86,20 @@ public sealed class GeneralSettingsServiceTests : IDisposable
             .Value.Should().Be("false");
     }
 
+    [Fact(DisplayName = "未完结剧集保留条件默认关闭，保存后可重新读取")]
+    public async Task KeepOngoingSeries_DefaultsOff_AndPersists()
+    {
+        const string key = "File.CleanEmptyDirKeepOngoingSeries";
+        GeneralSettingItem initial = (await _sut.ListAsync()).Groups["General"].Single(i => i.Key == key);
+        initial.Value.Should().Be("false");
+        initial.ValueType.Should().Be("bool");
+        initial.Description.Should().Contain("明确未完结");
+        await _sut.UpdateAsync(new UpdateGeneralRequest(new[] { new UpdateGeneralItem(key, "true") }));
+        (await _sut.ListAsync()).Groups["General"].Single(i => i.Key == key).Value.Should().Be("true");
+        using PmmDbContext db = _dbFactory.CreateDbContext();
+        db.SystemSettings.Single(s => s.Key == "File.CleanEmptyDir").Value.Should().Be("false");
+    }
+
     [Fact(DisplayName = "未知 key 不带 valueType（前端按 string 渲染）")]
     public async Task ListAsync_Unknown_Key_Has_Null_ValueType()
     {

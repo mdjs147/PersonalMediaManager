@@ -246,13 +246,13 @@
   - 推荐 **Fine-grained PAT**（单仓库 + 强制过期 + `Contents: Read-only`），Classic PAT 兼容但不推荐
 - **CLI 红线**：本仓库 PowerShell / Bash 自动化脚本里禁止内嵌明文 PAT；需要用 PAT 时走 **Windows Credential Manager**（`git credential approve` 一次性灌入）或显式 stdin 注入，绝不进命令行参数。
 
-### 9.6 单一产品版本（当前目标 0.4.0）
+### 9.6 单一产品版本（当前目标 0.5.0）
 
 - **唯一人工版本源**：根 `Directory.Build.props:PmmProductVersion`，格式固定为 `X.Y.Z`。`VersionPrefix`、程序集版本、API 与 UI 的兼容版本字段均由此派生，不再分别维护。
 - 前端 `package.json` / `package-lock.json` 的项目版本是 npm 所需的兼容元数据。修改产品版本后运行 `npm --prefix src/PersonalMediaManager.Frontend run version:sync` 并检查生成 diff；禁止 `npm version` 单独升前端版本。`version:check` 为只读检查，CI 在构建前强制执行，失败时修正源或重新同步，不能手工维持多份版本号。
-- `AssemblyVersion` / `FileVersion` 固定为产品版本加 `.0`（如 `0.4.0.0`）；`InformationalVersion` 的 `+commit[.dirty]` 和构建时间只定位产物，不是独立产品版本。Release tag、产物文件名、更新比较及产品展示统一使用 `PmmProductVersion`。
+- `AssemblyVersion` / `FileVersion` 固定为产品版本加 `.0`（如 `0.5.0.0`）；`InformationalVersion` 的 `+commit[.dirty]` 和构建时间只定位产物，不是独立产品版本。Release tag、产物文件名、更新比较及产品展示统一使用 `PmmProductVersion`。
 - 数据库以 EF migration ID 和完整的已应用 / 待迁移集合判定状态，不维护 `PmmDbVersion`。`__EFMigrationsHistory.ProductVersion` 是 EF 工具版本，不能当作 PMM 产品号。已发布历史记录、旧 `db/version-map.json` 与已有 Migrations 保留，不为统一版本而改写。
-- 每次合并、发布或部署报告产品版本、commit、迁移状态和验证结果即可；不再要求四版本旧、新值清单。当前源码目标 0.4.0 不等于已发布或已部署，流程见 [发版流程](docs/发版流程.md)。
+- 每次合并、发布或部署报告产品版本、commit、迁移状态和验证结果即可；不再要求四版本旧、新值清单。当前源码目标 0.5.0 不等于已发布或已部署，流程见 [发版流程](docs/发版流程.md)。
 
 ## 十、新需求 / 需求变更
 - 与当前需求文档对比；有变更则同步更新需求文档与进度表，必要时调整 README。

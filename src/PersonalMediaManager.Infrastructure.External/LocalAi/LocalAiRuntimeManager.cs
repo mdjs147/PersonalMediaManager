@@ -285,6 +285,7 @@ internal sealed class LocalAiRuntimeManager(ILocalAiSettingsService settingsServ
     public async Task<LocalAiInferenceResult> GenerateAsync(LocalAiInferenceRequest request, CancellationToken ct = default)
     {
         using IDisposable? diagnosticScope = ParseDiagnostics.CurrentRunId is null ? ParseDiagnostics.Begin("local_ai_runtime") : null;
+        using IDisposable? physicalDiagnostic = ParseDiagnostics.CurrentRequestId is null ? ParseDiagnostics.BeginAiCall(Guid.NewGuid().ToString("N")) : null;
         Stopwatch elapsed = Stopwatch.StartNew();
         string? fingerprint = null;
         bool entered = false;
@@ -297,7 +298,9 @@ internal sealed class LocalAiRuntimeManager(ILocalAiSettingsService settingsServ
             if (settings.Mode == LocalAiMode.Disabled) return Failure("disabled");
             if (string.IsNullOrEmpty(request.SystemPrompt) || string.IsNullOrEmpty(request.UserPrompt)
                 || request.SystemPrompt.Length + request.UserPrompt.Length > 16000 || request.MaxOutputTokens is < 1
-                || request.AllowedSpanCount is < 0 or > 12)
+                || request.AllowedSpanCount is < 0 or > 12
+                || request.BatchSpanCounts is { } counts && (request.AllowedSpanCount is not null
+                    || counts.Count is < 1 or > 2 || counts.Any(x => !Guid.TryParseExact(x.Key, "N", out _) || x.Value is < 0 or > 12)))
                 return Failure("invalid_request");
             using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(ct, _lifetime.Token);
             timeout.CancelAfter(TimeSpan.FromSeconds(settings.TimeoutSeconds));
@@ -318,7 +321,8 @@ internal sealed class LocalAiRuntimeManager(ILocalAiSettingsService settingsServ
             CheckMemory(child, settings);
             if (!await IsOwnedServerReadyAsync(settings.Port, alias, child, linked.Token)) return Failure("not_ready");
             int maxTokens = Math.Min(settings.MaxOutputTokens, request.MaxOutputTokens ?? settings.MaxOutputTokens);
-            object responseFormat = ResponseFormat(request.AllowedSpanCount);
+            object responseFormat = request.BatchSpanCounts is null ? ResponseFormat(request.AllowedSpanCount)
+                : BatchResponseFormat(request.BatchSpanCounts);
             object payload = new
             {
                 model = alias,
@@ -339,7 +343,7 @@ internal sealed class LocalAiRuntimeManager(ILocalAiSettingsService settingsServ
             }))));
             ParseDiagnostics.Emit("local_ai.runtime_request", new
             {
-                Fingerprint = fingerprint, Protocol = "OpenAiCompatible", Model = modelText,
+                Fingerprint = fingerprint, Stage = "prepared_not_yet_sent", Protocol = "OpenAiCompatible", Model = modelText,
                 CatalogArtifactSha256 = artifact.Sha256, CatalogRevision = artifact.Revision,
                 ArtifactVerification = "catalog_artifact_verified_at_startup",
                 RuntimeModel = alias, Temperature = 0, MaxTokens = maxTokens, Stream = false,
@@ -348,20 +352,44 @@ internal sealed class LocalAiRuntimeManager(ILocalAiSettingsService settingsServ
             });
             using HttpRequestMessage message = new(HttpMethod.Post, LoopbackUri(settings.Port, "v1/chat/completions"))
             { Content = JsonContent.Create(payload) };
+            await PersonalMediaManager.Infrastructure.External.Ai.AiDiagnosticHttp.RecordPreparedRequestAsync(message);
             linked.Token.ThrowIfCancellationRequested();
             attempted = true;
-            using HttpResponseMessage response = await localHttp.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, linked.Token);
+            Task<HttpResponseMessage> sending = localHttp.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, linked.Token);
+            PersonalMediaManager.Infrastructure.External.Ai.AiDiagnosticHttp.RecordDispatch();
+            using HttpResponseMessage response = await sending;
             ParseDiagnostics.Emit("local_ai.runtime_http", new
             { Fingerprint = fingerprint, HttpStatus = (int)response.StatusCode, ElapsedMs = elapsed.ElapsedMilliseconds });
-            if (!response.IsSuccessStatusCode) return Failure("http_error");
-            string raw = await ReadBoundedAsync(response, linked.Token);
+            if (!response.IsSuccessStatusCode)
+            {
+                if (ParseDiagnostics.IsFull)
+                {
+                    // HTTP 失败已确定。诊断错误体使用独立短预算，不等待模型长预算或改变失败类别。
+                    using CancellationTokenSource diagnosticRead = CancellationTokenSource.CreateLinkedTokenSource(linked.Token);
+                    diagnosticRead.CancelAfter(TimeSpan.FromMilliseconds(50));
+                    try { await ReadBoundedAsync(response, diagnosticRead.Token, diagnostic: true); }
+                    catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                    catch (Exception ex)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        ParseDiagnostics.Emit("local_ai.error_body_omitted", new
+                        {
+                            reason = diagnosticRead.IsCancellationRequested ? "error_body_capture_budget_or_stop" : "error_body_capture_failed",
+                            ExceptionType = ex.GetType().Name, HttpStatus = (int)response.StatusCode,
+                        });
+                    }
+                    ct.ThrowIfCancellationRequested();
+                }
+                return Failure("http_error");
+            }
+            string raw = await ReadBoundedAsync(response, linked.Token, diagnostic: true);
             if (child.HasExited) return Failure("runtime_exited");
             using JsonDocument json = JsonDocument.Parse(raw);
             if (!json.RootElement.TryGetProperty("choices", out JsonElement choices) || choices.ValueKind != JsonValueKind.Array || choices.GetArrayLength() != 1)
                 return Failure("invalid_response");
             JsonElement choice = choices[0];
             string? finish = choice.TryGetProperty("finish_reason", out JsonElement finishElement) ? finishElement.GetString() : null;
-            // 只读取公开助手正文；原始响应包可能含 reasoning/thinking，绝不写入诊断。
+            // 业务只读取公开助手正文；Full 原包在独立隐私边界后保存，推理字段明确省略。
             string? content = choice.TryGetProperty("message", out JsonElement assistant)
                 && assistant.TryGetProperty("content", out JsonElement text) && text.ValueKind == JsonValueKind.String ? text.GetString() : null;
             ParseDiagnostics.Emit("local_ai.runtime_response", new
@@ -371,7 +399,16 @@ internal sealed class LocalAiRuntimeManager(ILocalAiSettingsService settingsServ
             });
             if (finish != "stop") return Complete(new(null, finish == "length" ? "truncated" : "incomplete_response", finish, elapsed.ElapsedMilliseconds, settings.ModelId, attempted));
             if (string.IsNullOrWhiteSpace(content)) return Failure("empty_response");
-            return Complete(new(content, null, finish, elapsed.ElapsedMilliseconds, settings.ModelId, attempted));
+            int? promptTokens = null, completionTokens = null;
+            if (json.RootElement.TryGetProperty("usage", out JsonElement usage) && usage.ValueKind == JsonValueKind.Object)
+            {
+                if (usage.TryGetProperty("prompt_tokens", out JsonElement prompt) && prompt.ValueKind == JsonValueKind.Number
+                    && prompt.TryGetInt32(out int p) && p >= 0) promptTokens = p;
+                if (usage.TryGetProperty("completion_tokens", out JsonElement output) && output.ValueKind == JsonValueKind.Number
+                    && output.TryGetInt32(out int c) && c >= 0) completionTokens = c;
+            }
+            return Complete(new(content, null, finish, elapsed.ElapsedMilliseconds, settings.ModelId, attempted,
+                promptTokens, completionTokens, child.WorkingSetBytes));
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -442,8 +479,47 @@ internal sealed class LocalAiRuntimeManager(ILocalAiSettingsService settingsServ
         };
     }
 
-    private static async Task<string> ReadBoundedAsync(HttpResponseMessage response, CancellationToken ct)
+    private static object BatchResponseFormat(IReadOnlyDictionary<string, int> counts)
     {
+        int?[] indices = new int?[counts.Values.Max() + 1];
+        for (int i = 1; i < indices.Length; i++) indices[i] = i - 1;
+        return new
+        {
+            type = "json_schema", json_schema = new
+            {
+                name = "literal_span_batch_v1", strict = true,
+                schema = new
+                {
+                    type = "object", properties = new
+                    {
+                        items = new
+                        {
+                            type = "array", minItems = counts.Count, maxItems = counts.Count,
+                            items = new
+                            {
+                                type = "object", properties = new
+                                {
+                                    id = new { type = "string", @enum = counts.Keys.ToArray() },
+                                    result = new { type = "object", properties = new { index = new { @enum = indices } },
+                                        required = new[] { "index" }, additionalProperties = false }
+                                },
+                                required = new[] { "id", "result" }, additionalProperties = false
+                            }
+                        }
+                    },
+                    required = new[] { "items" }, additionalProperties = false
+                }
+            }
+        };
+    }
+
+    private static async Task<string> ReadBoundedAsync(HttpResponseMessage response, CancellationToken ct, bool diagnostic = false)
+    {
+        if (diagnostic)
+        {
+            try { return await PersonalMediaManager.Infrastructure.External.Ai.AiResponseReader.ReadAsync(response.Content, ResponseLimitBytes, ct, httpStatus: (int)response.StatusCode); }
+            catch (PersonalMediaManager.Application.Contracts.AiProviderLogicalException) { throw new BusinessException("本地模型响应超出大小限制"); }
+        }
         if (response.Content.Headers.ContentLength is > ResponseLimitBytes) throw new BusinessException("本地模型响应超出大小限制");
         await using Stream stream = await response.Content.ReadAsStreamAsync(ct);
         using MemoryStream output = new();

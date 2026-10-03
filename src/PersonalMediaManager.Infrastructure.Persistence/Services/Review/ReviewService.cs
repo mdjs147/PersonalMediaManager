@@ -8,6 +8,7 @@ using PersonalMediaManager.Application.Common.Archiving;
 using PersonalMediaManager.Application.Contracts;
 using PersonalMediaManager.Application.Dtos.Review;
 using PersonalMediaManager.Application.Services.Archive;
+using PersonalMediaManager.Application.Services.Library;
 using PersonalMediaManager.Application.Services.Parse;
 using PersonalMediaManager.Application.Services.Review;
 using PersonalMediaManager.Application.Services.Tmdb;
@@ -34,7 +35,7 @@ namespace PersonalMediaManager.Infrastructure.Persistence.Services.Review;
 ///   仅校验 MediaItem 存在。
 /// bind-tmdb：要求 AwaitingReview；不改 status，仅更新 TmdbId/TmdbMediaType + 拉详情写缓存（GetDetailsAsync 自动写）。
 /// </remarks>
-internal sealed class ReviewService : IReviewService
+internal sealed partial class ReviewService : IReviewService
 {
     private const int ListMaxPageSize = 100;
     // items 集合的「非空 / 数量上限」校验已上移至各批量 Request DTO（[Required]+[MinLength(1)]+[MaxLength(N)]，N=50/500）
@@ -49,6 +50,8 @@ internal sealed class ReviewService : IReviewService
     private readonly IWebhookEmitter _webhook;
     private readonly ILogger<ReviewService> _logger;
     private readonly IParseDiagnosticSink? _diagnostics;
+    private readonly IRuleEngineService? _rules;
+    private readonly IWorkEnrichmentService? _enrichment;
 
     public ReviewService(
         IDbContextFactory<PmmDbContext> dbFactory,
@@ -57,7 +60,8 @@ internal sealed class ReviewService : IReviewService
         IFileProbe fileProbe,
         IFolderSeriesCache folderCache,
         IWebhookEmitter webhook,
-        ILogger<ReviewService> logger, IParseDiagnosticSink? diagnostics = null)
+        ILogger<ReviewService> logger, IParseDiagnosticSink? diagnostics = null,
+        IRuleEngineService? rules = null, IWorkEnrichmentService? enrichment = null)
     {
         _dbFactory = dbFactory;
         _tmdb = tmdb;
@@ -67,6 +71,8 @@ internal sealed class ReviewService : IReviewService
         _webhook = webhook;
         _logger = logger;
         _diagnostics = diagnostics;
+        _rules = rules;
+        _enrichment = enrichment;
     }
 
     /// <summary>时间线步骤 JSON 配置（camelCase、省 null、CJK 不转义，与 ProcessFileService / HistoryService 一致）</summary>
@@ -148,6 +154,7 @@ internal sealed class ReviewService : IReviewService
         using IDisposable trace = ParseDiagnostics.Begin("manual_review", mediaItemId: mediaItemId, sink: _diagnostics);
         ParseDiagnostics.Emit("manual.requested", new { action = "Confirm", source = "ReviewApi", actor = "unknown", groundTruth = false });
         ValidateMediaType(req.MediaType);
+        ValidateDecisionSource(req.DecisionSource);
 
         await using PmmDbContext db = await _dbFactory.CreateDbContextAsync(ct);
         MediaItem item = await LoadAwaitingReviewWithConcurrencyAsync(db, mediaItemId, req.RowVersion, ct);
@@ -162,12 +169,16 @@ internal sealed class ReviewService : IReviewService
             .FirstOrDefaultAsync(c => c.Id == req.CategoryId, ct);
         if (cat is null) throw new BusinessException("分类不存在");
 
+        if (req.MediaType.Equals("tv", StringComparison.OrdinalIgnoreCase) && req.Episode is null)
+            throw new BusinessException("剧集必须填写季号与集号");
+
         // 拉一次详情确认 tmdbId 有效（同时填入缓存供 Archive 用），并取总季数用于单季自动补季
         int? totalSeasons;
+        TmdbDetailsResult details;
         try
         {
-            TmdbDetailsResult? details = await _tmdb.GetDetailsAsync(req.TmdbId, req.MediaType.ToLowerInvariant(), ct);
-            totalSeasons = details?.TotalSeasons;
+            details = await GetReviewDetailsAsync(req.TmdbId, req.MediaType, force: true, ct);
+            totalSeasons = details.TotalSeasons;
         }
         catch (TmdbClientException ex)
         {
@@ -177,7 +188,8 @@ internal sealed class ReviewService : IReviewService
         // 剧集季集校验（含单季自动补季）：缺季号但有集号、且 TMDB 仅 1 季 → 默认第 1 季；多季 / 缺集号仍要求人工补全
         bool isTv = string.Equals(req.MediaType, "tv", StringComparison.OrdinalIgnoreCase);
         int? effectiveSeason = req.Season;
-        if (isTv && effectiveSeason is null && req.Episode is not null && totalSeasons == 1)
+        if (isTv && effectiveSeason is null && req.Episode is int episodeToCheck && totalSeasons == 1
+            && TmdbEpisodeCatalogueGuard.ValidateSingleSeasonInference(details, req.TmdbId, episodeToCheck, req.EpisodeEnd) is null)
         {
             effectiveSeason = 1;
         }
@@ -185,6 +197,13 @@ internal sealed class ReviewService : IReviewService
         {
             throw new BusinessException("剧集必须填写季号与集号");
         }
+
+        ReviewMetadataState metadata = await RefreshSelectedMetadataAsync(details, isTv ? effectiveSeason : null, force: true, ct);
+        if (req.DecisionSource == "AbsoluteMapping" && (details.RefreshError is not null
+            || metadata.Catalogue?.RefreshError is not null || metadata.Catalogue?.Season is null))
+            throw new BusinessException("所选作品或季目录刷新失败，累计编号映射须重新预览后确认");
+        // 所选季强制刷新之后再核验令牌，不能提交基于刷新前目录的旧映射。
+        ReviewEpisodeMappingEntry? mapping = await ValidateConfirmedMappingAsync(mediaItemId, req, ct);
 
         // 应用用户覆盖（title/year/season/episode）到 ParsedInfo；空字段保留解析原值
         ParsedInfo merged = (ParsedInfo.FromJson(item.ParsedInfo)
@@ -199,8 +218,13 @@ internal sealed class ReviewService : IReviewService
             // 电影确认：顺带清掉解析阶段残留的季 / 集字段（电影无季集语义，残留会污染展示与后续归档判断）
             merged = merged with { Season = null, Episode = null, EpisodeEnd = null };
         }
+        if (mapping is not null)
+            merged = merged with { OriginalSeason = merged.OriginalSeason ?? mapping.OriginalSeason,
+                OriginalEpisode = merged.OriginalEpisode ?? mapping.OriginalEpisode,
+                OriginalEpisodeEnd = merged.OriginalEpisodeEnd ?? mapping.OriginalEpisodeEnd };
         object evidence = BuildReviewEvidence(item, req.TmdbId, req.MediaType, req.CategoryId, merged,
-            "Confirm", req.Season is not null, effectiveSeason != req.Season);
+            "Confirm", req.Season is not null, effectiveSeason != req.Season, req.DecisionSource, mapping,
+            new { details.CachedAt, details.FromCache, metadata.Error, catalogueCachedAt = metadata.Catalogue?.CachedAt });
         item.ApplyManualMatch(req.TmdbId, req.MediaType.ToLowerInvariant(), req.CategoryId, merged);
         item.AppendStep(MediaItemStatus.AwaitingReview, DateTimeOffset.UtcNow, 0, SerializeStep(evidence));
         ParseDiagnostics.Emit("manual.change_prepared", new { evidence, source = "ReviewApi", groundTruth = false });
@@ -254,7 +278,7 @@ internal sealed class ReviewService : IReviewService
                 // 状态写入用 CancellationToken.None：与下方终态落库同口径，绝不让记录停留在 Archiving 非终态
                 await db.SaveChangesAsync(CancellationToken.None);
                 await EmitReviewCreatedAsync(item, ct);
-                return new ConfirmResult(item.Id, MediaItemStatus.AwaitingReview, item.RowVersion);
+                return new ConfirmResult(item.Id, MediaItemStatus.AwaitingReview, item.RowVersion, metadata.Error);
             }
 
             item.SetArchiveResult(arc.TargetPath);
@@ -313,7 +337,7 @@ internal sealed class ReviewService : IReviewService
         }
 
         // 按 API 规范返回 confirm 那一刻的快照（Archiving + 当时 rowVersion）
-        return new ConfirmResult(item.Id, MediaItemStatus.Archiving, rowAfterConfirm);
+        return new ConfirmResult(item.Id, MediaItemStatus.Archiving, rowAfterConfirm, metadata.Error);
     }
 
     // ---------- Ignore ----------
@@ -347,6 +371,7 @@ internal sealed class ReviewService : IReviewService
     {
         List<long> succeeded = new();
         List<BatchConfirmFailure> failed = new();
+        List<BatchConfirmFailure> metadataWarnings = new();
 
         foreach (BatchConfirmItem entry in req.Items)
         {
@@ -354,9 +379,16 @@ internal sealed class ReviewService : IReviewService
             {
                 ConfirmRequest single = new(
                     entry.TmdbId, entry.MediaType, entry.CategoryId,
-                    entry.Title, entry.Year, entry.Season, entry.Episode, entry.RowVersion, entry.EpisodeEnd);
-                await ConfirmAsync(entry.Id, single, ct);
+                    entry.Title, entry.Year, entry.Season, entry.Episode, entry.RowVersion, entry.EpisodeEnd,
+                    entry.DecisionSource, entry.SourceEpisode, entry.SourceEpisodeEnd, entry.MappingToken);
+                ConfirmResult confirmed = await ConfirmAsync(entry.Id, single, ct);
+                if (confirmed.Status == MediaItemStatus.AwaitingReview)
+                {
+                    failed.Add(new(entry.Id, "目标文件冲突，记录仍待确认，请刷新后处理"));
+                    continue;
+                }
                 succeeded.Add(entry.Id);
+                if (confirmed.MetadataRefreshError is string warning) metadataWarnings.Add(new(entry.Id, warning));
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -375,7 +407,7 @@ internal sealed class ReviewService : IReviewService
             }
         }
 
-        return new BatchConfirmResult(succeeded, failed);
+        return new BatchConfirmResult(succeeded, failed, metadataWarnings);
     }
 
     // ---------- Batch Ignore ----------
@@ -453,7 +485,7 @@ internal sealed class ReviewService : IReviewService
         TmdbDetailsResult details;
         try
         {
-            details = await _tmdb.GetDetailsAsync(req.TmdbId, req.MediaType.ToLowerInvariant(), ct);
+            details = await GetReviewDetailsAsync(req.TmdbId, req.MediaType, force: true, ct);
         }
         catch (TmdbClientException ex)
         {
@@ -468,7 +500,15 @@ internal sealed class ReviewService : IReviewService
                 mediaType: req.MediaType,
                 season: null,
                 episode: null);
-        object evidence = BuildReviewEvidence(item, req.TmdbId, req.MediaType, item.CategoryId, rebound, "BindTmdb", false, false);
+        bool sameIdentity = item.TmdbId == req.TmdbId && string.Equals(item.TmdbMediaType, req.MediaType, StringComparison.OrdinalIgnoreCase);
+        if (!sameIdentity || req.MediaType.Equals("movie", StringComparison.OrdinalIgnoreCase))
+            rebound = rebound with { Season = null, Episode = null, EpisodeEnd = null,
+                OriginalSeason = null, OriginalEpisode = null, OriginalEpisodeEnd = null };
+        if (req.MediaType.Equals("tv", StringComparison.OrdinalIgnoreCase) && req.Season is int selectedSeason)
+            rebound = rebound with { Season = selectedSeason };
+        ReviewMetadataState metadata = await RefreshSelectedMetadataAsync(details, rebound.Season, force: true, ct);
+        object evidence = BuildReviewEvidence(item, req.TmdbId, req.MediaType, item.CategoryId, rebound, "BindTmdb", req.Season is not null, false,
+            metadata: new { details.CachedAt, details.FromCache, metadata.Error, catalogueCachedAt = metadata.Catalogue?.CachedAt });
         item.RebindTmdb(req.TmdbId, req.MediaType.ToLowerInvariant(), rebound);
         item.AppendStep(MediaItemStatus.AwaitingReview, DateTimeOffset.UtcNow, 0, SerializeStep(evidence));
         ParseDiagnostics.Emit("manual.change_prepared", new { evidence, source = "ReviewApi", groundTruth = false });
@@ -483,13 +523,14 @@ internal sealed class ReviewService : IReviewService
             SeedFolderCache(item.SourcePath, req.TmdbId, "tv", rebound.Title, rebound.Year);
         }
 
-        return new BindTmdbResult(item.Id, req.TmdbId, details.Title ?? details.OriginalTitle, details.Year, item.RowVersion);
+        return new BindTmdbResult(item.Id, req.TmdbId, details.Title ?? details.OriginalTitle, details.Year, item.RowVersion, metadata.Error);
     }
 
     // ---------- TMDB Detail (按 ID 取详情) ----------
 
     public async Task<TmdbDetailItem> TmdbDetailAsync(long mediaItemId, TmdbDetailQuery query, CancellationToken ct = default)
     {
+        using IDisposable trace = ParseDiagnostics.Begin("manual_metadata_refresh", mediaItemId: mediaItemId, sink: _diagnostics);
         ValidateMediaType(query.MediaType);
 
         await using PmmDbContext db = await _dbFactory.CreateDbContextAsync(ct);
@@ -499,13 +540,14 @@ internal sealed class ReviewService : IReviewService
         TmdbDetailsResult details;
         try
         {
-            details = await _tmdb.GetDetailsAsync(query.TmdbId, query.MediaType.ToLowerInvariant(), ct);
+            details = await GetReviewDetailsAsync(query.TmdbId, query.MediaType, query.ForceRefresh, ct, requireKnown: false);
         }
         catch (TmdbClientException ex)
         {
             throw new BusinessException("TMDB ID 无效或无法查询", ex);
         }
 
+        ReviewMetadataState metadata = await RefreshSelectedMetadataAsync(details, query.Season, query.ForceRefresh, ct);
         return new TmdbDetailItem(
             details.TmdbId,
             details.MediaType,
@@ -515,7 +557,8 @@ internal sealed class ReviewService : IReviewService
             ToPosterUrl(details.PosterPath),
             details.TotalSeasons,
             details.OriginCountry,
-            details.Seasons?.Select(s => new ReviewSeasonEpisodeCount(s.SeasonNumber, s.EpisodeCount, s.Name)).ToList());
+            details.Seasons?.Select(s => new ReviewSeasonEpisodeCount(s.SeasonNumber, s.EpisodeCount, s.Name)).ToList(),
+            details.CachedAt, details.FromCache, metadata.Error, metadata.Catalogue);
     }
 
     // ---------- Preview Path (去向预览) ----------
@@ -677,7 +720,8 @@ internal sealed class ReviewService : IReviewService
 
     /// <summary>保存已应用的有限字段差异，不推断调用者身份</summary>
     private static object BuildReviewEvidence(MediaItem item, int tmdbId, string mediaType,
-        long? categoryId, ParsedInfo after, string operation, bool seasonSupplied, bool automaticSeasonFilled)
+        long? categoryId, ParsedInfo after, string operation, bool seasonSupplied, bool automaticSeasonFilled,
+        string decisionSource = "ManualForm", ReviewEpisodeMappingEntry? mapping = null, object? metadata = null)
     {
         ParsedInfo? before = ParsedInfo.FromJson(item.ParsedInfo);
         bool idChanged = item.TmdbId != tmdbId;
@@ -698,7 +742,7 @@ internal sealed class ReviewService : IReviewService
             && (before?.Season is not null || before?.Episode is not null || before?.EpisodeEnd is not null);
         return new
         {
-            provenanceVersion = 1, operation, actorCategory = "Unknown", entryPoint = "ReviewApi",
+            provenanceVersion = 2, operation, decisionSource, mapping, metadata, actorCategory = "Unknown", entryPoint = "ReviewApi",
             confirm = operation == "Confirm",
             explicitCorrection, initialBinding, idReplaced, typeReplaced,
             confirmedExistingMatch = operation == "Confirm" && !initialBinding && !idChanged && !typeChanged && !explicitCorrection,

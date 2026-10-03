@@ -1,3 +1,4 @@
+using PersonalMediaManager.Application.Services.Parse;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using PersonalMediaManager.Application.Common;
@@ -199,6 +200,80 @@ public sealed class AiProviderQuotaTrackerTests : IClassFixture<PmmDbContextTest
         ParseAiProvider row = await ReadProviderAsync(pid);
         row.QuotaPeriodUsedCalls.Should().Be(2, "已超周期上限但计数继续对账");
         row.QuotaExceededAt.Should().BeNull("周期超限不写 QuotaExceededAt——软禁用交给 Resolver 滚动窗口过滤，跨窗口自动恢复");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ReservationStopsNextPhysicalCallBeforeBusinessContinuation(bool periodic)
+    {
+        DateTimeOffset now = new(2026, 7, 4, 12, 0, 0, TimeSpan.Zero);
+        long pid = await SeedProviderAsync(callLimit: periodic ? null : 1,
+            period: periodic ? AiQuotaPeriod.Daily : AiQuotaPeriod.None, periodTimeZone: "UTC", periodCallLimit: periodic ? 1 : null);
+        RecordingAlertService alert = new();
+        AiProviderQuotaTracker first = NewTracker(now, alert), second = NewTracker(now, alert);
+        AiProviderQuotaReservation reserved = (await first.TryReserveCallAsync(pid))!;
+        reserved.Should().NotBeNull();
+        // 第二个 scope 在第一项尚未落审计/业务续行前不能再占用剩余额度。
+        (await second.TryReserveCallAsync(pid)).Should().BeNull();
+        await first.SettleTokensAsync(pid, reserved, 5, 2);
+        ParseAiProvider row = await ReadProviderAsync(pid);
+        row.QuotaUsedCalls.Should().Be(1); row.QuotaUsedTokens.Should().Be(7);
+        if (periodic) row.QuotaPeriodUsedCalls.Should().Be(1);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SettledTokensBlockFurtherPhysicalFallback(bool periodic)
+    {
+        DateTimeOffset now = new(2026, 7, 4, 12, 0, 0, TimeSpan.Zero);
+        long pid = await SeedProviderAsync(tokenLimit: periodic ? null : 7,
+            period: periodic ? AiQuotaPeriod.Daily : AiQuotaPeriod.None, periodTimeZone: "UTC", periodTokenLimit: periodic ? 7 : null);
+        AiProviderQuotaTracker tracker = NewTracker(now, new RecordingAlertService());
+        AiProviderQuotaReservation reserved = (await tracker.TryReserveCallAsync(pid))!;
+        reserved.Should().NotBeNull();
+        await tracker.SettleTokensAsync(pid, reserved, 5, 2);
+        (await tracker.TryReserveCallAsync(pid)).Should().BeNull();
+        (await ReadProviderAsync(pid)).QuotaUsedCalls.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ReservationUsesFreshPeriodAndRejectsExpiredProvider()
+    {
+        DateTimeOffset now = new(2026, 7, 4, 12, 0, 0, TimeSpan.Zero);
+        long pid = await SeedProviderAsync(period: AiQuotaPeriod.Daily, periodTimeZone: "UTC", periodCallLimit: 1);
+        AiProviderQuotaTracker first = NewTracker(now, new RecordingAlertService());
+        AiProviderQuotaReservation reserved = (await first.TryReserveCallAsync(pid))!;
+        reserved.Should().NotBeNull();
+        await first.SettleTokensAsync(pid, reserved, 2, 1);
+        AiProviderQuotaTracker tomorrow = NewTracker(now.AddDays(1), new RecordingAlertService());
+        (await tomorrow.TryReserveCallAsync(pid)).Should().NotBeNull();
+        ParseAiProvider row = await ReadProviderAsync(pid);
+        row.QuotaUsedCalls.Should().Be(2); row.QuotaPeriodUsedCalls.Should().Be(1); row.QuotaPeriodUsedTokens.Should().Be(0);
+        await using PmmDbContext context = _fixture.CreateContext();
+        await context.ParseAiProviders.Where(p => p.Id == pid).ExecuteUpdateAsync(update => update.SetProperty(p => p.QuotaExpiresAt, now));
+        (await tomorrow.TryReserveCallAsync(pid)).Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LateTokensStayWithSendingPeriodRegardlessOfSettlementOrder(bool settleOldFirst)
+    {
+        DateTimeOffset lastSecond = new(2026, 7, 4, 23, 59, 59, TimeSpan.Zero);
+        long pid = await SeedProviderAsync(period: AiQuotaPeriod.Daily, periodTimeZone: "UTC", periodTokenLimit: 100);
+        AiProviderQuotaTracker yesterday = NewTracker(lastSecond, new RecordingAlertService());
+        AiProviderQuotaTracker today = NewTracker(lastSecond.AddSeconds(2), new RecordingAlertService());
+        AiProviderQuotaReservation old = (await yesterday.TryReserveCallAsync(pid))!;
+        if (settleOldFirst) await today.SettleTokensAsync(pid, old, 900, 100);
+        AiProviderQuotaReservation current = (await today.TryReserveCallAsync(pid))!;
+        current.Should().NotBeNull();
+        if (!settleOldFirst) await today.SettleTokensAsync(pid, old, 900, 100);
+        await today.SettleTokensAsync(pid, current, 3, 4);
+        ParseAiProvider row = await ReadProviderAsync(pid);
+        row.QuotaUsedCalls.Should().Be(2); row.QuotaUsedTokens.Should().Be(1007);
+        row.QuotaPeriodUsedCalls.Should().Be(1); row.QuotaPeriodUsedTokens.Should().Be(7);
     }
 
     private AiProviderQuotaTracker NewTracker(DateTimeOffset now, IAlertService alert) =>

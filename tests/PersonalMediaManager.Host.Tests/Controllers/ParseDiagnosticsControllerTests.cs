@@ -41,9 +41,38 @@ public sealed class ParseDiagnosticsControllerTests
         SetupGuardMiddleware.ResetCacheForTest();
     }
 
+    [Fact]
+    public async Task FullSettingsAreAdminOnlyAndExportIncludesIndependentBodies()
+    {
+        SetupGuardMiddleware.ResetCacheForTest();
+        using PmmHostFactory factory = new(); using HttpClient client = factory.CreateClient();
+        await client.PostAsJsonAsync("/api/setup/admin", new { username = "admin", password = "secret123" });
+        await client.PostAsJsonAsync("/api/setup/complete", new { });
+        (await client.PutAsJsonAsync("/api/diagnostics/parse/settings", new { level = "Full" })).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        JsonElement login = await (await client.PostAsJsonAsync("/api/auth/login", new { username = "admin", password = "secret123" })).Content.ReadFromJsonAsync<JsonElement>();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login.GetProperty("data").GetProperty("token").GetString());
+        JsonElement settings = await (await client.PutAsJsonAsync("/api/diagnostics/parse/settings", new { level = "Full" })).Content.ReadFromJsonAsync<JsonElement>();
+        settings.GetProperty("data").GetProperty("level").GetString().Should().Be("Full");
+        ParseDiagnosticFileSink sink = factory.Services.GetRequiredService<ParseDiagnosticFileSink>();
+        using (ParseDiagnostics.Begin("parse", mediaItemId: 42, sink: sink))
+            ParseDiagnostics.Emit("ai.synthetic", new { raw = ParseDiagnostics.CaptureText("raw body\nsecond line"), cleaned = ParseDiagnostics.CaptureText("cleaned body") });
+        JsonElement export = await (await client.GetAsync("/api/diagnostics/parse/export?mediaItemId=42")).Content.ReadFromJsonAsync<JsonElement>();
+        export.GetProperty("data").GetProperty("artifacts").GetArrayLength().Should().Be(2);
+        JsonElement invalid = await (await client.PutAsJsonAsync("/api/diagnostics/parse/settings", new { level = "Everything" })).Content.ReadFromJsonAsync<JsonElement>();
+        invalid.GetProperty("code").GetInt32().Should().Be(1000);
+        await client.PostAsJsonAsync("/api/account/users/create", new { username = "viewer", password = "viewer123", role = "Viewer" });
+        JsonElement viewer = await (await client.PostAsJsonAsync("/api/auth/login", new { username = "viewer", password = "viewer123" })).Content.ReadFromJsonAsync<JsonElement>();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", viewer.GetProperty("data").GetProperty("token").GetString());
+        (await client.GetAsync("/api/diagnostics/parse/settings")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await client.PutAsJsonAsync("/api/diagnostics/parse/settings", new { level = "Off" })).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        sink.Options.Level.Should().Be(ParseDiagnosticLevel.Full);
+        SetupGuardMiddleware.ResetCacheForTest();
+    }
+
     [Theory]
     [InlineData("Off", ParseDiagnosticLevel.Off)]
     [InlineData("Detailed", ParseDiagnosticLevel.Detailed)]
+    [InlineData("Full", ParseDiagnosticLevel.Full)]
     public void LocalConfigurationBindsRealHostAndClampsCapacity(string configured, ParseDiagnosticLevel expected)
     {
         string root = Path.Combine(Path.GetTempPath(), "pmm-diag-config-" + Guid.NewGuid().ToString("N"));

@@ -68,11 +68,12 @@ public sealed record LocalAiDownloadRequest(string ModelId);
 
 /// <summary>单次有界推理请求</summary>
 public sealed record LocalAiInferenceRequest(string SystemPrompt, string UserPrompt, int? MaxOutputTokens = null,
-    int? AllowedSpanCount = null);
+    int? AllowedSpanCount = null, IReadOnlyDictionary<string, int>? BatchSpanCounts = null);
 
 /// <summary>可回退的本地推理结果</summary>
 public sealed record LocalAiInferenceResult(string? Content, string? FailureReason, string? FinishReason = null,
-    long ElapsedMilliseconds = 0, string? ModelId = null, bool Attempted = false)
+    long ElapsedMilliseconds = 0, string? ModelId = null, bool Attempted = false,
+    int? PromptTokens = null, int? CompletionTokens = null, long? WorkingSetBytes = null)
 {
     public bool Success => Content is not null && FailureReason is null;
 }

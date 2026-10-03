@@ -1415,6 +1415,194 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/ai-batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 读取批量参数
+         * @description 成功：{"code":0,"message":"ok","data":{"externalBatchSize":1,"localBatchSize":1,"maxWaitMilliseconds":50,"contextTokenBudget":8192,"maxOutputTokens":2048},"requestId":"..."}
+         *     错误码：9000 服务错误。
+         *     错误：{"code":9000,"message":"读取失败","data":null,"requestId":"..."}
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 当前参数 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfAiBatchSettingsDto"];
+                        "application/json": components["schemas"]["ApiResponseOfAiBatchSettingsDto"];
+                        "text/json": components["schemas"]["ApiResponseOfAiBatchSettingsDto"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+            };
+        };
+        /**
+         * 保存批量参数
+         * @description 请求：{"externalBatchSize":1,"localBatchSize":1,"maxWaitMilliseconds":50,"contextTokenBudget":8192,"maxOutputTokens":2048}
+         *     成功：{"code":0,"message":"ok","data":null,"requestId":"..."}
+         *     错误码：1000 参数超限；9000 服务错误。
+         *     错误：{"code":1000,"message":"AI 批处理资源参数超出允许范围","data":null,"requestId":"..."}
+         *     大于1是实验性显式启用；不保证更快或更准确，不更改本地模式及提供商启用状态。
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AiBatchSettingsDto"];
+                    "text/json": components["schemas"]["AiBatchSettingsDto"];
+                    "application/*+json": components["schemas"]["AiBatchSettingsDto"];
+                };
+            };
+            responses: {
+                /** @description 保存成功 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/ai-batch/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 读取提供商批量推荐
+         * @description 成功：{"code":0,"message":"ok","data":[],"requestId":"..."}
+         *     错误码：9000 服务错误。
+         *     错误：{"code":9000,"message":"读取失败","data":null,"requestId":"..."}
+         *     仅返回安全显示信息及已核实的官方能力预设，不读取或返回密钥；预设不会自动保存。
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 提供商显示信息 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfIReadOnlyListOfAiBatchProviderInfoDto"];
+                        "application/json": components["schemas"]["ApiResponseOfIReadOnlyListOfAiBatchProviderInfoDto"];
+                        "text/json": components["schemas"]["ApiResponseOfIReadOnlyListOfAiBatchProviderInfoDto"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/archive-naming": {
         parameters: {
             query?: never;
@@ -8051,6 +8239,8 @@ export interface paths {
                 query?: {
                     TmdbId?: number | string;
                     MediaType?: string;
+                    Season?: number | string;
+                    ForceRefresh?: boolean;
                 };
                 header?: never;
                 path: {
@@ -8229,6 +8419,222 @@ export interface paths {
                         "text/plain": components["schemas"]["ApiResponseOfCheckFilesResult"];
                         "application/json": components["schemas"]["ApiResponseOfCheckFilesResult"];
                         "text/json": components["schemas"]["ApiResponseOfCheckFilesResult"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/review/episode-hints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * EpisodeHints / 规则提取
+         * @description 请求：{ "items":[ { "id":200, "rowVersion":3 } ] }。
+         *     响应：{ "code":0, "message":"ok", "data":{ "items":[] }, "requestId":"..." }。
+         *     - 1000：参数无效；逐项冲突在 error 中返回。
+         *     错误：{ "code":1000, "message":"参数无效", "data":null, "requestId":"..." }。
+         *     只读运行本地规则，不调用 AI，不绑定或归档媒体。
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ReviewEpisodeHintsRequest"];
+                    "text/json": components["schemas"]["ReviewEpisodeHintsRequest"];
+                    "application/*+json": components["schemas"]["ReviewEpisodeHintsRequest"];
+                };
+            };
+            responses: {
+                /** @description 可复核规则提取结果 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfReviewEpisodeHintsResult"];
+                        "application/json": components["schemas"]["ApiResponseOfReviewEpisodeHintsResult"];
+                        "text/json": components["schemas"]["ApiResponseOfReviewEpisodeHintsResult"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/review/{id}/library-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * LibraryCandidates / 库内候选
+         * @description 查询：query 为可选的库内标题或原名，不代理远端搜索。
+         *     响应：{ "code":0, "message":"ok", "data":{ "items":[] }, "requestId":"..." }。
+         *     - 1000：记录不存在或关键词过长。
+         *     错误：{ "code":1000, "message":"记录不存在", "data":null, "requestId":"..." }。
+         */
+        get: {
+            parameters: {
+                query?: {
+                    query?: string;
+                };
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 需人工选择的库内候选 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfReviewLibraryCandidatesResult"];
+                        "application/json": components["schemas"]["ApiResponseOfReviewLibraryCandidatesResult"];
+                        "text/json": components["schemas"]["ApiResponseOfReviewLibraryCandidatesResult"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/review/episode-mapping-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * EpisodeMapping / 累计编号预览
+         * @description 请求：{ "tmdbId":100, "mediaType":"tv", "season":2, "items":[ { "id":200, "rowVersion":3, "episode":12 } ] }。
+         *     响应：{ "code":0, "message":"ok", "data":{ "items":[], "cachedAt":null, "refreshError":null }, "requestId":"..." }。
+         *     - 1000：请求无效；身份、季内编号或目录冲突逐项返回 error。
+         *     错误：{ "code":1000, "message":"请求无效", "data":null, "requestId":"..." }。
+         *     调用表示用户声明源编号为全剧累计编号；只预览，不保存。确认时须提交原编号及 mappingToken 重新校验。
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ReviewEpisodeMappingRequest"];
+                    "text/json": components["schemas"]["ReviewEpisodeMappingRequest"];
+                    "application/*+json": components["schemas"]["ReviewEpisodeMappingRequest"];
+                };
+            };
+            responses: {
+                /** @description 原编号、目标编号与目录依据 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfReviewEpisodeMappingResult"];
+                        "application/json": components["schemas"]["ApiResponseOfReviewEpisodeMappingResult"];
+                        "text/json": components["schemas"]["ApiResponseOfReviewEpisodeMappingResult"];
                     };
                 };
                 /** @description Bad Request */
@@ -10921,6 +11327,129 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/diagnostics/parse/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 读取解析诊断设置
+         * @description 请求：GET /api/diagnostics/parse/settings，仅限管理员，无路径或正文入参。
+         *     成功：{ "code":0,"data":{ "level":"Standard","retentionDays":7,"maxArtifacts":256 },"requestId":"..." }。
+         *     返回当前级别、正文与事件容量边界、写入失败计数和隐私说明，不返回任何诊断正文或认证信息。
+         *     访问失败：401 未登录，403 非管理员；服务错误使用统一 ApiResponse 错误信封。
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 当前诊断级别与容量快照 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfParseDiagnosticSettingsDto"];
+                        "application/json": components["schemas"]["ApiResponseOfParseDiagnosticSettingsDto"];
+                        "text/json": components["schemas"]["ApiResponseOfParseDiagnosticSettingsDto"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+            };
+        };
+        /**
+         * 保存解析诊断级别
+         * @description 请求：PUT /api/diagnostics/parse/settings，正文示例 { "level":"Full" }，仅限管理员。
+         *     级别仅允许 Off、Standard、Detailed、Full；容量边界不通过此接口修改。
+         *     先持久化再应用，后续采集生效；切换期间在途请求可能仅保存部分阶段，不补回过去的正文。
+         *     成功：{ "code":0,"data":{ "level":"Full","retentionDays":7 },"requestId":"..." }。
+         *     错误码：1000 级别无效，9000 存储失败；401 未登录，403 非管理员。
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["DiagnosticLevelRequest"];
+                    "text/json": components["schemas"]["DiagnosticLevelRequest"];
+                    "application/*+json": components["schemas"]["DiagnosticLevelRequest"];
+                };
+            };
+            responses: {
+                /** @description 已保存的诊断级别与容量快照 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfParseDiagnosticSettingsDto"];
+                        "application/json": components["schemas"]["ApiResponseOfParseDiagnosticSettingsDto"];
+                        "text/json": components["schemas"]["ApiResponseOfParseDiagnosticSettingsDto"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+                /** @description Internal Server Error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/plain": components["schemas"]["ApiResponseOfObject"];
+                        "application/json": components["schemas"]["ApiResponseOfObject"];
+                        "text/json": components["schemas"]["ApiResponseOfObject"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/diagnostics/parse/export": {
         parameters: {
             query?: never;
@@ -11927,6 +12456,30 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AiBatchProviderInfoDto: {
+            /** Format: int64 */
+            providerId: number | string;
+            name: string;
+            model: string;
+            configurationKey: string;
+            recommendedSettings: null | components["schemas"]["AiProviderBatchSettingsDto"];
+            advancedSettings: null | components["schemas"]["AiProviderBatchSettingsDto"];
+        };
+        AiBatchSettingsDto: {
+            /** Format: int32 */
+            externalBatchSize?: number | string;
+            /** Format: int32 */
+            localBatchSize?: number | string;
+            /** Format: int32 */
+            maxWaitMilliseconds?: number | string;
+            /** Format: int32 */
+            contextTokenBudget?: number | string;
+            /** Format: int32 */
+            maxOutputTokens?: number | string;
+            /** Format: int32 */
+            maxResponseBytes?: number | string;
+            providerSettings?: components["schemas"]["AiProviderBatchSettingsDto"][];
+        };
         AiCallEntryResponse: {
             /** Format: int64 */
             id: number | string;
@@ -12033,6 +12586,20 @@ export interface components {
         };
         /** @enum {string} */
         AiCostTier: "Paid" | "Free";
+        AiProviderBatchSettingsDto: {
+            /** Format: int64 */
+            providerId?: number | string;
+            configurationKey?: string;
+            /** Format: int32 */
+            batchSize?: number | string;
+            disableThinking?: boolean;
+            /** Format: int32 */
+            contextTokenBudget?: number | string;
+            /** Format: int32 */
+            maxOutputTokens?: number | string;
+            /** Format: int32 */
+            maxResponseBytes?: number | string;
+        };
         AiProviderStatsResponse: {
             /** Format: int64 */
             providerId: number | string;
@@ -12064,6 +12631,13 @@ export interface components {
         AiProviderType: "Ollama" | "OpenAiCompatible" | "Anthropic" | "Gemini" | "AzureOpenAi";
         /** @enum {string} */
         AiQuotaPeriod: "None" | "Daily" | "Weekly" | "Monthly";
+        ApiResponseOfAiBatchSettingsDto: {
+            /** Format: int32 */
+            code?: number | string;
+            message?: string;
+            data?: null | components["schemas"]["AiBatchSettingsDto"];
+            requestId?: string;
+        };
         ApiResponseOfAiCallLogPageResponse: {
             /** Format: int32 */
             code?: number | string;
@@ -12331,6 +12905,13 @@ export interface components {
             data?: number | string;
             requestId?: string;
         };
+        ApiResponseOfIReadOnlyListOfAiBatchProviderInfoDto: {
+            /** Format: int32 */
+            code?: number | string;
+            message?: string;
+            data?: null | components["schemas"]["AiBatchProviderInfoDto"][];
+            requestId?: string;
+        };
         ApiResponseOfIReadOnlyListOfBackupFileInfo: {
             /** Format: int32 */
             code?: number | string;
@@ -12520,6 +13101,13 @@ export interface components {
             data?: null | components["schemas"]["ParseAiProviderResponse"];
             requestId?: string;
         };
+        ApiResponseOfParseDiagnosticSettingsDto: {
+            /** Format: int32 */
+            code?: number | string;
+            message?: string;
+            data?: null | components["schemas"]["ParseDiagnosticSettingsDto"];
+            requestId?: string;
+        };
         ApiResponseOfParseReplayExport: {
             /** Format: int32 */
             code?: number | string;
@@ -12567,6 +13155,27 @@ export interface components {
             code?: number | string;
             message?: string;
             data?: null | components["schemas"]["ResetConfigResult"];
+            requestId?: string;
+        };
+        ApiResponseOfReviewEpisodeHintsResult: {
+            /** Format: int32 */
+            code?: number | string;
+            message?: string;
+            data?: null | components["schemas"]["ReviewEpisodeHintsResult"];
+            requestId?: string;
+        };
+        ApiResponseOfReviewEpisodeMappingResult: {
+            /** Format: int32 */
+            code?: number | string;
+            message?: string;
+            data?: null | components["schemas"]["ReviewEpisodeMappingResult"];
+            requestId?: string;
+        };
+        ApiResponseOfReviewLibraryCandidatesResult: {
+            /** Format: int32 */
+            code?: number | string;
+            message?: string;
+            data?: null | components["schemas"]["ReviewLibraryCandidatesResult"];
             requestId?: string;
         };
         ApiResponseOfReviewListPage: {
@@ -12959,6 +13568,13 @@ export interface components {
             rowVersion: number | string;
             /** Format: int32 */
             episodeEnd?: null | number | string;
+            /** @default ManualForm */
+            decisionSource: string;
+            /** Format: int32 */
+            sourceEpisode?: null | number | string;
+            /** Format: int32 */
+            sourceEpisodeEnd?: null | number | string;
+            mappingToken?: null | string;
         };
         BatchConfirmRequest: {
             items: components["schemas"]["BatchConfirmItem"][];
@@ -12966,6 +13582,7 @@ export interface components {
         BatchConfirmResult: {
             succeeded: (number | string)[];
             failed: components["schemas"]["BatchConfirmFailure"][];
+            metadataWarnings?: null | components["schemas"]["BatchConfirmFailure"][];
         };
         BatchIgnoreFailure: {
             /** Format: int64 */
@@ -12998,6 +13615,8 @@ export interface components {
             mediaType: string;
             /** Format: int64 */
             rowVersion: number | string;
+            /** Format: int32 */
+            season?: null | number | string;
         };
         BindTmdbResult: {
             /** Format: int64 */
@@ -13009,6 +13628,7 @@ export interface components {
             year: null | number | string;
             /** Format: int64 */
             rowVersion: number | string;
+            metadataRefreshError?: null | string;
         };
         BuiltinParseRuleResponse: {
             key: string;
@@ -13165,6 +13785,13 @@ export interface components {
             rowVersion: number | string;
             /** Format: int32 */
             episodeEnd?: null | number | string;
+            /** @default ManualForm */
+            decisionSource: string;
+            /** Format: int32 */
+            sourceEpisode?: null | number | string;
+            /** Format: int32 */
+            sourceEpisodeEnd?: null | number | string;
+            mappingToken?: null | string;
         };
         ConfirmResult: {
             /** Format: int64 */
@@ -13172,6 +13799,7 @@ export interface components {
             status: components["schemas"]["MediaItemStatus"];
             /** Format: int64 */
             rowVersion: number | string;
+            metadataRefreshError?: null | string;
         };
         CreateAdminRequest: {
             username: string;
@@ -13462,6 +14090,10 @@ export interface components {
         DeleteWebhookSubscriptionRequest: {
             /** Format: int64 */
             id: number | string;
+        };
+        /** @description 管理员选择的诊断采集级别 */
+        DiagnosticLevelRequest: {
+            level: string;
         };
         DownloadSubtitleRequest: {
             subtitleId: string;
@@ -14139,6 +14771,12 @@ export interface components {
             /** Format: int32 */
             avgLatency?: null | number | string;
         };
+        ParseDiagnosticArtifactExport: {
+            artifactId: string;
+            state: string;
+            text: null | string;
+            reason: null | string;
+        };
         ParseDiagnosticEvent: {
             /** Format: int32 */
             schemaVersion: number | string;
@@ -14155,6 +14793,35 @@ export interface components {
             data: components["schemas"]["JsonElement"];
             /** @default false */
             dataRedacted: boolean;
+            requestId?: null | string;
+            batchId?: null | string;
+            itemId?: null | string;
+            /** Format: int32 */
+            attempt?: null | number | string;
+        };
+        ParseDiagnosticSettingsDto: {
+            level: string;
+            /** Format: int32 */
+            maxTextUtf8Bytes: number | string;
+            /** Format: int32 */
+            maxEventUtf8Bytes: number | string;
+            /** Format: int64 */
+            maxFileBytes: number | string;
+            /** Format: int64 */
+            maxTotalBytes: number | string;
+            /** Format: int32 */
+            retentionDays: number | string;
+            /** Format: int32 */
+            maxFiles: number | string;
+            /** Format: int32 */
+            maxArtifactUtf8Bytes: number | string;
+            /** Format: int64 */
+            maxArtifactTotalBytes: number | string;
+            /** Format: int32 */
+            maxArtifacts: number | string;
+            /** Format: int64 */
+            storageWriteFailures: number | string;
+            bodyBoundary: string;
         };
         ParseReplayExport: {
             /** Format: int32 */
@@ -14164,6 +14831,7 @@ export interface components {
             scope: string;
             events: components["schemas"]["ParseDiagnosticEvent"][];
             completeness: unknown;
+            artifacts?: null | components["schemas"]["ParseDiagnosticArtifactExport"][];
         };
         /** @enum {string} */
         ParseRuleImportMode: "Merge" | "Replace";
@@ -14310,6 +14978,77 @@ export interface components {
         RestoreBackupRequest: {
             fileName: string;
         };
+        ReviewEpisodeHint: {
+            /** Format: int64 */
+            id: number | string;
+            /** Format: int32 */
+            season: null | number | string;
+            /** Format: int32 */
+            episode: null | number | string;
+            /** Format: int32 */
+            episodeEnd: null | number | string;
+            source: string;
+            evidence: string[];
+            error: null | string;
+        };
+        ReviewEpisodeHintItem: {
+            /** Format: int64 */
+            id: number | string;
+            /** Format: int64 */
+            rowVersion: number | string;
+        };
+        ReviewEpisodeHintsRequest: {
+            items: components["schemas"]["ReviewEpisodeHintItem"][];
+        };
+        ReviewEpisodeHintsResult: {
+            items: components["schemas"]["ReviewEpisodeHint"][];
+        };
+        ReviewEpisodeMappingEntry: {
+            /** Format: int64 */
+            id: number | string;
+            /** Format: int32 */
+            originalSeason: null | number | string;
+            /** Format: int32 */
+            originalEpisode: number | string;
+            /** Format: int32 */
+            originalEpisodeEnd: null | number | string;
+            /** Format: int32 */
+            season: null | number | string;
+            /** Format: int32 */
+            episode: null | number | string;
+            /** Format: int32 */
+            episodeEnd: null | number | string;
+            source: string;
+            evidence: string[];
+            error: null | string;
+            mappingToken?: null | string;
+        };
+        ReviewEpisodeMappingItem: {
+            /** Format: int64 */
+            id: number | string;
+            /** Format: int64 */
+            rowVersion: number | string;
+            /** Format: int32 */
+            episode: number | string;
+            /** Format: int32 */
+            episodeEnd?: null | number | string;
+        };
+        ReviewEpisodeMappingRequest: {
+            /** Format: int32 */
+            tmdbId: number | string;
+            mediaType: string;
+            /** Format: int32 */
+            season: number | string;
+            items: components["schemas"]["ReviewEpisodeMappingItem"][];
+            /** @default false */
+            forceRefresh: boolean;
+        };
+        ReviewEpisodeMappingResult: {
+            items: components["schemas"]["ReviewEpisodeMappingEntry"][];
+            /** Format: date-time */
+            cachedAt: null | string;
+            refreshError: null | string;
+        };
         ReviewHit: {
             /** Format: int64 */
             id: number | string;
@@ -14335,6 +15074,26 @@ export interface components {
             reason: null | components["schemas"]["ReviewReason"];
             /** @default false */
             aiInvolved: boolean;
+        };
+        ReviewLibraryCandidate: {
+            /** Format: int32 */
+            tmdbId: number | string;
+            mediaType: string;
+            title: null | string;
+            originalTitle: null | string;
+            /** Format: int32 */
+            year: null | number | string;
+            posterUrl: null | string;
+            /** Format: int32 */
+            totalSeasons: null | number | string;
+            source: string;
+            matchReason: string;
+            tmdbStatus: null | string;
+            /** Format: date-time */
+            latestArchivedAt: null | string;
+        };
+        ReviewLibraryCandidatesResult: {
+            items: components["schemas"]["ReviewLibraryCandidate"][];
         };
         ReviewListPage: {
             items: components["schemas"]["ReviewItemResponse"][];
@@ -14740,6 +15499,25 @@ export interface components {
             totalSeasons: null | number | string;
             originCountry: null | string[];
             seasons?: null | components["schemas"]["ReviewSeasonEpisodeCount"][];
+            /** Format: date-time */
+            cachedAt?: null | string;
+            /** @default false */
+            fromCache: boolean;
+            refreshError?: null | string;
+            catalogue?: null | components["schemas"]["TmdbSeasonCatalogueResult"];
+        };
+        TmdbEpisodeRef: {
+            /** Format: int32 */
+            episodeNumber: number | string;
+            name: null | string;
+            overview: null | string;
+            stillPath: null | string;
+            /** Format: date-time */
+            airDate: null | string;
+            /** Format: int32 */
+            runtime: null | number | string;
+            /** Format: double */
+            voteAverage: null | number | string;
         };
         TmdbMetadataSummary: {
             /** Format: int32 */
@@ -14773,6 +15551,27 @@ export interface components {
         };
         TmdbSearchListResult: {
             items: components["schemas"]["TmdbSearchListItem"][];
+        };
+        TmdbSeasonCatalogueResult: {
+            /** Format: int32 */
+            tmdbId: number | string;
+            mediaType: string;
+            season: null | components["schemas"]["TmdbSeasonDetail"];
+            /** Format: date-time */
+            cachedAt?: null | string;
+            /** @default false */
+            fromCache: boolean;
+            refreshError?: null | string;
+        };
+        TmdbSeasonDetail: {
+            /** Format: int32 */
+            seasonNumber: number | string;
+            name: null | string;
+            overview: null | string;
+            posterPath: null | string;
+            /** Format: date-time */
+            airDate: null | string;
+            episodes: components["schemas"]["TmdbEpisodeRef"][];
         };
         TmdbSettingResponse: {
             hasApiKey: boolean;

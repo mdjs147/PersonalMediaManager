@@ -16,3 +16,14 @@ public interface IAiProviderQuotaTracker
     /// <summary>记录一次实际 AI HTTP 调用：次数 +1、token += (prompt??0)+(completion??0)，累计后评估超限</summary>
     Task RecordUsageAsync(long providerId, int? promptTokens, int? completionTokens, CancellationToken ct = default);
 }
+
+/// <summary>物理发送前原子占用调用额度</summary>
+/// <remarks>占用完成即计一次调用；响应仅结算 token。不得跨网络调用持有事务或数据库连接。</remarks>
+public interface IAiProviderQuotaReservationTracker
+{
+    Task<AiProviderQuotaReservation?> TryReserveCallAsync(long providerId, CancellationToken ct = default);
+    Task SettleTokensAsync(long providerId, AiProviderQuotaReservation reservation, int? promptTokens, int? completionTokens, CancellationToken ct = default);
+}
+
+/// <summary>一次发送所属的周期快照</summary>
+public sealed record AiProviderQuotaReservation(PersonalMediaManager.Domain.Enums.AiQuotaPeriod Period, DateTimeOffset? PeriodResetAt);

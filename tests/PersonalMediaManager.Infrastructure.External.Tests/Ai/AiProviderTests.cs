@@ -42,6 +42,73 @@ public sealed class AiProviderTests
     private static HttpResponseMessage Ok(string body) =>
         new(HttpStatusCode.OK) { Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json") };
 
+    [Theory]
+    [InlineData(AiProviderType.OpenAiCompatible)]
+    [InlineData(AiProviderType.Ollama)]
+    [InlineData(AiProviderType.Anthropic)]
+    [InlineData(AiProviderType.Gemini)]
+    [InlineData(AiProviderType.AzureOpenAi)]
+    public async Task CancelledBeforeLimiterAdmissionHasNoPhysicalUsage(AiProviderType type)
+    {
+        StubHttpMessageHandler handler = new();
+        TokenBucketRateLimiter limiter = new(1, TimeSpan.FromSeconds(30));
+        await limiter.ConsumeAsync();
+        StubHttpClientFactory factory = new(handler);
+        IAiProtocol protocol = type switch
+        {
+            AiProviderType.Ollama => new OllamaProtocol(factory, NullLogger<OllamaProtocol>.Instance, limiter),
+            AiProviderType.Anthropic => new AnthropicProtocol(factory, NullLogger<AnthropicProtocol>.Instance, limiter),
+            AiProviderType.Gemini => new GeminiProtocol(factory, NullLogger<GeminiProtocol>.Instance, limiter),
+            AiProviderType.AzureOpenAi => new AzureOpenAiProtocol(factory, NullLogger<AzureOpenAiProtocol>.Instance, limiter),
+            _ => new OpenAiCompatibleProtocol(factory, NullLogger<OpenAiCompatibleProtocol>.Instance, limiter),
+        };
+        AiProtocolParser parser = new([protocol]);
+        int started = 0;
+        using AiTransportScope scope = new AiTransportScope(() => started++).Enter();
+        using CancellationTokenSource cancellation = new(TimeSpan.FromMilliseconds(80));
+        Func<Task> act = () => parser.ParseAsync(protocol.Protocol, new("https://fixture.invalid", null, "fixture", IsFree: false),
+            new("Alpha.mkv"), cancellation.Token);
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        handler.Requests.Should().BeEmpty();
+        started.Should().Be(0);
+        scope.Usage.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task CancellationAfterHttpSendStillCountsOnce()
+    {
+        StubHttpMessageHandler handler = new();
+        using CancellationTokenSource cancellation = new();
+        handler.EnqueueResponse(_ => { cancellation.Cancel(); throw new OperationCanceledException(cancellation.Token); });
+        OpenAiCompatibleProtocol protocol = new(new StubHttpClientFactory(handler), NullLogger<OpenAiCompatibleProtocol>.Instance, FastLimiter());
+        AiProtocolParser parser = new([protocol]);
+        int started = 0, settled = 0;
+        using AiTransportScope scope = new AiTransportScope(_ => { started++; return Task.CompletedTask; },
+            _ => { settled++; return Task.CompletedTask; }).Enter();
+        Func<Task> act = () => parser.ParseAsync(protocol.Protocol, new("https://fixture.invalid", null, "fixture"), new("Alpha.mkv"), cancellation.Token);
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        handler.Requests.Should().HaveCount(1);
+        started.Should().Be(1); settled.Should().Be(1);
+        await scope.SettlePendingAsync();
+        settled.Should().Be(1);
+    }
+
+    [Theory]
+    [InlineData("https://api.deepseek.com", "deepseek-flash", true, true)]
+    [InlineData("https://api.deepseek.com", "deepseek-flash", false, false)]
+    [InlineData("https://proxy.invalid", "deepseek-flash", true, false)]
+    [InlineData("https://api.deepseek.com", "other-model", true, false)]
+    public async Task NonThinkingWireIsExplicitAndOnlyForOfficialMatchedDeepSeek(string endpoint, string model, bool requested, bool expected)
+    {
+        StubHttpMessageHandler handler = new(); string? body = null;
+        handler.EnqueueResponse(request => { body = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult(); return Ok(OpenAiOkBody); });
+        OpenAiCompatibleProtocol protocol = new(new StubHttpClientFactory(handler), NullLogger<OpenAiCompatibleProtocol>.Instance, FastLimiter());
+        await protocol.CompleteAsync(Req(new(endpoint, null, model, IsFree: true)) with { DisableThinking = requested });
+        using System.Text.Json.JsonDocument doc = System.Text.Json.JsonDocument.Parse(body!);
+        doc.RootElement.TryGetProperty("thinking", out System.Text.Json.JsonElement thinking).Should().Be(expected);
+        if (expected) thinking.GetProperty("type").GetString().Should().Be("disabled");
+    }
+
     // ───────────────── Ollama ─────────────────
     [Fact]
     public async Task Ollama_Success_ReturnsMessageContent_NoAuthHeader()

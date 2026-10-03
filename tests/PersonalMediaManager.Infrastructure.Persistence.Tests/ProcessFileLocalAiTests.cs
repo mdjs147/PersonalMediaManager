@@ -125,6 +125,24 @@ public sealed partial class ProcessFileServiceTests
         await _ruleEngine.DidNotReceive().ParseAsync(Arg.Any<FileParseContext>(), Arg.Any<CancellationToken>());
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task LocalDeferredPreservesGoodRulesButDoesNotEscalateToExternalAi(bool ruleResolves)
+    {
+        ILocalMediaAssistService local = Substitute.For<ILocalMediaAssistService>();
+        local.SuggestAsync(Arg.Any<FileParseContext>(), Arg.Any<RuleParseResult?>(), Arg.Any<LocalAiMode>(), Arg.Any<CancellationToken>())
+            .Returns(info => new LocalMediaAssistResult(info.Arg<LocalAiMode>(), "Deferred", [], ["BatchRetryBudgetExceeded"], InferenceAttempted: true));
+        ConfigureRule(ruleResolves ? 0.9 : 0.2, !ruleResolves);
+        ConfigureTmdb(ruleResolves ? 1 : 0);
+        ConfigureClassify(ClassifyDecision.Matched, 7);
+        ConfigureArchive(ArchiveOutcome.Completed, "/M/Example.mkv");
+        ProcessFileOutcome outcome = await RunWithLocal(local);
+        outcome.Outcome.Should().Be(ruleResolves ? ProcessOutcome.Completed : ProcessOutcome.Failed);
+        await _ruleEngine.Received(1).ParseAsync(Arg.Any<FileParseContext>(), Arg.Any<CancellationToken>());
+        await _aiOrchestrator.DidNotReceive().ExecuteAsync(Arg.Any<AiParseRequest>(), Arg.Any<long?>(), Arg.Any<CancellationToken>());
+    }
+
     private static LocalMediaAssistResult LocalSuggestions(LocalAiMode mode) => new(mode, "Validated",
         [new("Model Hypothesis", "Original Programme", "FileName", null, 0, 18, "source", "UnverifiedAlias")], [],
         InferenceAttempted: true);

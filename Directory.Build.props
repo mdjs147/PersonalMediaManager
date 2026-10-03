@@ -36,7 +36,7 @@
     <!-- 唯一人工维护的产品版本；“主版本”指完整产品版本，并非只指 SemVer 的 major 位。
          前端 manifest、程序集和安装包均派生此值；数据库只保留 EF 迁移标识。
          历史独立版本演进保存在 CHANGELOG，不再作为构建配置来源。 -->
-    <PmmProductVersion>0.4.0</PmmProductVersion>
+    <PmmProductVersion>0.5.0</PmmProductVersion>
     <VersionPrefix>$(PmmProductVersion)</VersionPrefix>
     <Version>$(PmmProductVersion)</Version>
     <AssemblyVersion>$(PmmProductVersion).0</AssemblyVersion>

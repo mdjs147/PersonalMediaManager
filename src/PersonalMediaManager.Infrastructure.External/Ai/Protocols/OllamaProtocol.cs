@@ -21,7 +21,7 @@ namespace PersonalMediaManager.Infrastructure.External.Ai.Protocols;
 ///   - 节流按档：仅付费节点（Endpoint.IsFree=false）走 1 req/s，免费档（本地常态）豁免。
 /// 失败映射统一走 <see cref="AiHttpFailureMapper"/>，与 IAiProtocol 契约口径一致。
 /// </remarks>
-internal sealed class OllamaProtocol : IAiProtocol
+internal sealed class OllamaProtocol : IAiProtocol, IAiSendBoundaryProtocol
 {
     private const string ProtocolName = "Ollama";
 
@@ -65,10 +65,15 @@ internal sealed class OllamaProtocol : IAiProtocol
         req.Content = JsonContent.Create(BuildPayload(request));
 
         HttpResponseMessage resp;
+        await AiDiagnosticHttp.RecordPreparedRequestAsync(req, endpoint.ApiKey);
+        ct.ThrowIfCancellationRequested();
+        if (request.BeforeSend is not null) await request.BeforeSend(ct);
         DateTimeOffset sentAt = DateTimeOffset.UtcNow;
         try
         {
-            resp = await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+            Task<HttpResponseMessage> sending = client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+            AiDiagnosticHttp.RecordDispatch();
+            resp = await sending;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
         {
@@ -78,7 +83,9 @@ internal sealed class OllamaProtocol : IAiProtocol
         using (resp)
         {
             string body;
-            try { body = await resp.Content.ReadAsStringAsync(ct); }
+            try { body = await AiResponseReader.ReadAsync(resp.Content, request.MaxResponseBytes, ct, endpoint.ApiKey, (int)resp.StatusCode); }
+            catch (OperationCanceledException) { throw; }
+            catch (AiProviderLogicalException) { throw; }
             catch { body = string.Empty; }
 
             // 状态错误统一映射（429 → 限流 / 5xx → 瞬时 / 4xx → 逻辑）
@@ -130,7 +137,8 @@ internal sealed class OllamaProtocol : IAiProtocol
 
             int? promptTokens = TryGetTokenCount(root, "prompt_eval_count");
             int? completionTokens = TryGetTokenCount(root, "eval_count");
-            return new AiCompletion(text, promptTokens, completionTokens);
+            return new AiCompletion(text, promptTokens, completionTokens,
+                root.TryGetProperty("done_reason", out JsonElement finish) && finish.ValueKind == JsonValueKind.String ? finish.GetString() : null);
         }
         catch (JsonException ex)
         {
