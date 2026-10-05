@@ -1,0 +1,2434 @@
+{
+  "schema_version": 1,
+  "artifact_type": "from_zero_requirements_and_capability_mapping",
+  "scope": "DEV001 revalidates requirements, applicability and architecture, then builds a new inert offline engineering foundation. This mapping does not authorize business operations.",
+  "status": "planned",
+  "verification_status": "not-run",
+  "source_scope": "Relative paths identify non-code design inputs in the previous contracts package. They do not import previous implementation or acceptance evidence.",
+  "inputs": [
+    {
+      "path": "docs/contracts/decisions.zh-CN.md",
+      "sha256": "02831e5cf369888d814343d96664a102de9fc6d43fa275acdff9cfb4945b9997",
+      "role": "confirmed_outcomes_proposals_and_open_policies"
+    },
+    {
+      "path": "docs/contracts/domain-model.zh-CN.md",
+      "sha256": "4ec43b3d0cc6fe124816f8cfe5166370d7bb961d48ca23779a25dae511b2f640",
+      "role": "candidate_domain_design"
+    },
+    {
+      "path": "docs/contracts/domain-model.coverage.json",
+      "sha256": "1ac2156b60e62b8df35832e536a4c4cc20b5a284eb3f71da3be2db2bc3770891",
+      "role": "source_classification_and_design_mapping"
+    },
+    {
+      "path": "docs/contracts/state-safety.zh-CN.md",
+      "sha256": "d3f66371c1fcc471fb5c7128a5c2f3e9a9abeda5140feea98336fd95f0253c06",
+      "role": "candidate_safety_mechanisms"
+    },
+    {
+      "path": "docs/contracts/http-mcp-permissions.zh-CN.md",
+      "sha256": "13bb39f86198c588552647cc2546b91a10099f9d844aba63223572172f608530",
+      "role": "candidate_transport_and_authorization_contracts"
+    },
+    {
+      "path": "docs/contracts/capabilities.json",
+      "sha256": "1b9463ca2e9cc51647080d50a67594a3d8ab573f8551041e7c4dbe98acbfa657",
+      "role": "candidate_capability_inventory"
+    },
+    {
+      "path": "docs/contracts/acceptance.zh-CN.md",
+      "sha256": "29f531070eb2f61c16cb6870d7a01b6481de11302e784be7cec4dbdd930ca631",
+      "role": "future_acceptance_requirements_only"
+    }
+  ],
+  "classification_rules": {
+    "confirmed": "A retained product outcome or intended technology choice; not an implemented capability or field-level design approval.",
+    "proposal": "A candidate engineering, entity, API or capability contract that requires review in its new implementation card.",
+    "unresolved": "A product policy that remains open; historical conservative construction values do not settle it.",
+    "capability_classification": "Every capability below is a proposed catalog contract. This classification does not remove confirmed product outcomes, settle open policies, or imply any implementation.",
+    "reset": "All inherited capability implementation states are planned and all successor verification states are not-run. No old task progress, tests, validators or output evidence is carried over."
+  },
+  "design_inputs": {
+    "confirmed": [
+      {
+        "id": "CONFIRMED-01",
+        "classification": "confirmed",
+        "description": "全新独立产品；不读取、探测、导入、迁移或兼容旧 PMM 数据库及备份。",
+        "source": "docs/contracts/decisions.zh-CN.md#已确认的产品决定"
+      },
+      {
+        "id": "CONFIRMED-02",
+        "classification": "confirmed",
+        "description": ".NET 10 / C# 14；一个 Kestrel 宿主承载 Razor MVC、HTTP 和 MCP。",
+        "source": "docs/contracts/decisions.zh-CN.md#已确认的产品决定"
+      },
+      {
+        "id": "CONFIRMED-03",
+        "classification": "confirmed",
+        "description": "Bootstrap 5、jQuery、Axios 随产品本地打包；SQLite 3 / EF Core 10 Code First；HostedServices 持久任务；不引入 Redis 或外部消息中间件。",
+        "source": "docs/contracts/decisions.zh-CN.md#已确认的产品决定"
+      },
+      {
+        "id": "CONFIRMED-04",
+        "classification": "confirmed",
+        "description": "采用 xUnit、真实隔离 SQLite 与临时文件系统、API 合同及 Playwright；Windows、Linux、macOS 的证据分别记录。",
+        "source": "docs/contracts/decisions.zh-CN.md#已确认的产品决定"
+      },
+      {
+        "id": "CONFIRMED-05",
+        "classification": "confirmed",
+        "description": "GitHub、Actions、Issues；Bash 和 PowerShell 7 的行为按实际平台验证。",
+        "source": "docs/contracts/decisions.zh-CN.md#已确认的产品决定"
+      },
+      {
+        "id": "CONFIRMED-06",
+        "classification": "confirmed",
+        "description": "规则加 TMDB 为默认识别路径；AI 可选；MCP 客户端提案不隐式启用付费 AI。",
+        "source": "docs/contracts/decisions.zh-CN.md#已确认的产品决定"
+      },
+      {
+        "id": "CONFIRMED-07",
+        "classification": "confirmed",
+        "description": "完整产品范围保留本地作品、人工资料、复杂季集覆盖、保留原版的主动音轨处理和受控来源目标重叠。",
+        "source": "docs/contracts/decisions.zh-CN.md#已确认的产品决定"
+      },
+      {
+        "id": "CONFIRMED-08",
+        "classification": "confirmed",
+        "description": "默认不自动覆盖；替换前保全；撤销结果服从实际磁盘事实；UI、HTTP、MCP 共用领域规则。",
+        "source": "docs/contracts/decisions.zh-CN.md#已确认的产品决定"
+      },
+      {
+        "id": "CONFIRMED-09",
+        "classification": "confirmed",
+        "description": "已确认视觉方向仅为设计参考；对象级播放和下载链接不扩展为媒体下载器或播放服务。",
+        "source": "docs/contracts/decisions.zh-CN.md#已确认的产品决定"
+      }
+    ],
+    "proposals": [
+      {
+        "id": "E01",
+        "classification": "proposal",
+        "description": "源代际、身份与覆盖决定、不可变计划、批准、执行 journal 的拆分及共用应用层。",
+        "source": "docs/contracts/decisions.zh-CN.md#供独立评审后实施的工程决定"
+      },
+      {
+        "id": "E02",
+        "classification": "proposal",
+        "description": "持久队列、lease/fencing、意图 journal、检查点和事实核查机制；不声称跨 SQLite 与文件系统的分布式原子事务。",
+        "source": "docs/contracts/decisions.zh-CN.md#供独立评审后实施的工程决定"
+      },
+      {
+        "id": "E03",
+        "classification": "proposal",
+        "description": "精确版本范围、幂等、执行时重验、恢复不复活批准、批内成功不重复执行的具体实现机制。",
+        "source": "docs/contracts/decisions.zh-CN.md#供独立评审后实施的工程决定"
+      },
+      {
+        "id": "E04",
+        "classification": "proposal",
+        "description": "完整内容校验、保全副本及操作证据保留的具体机制。",
+        "source": "docs/contracts/decisions.zh-CN.md#供独立评审后实施的工程决定"
+      },
+      {
+        "id": "E05",
+        "classification": "proposal",
+        "description": "最小能力授权、合成身份和 fake 适配器的具体实现。",
+        "source": "docs/contracts/decisions.zh-CN.md#供独立评审后实施的工程决定"
+      },
+      {
+        "id": "DOMAIN-SCHEMAS",
+        "classification": "proposal",
+        "description": "领域实体、字段、键、索引、算法、状态编码、DTO 和逐能力接口设计均须在对应新卡中重新审查；不从已确认结果推定字段级批准。",
+        "source": "docs/contracts/domain-model.zh-CN.md#1.3-设计状态标签"
+      }
+    ],
+    "unresolved": [
+      {
+        "id": "D01",
+        "classification": "unresolved",
+        "description": "默认 Move/Copy 与目录覆盖行为。",
+        "source": "docs/contracts/decisions.zh-CN.md#未定产品策略及安全施工取值"
+      },
+      {
+        "id": "D02",
+        "classification": "unresolved",
+        "description": "冲突时询问、跳过及替换策略。",
+        "source": "docs/contracts/decisions.zh-CN.md#未定产品策略及安全施工取值"
+      },
+      {
+        "id": "D03",
+        "classification": "unresolved",
+        "description": "原版与替换版保留期限、恢复介质及空间处置。",
+        "source": "docs/contracts/decisions.zh-CN.md#未定产品策略及安全施工取值"
+      },
+      {
+        "id": "D04",
+        "classification": "unresolved",
+        "description": "角色、匿名、LAN 和远程访问策略。",
+        "source": "docs/contracts/decisions.zh-CN.md#未定产品策略及安全施工取值"
+      },
+      {
+        "id": "D05",
+        "classification": "unresolved",
+        "description": "各平台入口等价范围和实际验收次序。",
+        "source": "docs/contracts/decisions.zh-CN.md#未定产品策略及安全施工取值"
+      },
+      {
+        "id": "D06",
+        "classification": "unresolved",
+        "description": "同目录决定复用范围与期限。",
+        "source": "docs/contracts/decisions.zh-CN.md#未定产品策略及安全施工取值"
+      },
+      {
+        "id": "D07",
+        "classification": "unresolved",
+        "description": "发行版、复杂覆盖表达与消费端 NFO 兼容。",
+        "source": "docs/contracts/decisions.zh-CN.md#未定产品策略及安全施工取值"
+      },
+      {
+        "id": "D08",
+        "classification": "unresolved",
+        "description": "AI 预算、模型白名单、提供商能力和默认批量。",
+        "source": "docs/contracts/decisions.zh-CN.md#未定产品策略及安全施工取值"
+      },
+      {
+        "id": "D09",
+        "classification": "unresolved",
+        "description": "完成度分母及未知目录、特别篇、版本的处理。",
+        "source": "docs/contracts/decisions.zh-CN.md#未定产品策略及安全施工取值"
+      },
+      {
+        "id": "D10",
+        "classification": "unresolved",
+        "description": "精确清理对象和审计、恢复证据保留期限。",
+        "source": "docs/contracts/decisions.zh-CN.md#未定产品策略及安全施工取值"
+      },
+      {
+        "id": "D11",
+        "classification": "unresolved",
+        "description": "新产品恢复切换时的数据取舍及切换前状态保全。",
+        "source": "docs/contracts/decisions.zh-CN.md#未定产品策略及安全施工取值"
+      },
+      {
+        "id": "D12",
+        "classification": "unresolved",
+        "description": "自动更新、实际安装和回滚窗口。",
+        "source": "docs/contracts/decisions.zh-CN.md#未定产品策略及安全施工取值"
+      },
+      {
+        "id": "D13",
+        "classification": "unresolved",
+        "description": "通知停用、既有队列目的地及网络出口策略。",
+        "source": "docs/contracts/decisions.zh-CN.md#未定产品策略及安全施工取值"
+      },
+      {
+        "id": "D14",
+        "classification": "unresolved",
+        "description": "MCP 访问与本机确认的具体授权边界。",
+        "source": "docs/contracts/decisions.zh-CN.md#未定产品策略及安全施工取值"
+      },
+      {
+        "id": "D15",
+        "classification": "unresolved",
+        "description": "设置的实际消费者、生效时点和维护对象集合。",
+        "source": "docs/contracts/decisions.zh-CN.md#未定产品策略及安全施工取值"
+      }
+    ]
+  },
+  "capabilities": [
+    {
+      "id": "system.status",
+      "title": "运行与初始化 status",
+      "category": "基础与受限访问",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "system.readiness",
+      "title": "运行与初始化 readiness",
+      "category": "基础与受限访问",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "system.setup_status",
+      "title": "运行与初始化 setup_status",
+      "category": "基础与受限访问",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "system.initialize",
+      "title": "运行与初始化 initialize",
+      "category": "基础与受限访问",
+      "operation_kind": "local",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "system.capabilities",
+      "title": "运行与初始化 capabilities",
+      "category": "基础与受限访问",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "accounts.list",
+      "title": "账户与访问 list",
+      "category": "基础与受限访问",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "accounts.create",
+      "title": "账户与访问 create",
+      "category": "基础与受限访问",
+      "operation_kind": "local",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "accounts.disable",
+      "title": "账户与访问 disable",
+      "category": "基础与受限访问",
+      "operation_kind": "local",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "accounts.delete",
+      "title": "账户与访问 delete",
+      "category": "基础与受限访问",
+      "operation_kind": "local",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "accounts.change_password",
+      "title": "账户与访问 change_password",
+      "category": "基础与受限访问",
+      "operation_kind": "local",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "accounts.revoke_sessions",
+      "title": "账户与访问 revoke_sessions",
+      "category": "基础与受限访问",
+      "operation_kind": "local",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "accounts.list_sessions",
+      "title": "账户与访问 list_sessions",
+      "category": "基础与受限访问",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "accounts.mcp_access_read",
+      "title": "账户与访问 mcp_access_read",
+      "category": "基础与受限访问",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "accounts.mcp_access_grant",
+      "title": "账户与访问 mcp_access_grant",
+      "category": "基础与受限访问",
+      "operation_kind": "local",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "accounts.mcp_access_revoke",
+      "title": "账户与访问 mcp_access_revoke",
+      "category": "基础与受限访问",
+      "operation_kind": "local",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "sources.list",
+      "title": "来源发现 list",
+      "category": "来源扫描与文件代际",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "sources.get",
+      "title": "来源发现 get",
+      "category": "来源扫描与文件代际",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "sources.save",
+      "title": "来源发现 save",
+      "category": "来源扫描与文件代际",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "sources.pause",
+      "title": "来源发现 pause",
+      "category": "来源扫描与文件代际",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "sources.resume",
+      "title": "来源发现 resume",
+      "category": "来源扫描与文件代际",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "sources.probe",
+      "title": "来源发现 probe",
+      "category": "来源扫描与文件代际",
+      "operation_kind": "probe",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "sources.scan",
+      "title": "来源发现 scan",
+      "category": "来源扫描与文件代际",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "sources.scan_all",
+      "title": "来源发现 scan_all",
+      "category": "来源扫描与文件代际",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "sources.intake_path",
+      "title": "来源发现 intake_path",
+      "category": "来源扫描与文件代际",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "sources.formats_read",
+      "title": "来源发现 formats_read",
+      "category": "来源扫描与文件代际",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "sources.formats_save",
+      "title": "来源发现 formats_save",
+      "category": "来源扫描与文件代际",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "sources.ignore_rules_read",
+      "title": "来源发现 ignore_rules_read",
+      "category": "来源扫描与文件代际",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "sources.ignore_rules_save",
+      "title": "来源发现 ignore_rules_save",
+      "category": "来源扫描与文件代际",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "sources.ignore_preview",
+      "title": "来源发现 ignore_preview",
+      "category": "来源扫描与文件代际",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "sources.overlap_preview",
+      "title": "来源发现 overlap_preview",
+      "category": "来源扫描与文件代际",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "tasks.list",
+      "title": "任务与回执 list",
+      "category": "持久操作与阶段回执",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "tasks.get",
+      "title": "任务与回执 get",
+      "category": "持久操作与阶段回执",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "tasks.stages",
+      "title": "任务与回执 stages",
+      "category": "持久操作与阶段回执",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "tasks.cancel",
+      "title": "任务与回执 cancel",
+      "category": "持久操作与阶段回执",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "tasks.reconcile",
+      "title": "任务与回执 reconcile",
+      "category": "持久操作与阶段回执",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "tasks.retry_plan",
+      "title": "任务与回执 retry_plan",
+      "category": "持久操作与阶段回执",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "tasks.retry_execute",
+      "title": "任务与回执 retry_execute",
+      "category": "持久操作与阶段回执",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "tasks.reanalyze",
+      "title": "任务与回执 reanalyze",
+      "category": "持久操作与阶段回执",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "tasks.events",
+      "title": "任务与回执 events",
+      "category": "持久操作与阶段回执",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "recognition.context",
+      "title": "识别与证据 context",
+      "category": "识别证据与人工采用",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "recognition.parse_preview",
+      "title": "识别与证据 parse_preview",
+      "category": "识别证据与人工采用",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "recognition.candidates",
+      "title": "识别与证据 candidates",
+      "category": "识别证据与人工采用",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "recognition.tmdb_search",
+      "title": "识别与证据 tmdb_search",
+      "category": "识别证据与人工采用",
+      "operation_kind": "probe",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "recognition.tmdb_details",
+      "title": "识别与证据 tmdb_details",
+      "category": "识别证据与人工采用",
+      "operation_kind": "probe",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "recognition.catalog_refresh",
+      "title": "识别与证据 catalog_refresh",
+      "category": "识别证据与人工采用",
+      "operation_kind": "probe",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "recognition.submit_suggestion",
+      "title": "识别与证据 submit_suggestion",
+      "category": "识别证据与人工采用",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "recognition.adopt_suggestion",
+      "title": "识别与证据 adopt_suggestion",
+      "category": "识别证据与人工采用",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "recognition.decision_get",
+      "title": "识别与证据 decision_get",
+      "category": "识别证据与人工采用",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "recognition.decision_save",
+      "title": "识别与证据 decision_save",
+      "category": "识别证据与人工采用",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "recognition.numbering_preview",
+      "title": "识别与证据 numbering_preview",
+      "category": "识别证据与人工采用",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "recognition.numbering_save",
+      "title": "识别与证据 numbering_save",
+      "category": "识别证据与人工采用",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "recognition.directory_binding_read",
+      "title": "识别与证据 directory_binding_read",
+      "category": "识别证据与人工采用",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "recognition.directory_binding_save",
+      "title": "识别与证据 directory_binding_save",
+      "category": "识别证据与人工采用",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "recognition.directory_binding_revoke",
+      "title": "识别与证据 directory_binding_revoke",
+      "category": "识别证据与人工采用",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "recognition.markers_inspect",
+      "title": "识别与证据 markers_inspect",
+      "category": "识别证据与人工采用",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "recognition.episode_group_preview",
+      "title": "识别与证据 episode_group_preview",
+      "category": "识别证据与人工采用",
+      "operation_kind": "probe",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "works.list",
+      "title": "作品与人工资料 list",
+      "category": "本地作品与复杂覆盖",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "works.get",
+      "title": "作品与人工资料 get",
+      "category": "本地作品与复杂覆盖",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "works.create_local",
+      "title": "作品与人工资料 create_local",
+      "category": "本地作品与复杂覆盖",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "works.save_metadata",
+      "title": "作品与人工资料 save_metadata",
+      "category": "本地作品与复杂覆盖",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "works.link_external_preview",
+      "title": "作品与人工资料 link_external_preview",
+      "category": "本地作品与复杂覆盖",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "works.link_external_apply",
+      "title": "作品与人工资料 link_external_apply",
+      "category": "本地作品与复杂覆盖",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "works.unlink_external",
+      "title": "作品与人工资料 unlink_external",
+      "category": "本地作品与复杂覆盖",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "works.merge_plan",
+      "title": "作品与人工资料 merge_plan",
+      "category": "本地作品与复杂覆盖",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "works.merge_execute",
+      "title": "作品与人工资料 merge_execute",
+      "category": "本地作品与复杂覆盖",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "works.coverage_read",
+      "title": "作品与人工资料 coverage_read",
+      "category": "本地作品与复杂覆盖",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "works.coverage_save",
+      "title": "作品与人工资料 coverage_save",
+      "category": "本地作品与复杂覆盖",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "organize.plan",
+      "title": "归档计划与执行 plan",
+      "category": "分类命名与安全归档",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "organize.plan_get",
+      "title": "归档计划与执行 plan_get",
+      "category": "分类命名与安全归档",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "organize.plan_validate",
+      "title": "归档计划与执行 plan_validate",
+      "category": "分类命名与安全归档",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "organize.plan_approve",
+      "title": "归档计划与执行 plan_approve",
+      "category": "分类命名与安全归档",
+      "operation_kind": "approve",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "organize.plan_revoke",
+      "title": "归档计划与执行 plan_revoke",
+      "category": "分类命名与安全归档",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "organize.execute",
+      "title": "归档计划与执行 execute",
+      "category": "分类命名与安全归档",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "organize.receipt",
+      "title": "归档计划与执行 receipt",
+      "category": "分类命名与安全归档",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "organize.auto_policy_read",
+      "title": "归档计划与执行 auto_policy_read",
+      "category": "分类命名与安全归档",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "organize.auto_policy_save",
+      "title": "归档计划与执行 auto_policy_save",
+      "category": "分类命名与安全归档",
+      "operation_kind": "local",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "categories.list",
+      "title": "分类目标与命名 list",
+      "category": "分类命名与安全归档",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "categories.save",
+      "title": "分类目标与命名 save",
+      "category": "分类命名与安全归档",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "categories.delete",
+      "title": "分类目标与命名 delete",
+      "category": "分类命名与安全归档",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "categories.rules_read",
+      "title": "分类目标与命名 rules_read",
+      "category": "分类命名与安全归档",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "categories.rules_save",
+      "title": "分类目标与命名 rules_save",
+      "category": "分类命名与安全归档",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "categories.rules_preview",
+      "title": "分类目标与命名 rules_preview",
+      "category": "分类命名与安全归档",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "categories.naming_read",
+      "title": "分类目标与命名 naming_read",
+      "category": "分类命名与安全归档",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "categories.naming_save",
+      "title": "分类目标与命名 naming_save",
+      "category": "分类命名与安全归档",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "categories.naming_preview",
+      "title": "分类目标与命名 naming_preview",
+      "category": "分类命名与安全归档",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "assets.manifest",
+      "title": "字幕元数据音轨 manifest",
+      "category": "伴生音轨与来源清理",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "assets.sidecar_plan",
+      "title": "字幕元数据音轨 sidecar_plan",
+      "category": "伴生音轨与来源清理",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "assets.sidecar_execute",
+      "title": "字幕元数据音轨 sidecar_execute",
+      "category": "伴生音轨与来源清理",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "assets.subtitle_candidates",
+      "title": "字幕元数据音轨 subtitle_candidates",
+      "category": "伴生音轨与来源清理",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "assets.subtitle_search",
+      "title": "字幕元数据音轨 subtitle_search",
+      "category": "伴生音轨与来源清理",
+      "operation_kind": "probe",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "assets.subtitle_files",
+      "title": "字幕元数据音轨 subtitle_files",
+      "category": "伴生音轨与来源清理",
+      "operation_kind": "probe",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "assets.subtitle_download_plan",
+      "title": "字幕元数据音轨 subtitle_download_plan",
+      "category": "伴生音轨与来源清理",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "assets.subtitle_download_execute",
+      "title": "字幕元数据音轨 subtitle_download_execute",
+      "category": "伴生音轨与来源清理",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "assets.subtitle_download_history",
+      "title": "字幕元数据音轨 subtitle_download_history",
+      "category": "伴生音轨与来源清理",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "assets.audio_probe",
+      "title": "字幕元数据音轨 audio_probe",
+      "category": "伴生音轨与来源清理",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "assets.audio_transform_plan",
+      "title": "字幕元数据音轨 audio_transform_plan",
+      "category": "伴生音轨与来源清理",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "assets.audio_transform_execute",
+      "title": "字幕元数据音轨 audio_transform_execute",
+      "category": "伴生音轨与来源清理",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "assets.audio_original_restore_plan",
+      "title": "字幕元数据音轨 audio_original_restore_plan",
+      "category": "伴生音轨与来源清理",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "assets.audio_original_restore_execute",
+      "title": "字幕元数据音轨 audio_original_restore_execute",
+      "category": "伴生音轨与来源清理",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "assets.cleanup_plan",
+      "title": "字幕元数据音轨 cleanup_plan",
+      "category": "伴生音轨与来源清理",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "assets.cleanup_execute",
+      "title": "字幕元数据音轨 cleanup_execute",
+      "category": "伴生音轨与来源清理",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "recovery.undo_plan",
+      "title": "撤销纠错与认领 undo_plan",
+      "category": "撤销纠错与孤儿恢复",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "recovery.undo_execute",
+      "title": "撤销纠错与认领 undo_execute",
+      "category": "撤销纠错与孤儿恢复",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "recovery.reopen_plan",
+      "title": "撤销纠错与认领 reopen_plan",
+      "category": "撤销纠错与孤儿恢复",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "recovery.reopen_execute",
+      "title": "撤销纠错与认领 reopen_execute",
+      "category": "撤销纠错与孤儿恢复",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "recovery.orphan_scan",
+      "title": "撤销纠错与认领 orphan_scan",
+      "category": "撤销纠错与孤儿恢复",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "recovery.orphan_claim_plan",
+      "title": "撤销纠错与认领 orphan_claim_plan",
+      "category": "撤销纠错与孤儿恢复",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "recovery.orphan_claim_execute",
+      "title": "撤销纠错与认领 orphan_claim_execute",
+      "category": "撤销纠错与孤儿恢复",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "recovery.relocate_plan",
+      "title": "撤销纠错与认领 relocate_plan",
+      "category": "撤销纠错与孤儿恢复",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "recovery.relocate_execute",
+      "title": "撤销纠错与认领 relocate_execute",
+      "category": "撤销纠错与孤儿恢复",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "recovery.delete_record_plan",
+      "title": "撤销纠错与认领 delete_record_plan",
+      "category": "撤销纠错与孤儿恢复",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "recovery.delete_record_execute",
+      "title": "撤销纠错与认领 delete_record_execute",
+      "category": "撤销纠错与孤儿恢复",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "library.list",
+      "title": "媒体浏览与维护 list",
+      "category": "媒体库与对象级外链",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "library.recent",
+      "title": "媒体浏览与维护 recent",
+      "category": "媒体库与对象级外链",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "library.work",
+      "title": "媒体浏览与维护 work",
+      "category": "媒体库与对象级外链",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "library.season",
+      "title": "媒体浏览与维护 season",
+      "category": "媒体库与对象级外链",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "library.asset",
+      "title": "媒体浏览与维护 asset",
+      "category": "媒体库与对象级外链",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "library.facets",
+      "title": "媒体浏览与维护 facets",
+      "category": "媒体库与对象级外链",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "library.statistics",
+      "title": "媒体浏览与维护 statistics",
+      "category": "媒体库与对象级外链",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "library.metadata_refresh",
+      "title": "媒体浏览与维护 metadata_refresh",
+      "category": "媒体库与对象级外链",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "library.existence_scan",
+      "title": "媒体浏览与维护 existence_scan",
+      "category": "媒体库与对象级外链",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "library.audio_scan",
+      "title": "媒体浏览与维护 audio_scan",
+      "category": "媒体库与对象级外链",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "links.list",
+      "title": "播放下载来源链接 list",
+      "category": "媒体库与对象级外链",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "links.save",
+      "title": "播放下载来源链接 save",
+      "category": "媒体库与对象级外链",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "links.remove",
+      "title": "播放下载来源链接 remove",
+      "category": "媒体库与对象级外链",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "links.restore",
+      "title": "播放下载来源链接 restore",
+      "category": "媒体库与对象级外链",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "links.resolve_open",
+      "title": "播放下载来源链接 resolve_open",
+      "category": "媒体库与对象级外链",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "links.tmdb_register",
+      "title": "播放下载来源链接 tmdb_register",
+      "category": "媒体库与对象级外链",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "rules.list",
+      "title": "规则与离线验证 list",
+      "category": "规则建议与离线验证",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "rules.get",
+      "title": "规则与离线验证 get",
+      "category": "规则建议与离线验证",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "rules.save_draft",
+      "title": "规则与离线验证 save_draft",
+      "category": "规则建议与离线验证",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "rules.propose",
+      "title": "规则与离线验证 propose",
+      "category": "规则建议与离线验证",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "rules.validate",
+      "title": "规则与离线验证 validate",
+      "category": "规则建议与离线验证",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "rules.impact",
+      "title": "规则与离线验证 impact",
+      "category": "规则建议与离线验证",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "rules.activate",
+      "title": "规则与离线验证 activate",
+      "category": "规则建议与离线验证",
+      "operation_kind": "approve",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "rules.rollback",
+      "title": "规则与离线验证 rollback",
+      "category": "规则建议与离线验证",
+      "operation_kind": "approve",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "rules.test_cases_list",
+      "title": "规则与离线验证 test_cases_list",
+      "category": "规则建议与离线验证",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "rules.test_cases_save",
+      "title": "规则与离线验证 test_cases_save",
+      "category": "规则建议与离线验证",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "rules.test_cases_import",
+      "title": "规则与离线验证 test_cases_import",
+      "category": "规则建议与离线验证",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "rules.test_cases_disable",
+      "title": "规则与离线验证 test_cases_disable",
+      "category": "规则建议与离线验证",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "rules.test_cases_replay",
+      "title": "规则与离线验证 test_cases_replay",
+      "category": "规则建议与离线验证",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "rules.test_cases_approve_expected",
+      "title": "规则与离线验证 test_cases_approve_expected",
+      "category": "规则建议与离线验证",
+      "operation_kind": "approve",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "rules.runs",
+      "title": "规则与离线验证 runs",
+      "category": "规则建议与离线验证",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "ai.providers_list",
+      "title": "AI提供商与请求 providers_list",
+      "category": "可选AI与完整诊断",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "ai.provider_save",
+      "title": "AI提供商与请求 provider_save",
+      "category": "可选AI与完整诊断",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "ai.provider_delete",
+      "title": "AI提供商与请求 provider_delete",
+      "category": "可选AI与完整诊断",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "ai.credential_set",
+      "title": "AI提供商与请求 credential_set",
+      "category": "可选AI与完整诊断",
+      "operation_kind": "local",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "ai.primary_select",
+      "title": "AI提供商与请求 primary_select",
+      "category": "可选AI与完整诊断",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "ai.health_known",
+      "title": "AI提供商与请求 health_known",
+      "category": "可选AI与完整诊断",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "ai.test_connection",
+      "title": "AI提供商与请求 test_connection",
+      "category": "可选AI与完整诊断",
+      "operation_kind": "probe",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "ai.unblock",
+      "title": "AI提供商与请求 unblock",
+      "category": "可选AI与完整诊断",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "ai.quota_read",
+      "title": "AI提供商与请求 quota_read",
+      "category": "可选AI与完整诊断",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "ai.quota_save",
+      "title": "AI提供商与请求 quota_save",
+      "category": "可选AI与完整诊断",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "ai.quota_reset",
+      "title": "AI提供商与请求 quota_reset",
+      "category": "可选AI与完整诊断",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "ai.batch_policy_read",
+      "title": "AI提供商与请求 batch_policy_read",
+      "category": "可选AI与完整诊断",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "ai.batch_policy_save",
+      "title": "AI提供商与请求 batch_policy_save",
+      "category": "可选AI与完整诊断",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "ai.suggest",
+      "title": "AI提供商与请求 suggest",
+      "category": "可选AI与完整诊断",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "ai.calls",
+      "title": "AI提供商与请求 calls",
+      "category": "可选AI与完整诊断",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "ai.call_diagnostic",
+      "title": "AI提供商与请求 call_diagnostic",
+      "category": "可选AI与完整诊断",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "ai.call_cancel",
+      "title": "AI提供商与请求 call_cancel",
+      "category": "可选AI与完整诊断",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "models.list",
+      "title": "本地模型生命周期 list",
+      "category": "本地模型生命周期",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "models.get",
+      "title": "本地模型生命周期 get",
+      "category": "本地模型生命周期",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "models.download_plan",
+      "title": "本地模型生命周期 download_plan",
+      "category": "本地模型生命周期",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "models.download_execute",
+      "title": "本地模型生命周期 download_execute",
+      "category": "本地模型生命周期",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "models.download_cancel",
+      "title": "本地模型生命周期 download_cancel",
+      "category": "本地模型生命周期",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "models.verify",
+      "title": "本地模型生命周期 verify",
+      "category": "本地模型生命周期",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "models.start",
+      "title": "本地模型生命周期 start",
+      "category": "本地模型生命周期",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "models.stop",
+      "title": "本地模型生命周期 stop",
+      "category": "本地模型生命周期",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "models.activate",
+      "title": "本地模型生命周期 activate",
+      "category": "本地模型生命周期",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "models.remove_plan",
+      "title": "本地模型生命周期 remove_plan",
+      "category": "本地模型生命周期",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "models.remove_execute",
+      "title": "本地模型生命周期 remove_execute",
+      "category": "本地模型生命周期",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "models.resources",
+      "title": "本地模型生命周期 resources",
+      "category": "本地模型生命周期",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "settings.catalog",
+      "title": "配置与外部连接 catalog",
+      "category": "有效设置与通知连接",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "settings.read",
+      "title": "配置与外部连接 read",
+      "category": "有效设置与通知连接",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "settings.save",
+      "title": "配置与外部连接 save",
+      "category": "有效设置与通知连接",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "settings.reset_plan",
+      "title": "配置与外部连接 reset_plan",
+      "category": "有效设置与通知连接",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "settings.reset_execute",
+      "title": "配置与外部连接 reset_execute",
+      "category": "有效设置与通知连接",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "settings.effective",
+      "title": "配置与外部连接 effective",
+      "category": "有效设置与通知连接",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "settings.tmdb_test",
+      "title": "配置与外部连接 tmdb_test",
+      "category": "有效设置与通知连接",
+      "operation_kind": "probe",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "settings.subtitle_test",
+      "title": "配置与外部连接 subtitle_test",
+      "category": "有效设置与通知连接",
+      "operation_kind": "probe",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "settings.proxy_test",
+      "title": "配置与外部连接 proxy_test",
+      "category": "有效设置与通知连接",
+      "operation_kind": "probe",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "settings.ffmpeg_test",
+      "title": "配置与外部连接 ffmpeg_test",
+      "category": "有效设置与通知连接",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "settings.credential_set",
+      "title": "配置与外部连接 credential_set",
+      "category": "有效设置与通知连接",
+      "operation_kind": "local",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "notifications.subscriptions",
+      "title": "通知与Webhook subscriptions",
+      "category": "有效设置与通知连接",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "notifications.save",
+      "title": "通知与Webhook save",
+      "category": "有效设置与通知连接",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "notifications.disable",
+      "title": "通知与Webhook disable",
+      "category": "有效设置与通知连接",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "notifications.test",
+      "title": "通知与Webhook test",
+      "category": "有效设置与通知连接",
+      "operation_kind": "probe",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "notifications.deliveries",
+      "title": "通知与Webhook deliveries",
+      "category": "有效设置与通知连接",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "notifications.retry",
+      "title": "通知与Webhook retry",
+      "category": "有效设置与通知连接",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "notifications.alerts",
+      "title": "通知与Webhook alerts",
+      "category": "有效设置与通知连接",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "notifications.acknowledge",
+      "title": "通知与Webhook acknowledge",
+      "category": "有效设置与通知连接",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "diagnostics.timeline",
+      "title": "审计诊断与维护 timeline",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "diagnostics.logs",
+      "title": "审计诊断与维护 logs",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "diagnostics.export_plan",
+      "title": "审计诊断与维护 export_plan",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "diagnostics.export_execute",
+      "title": "审计诊断与维护 export_execute",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "diagnostics.retention_read",
+      "title": "审计诊断与维护 retention_read",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "diagnostics.retention_save",
+      "title": "审计诊断与维护 retention_save",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "diagnostics.clear_plan",
+      "title": "审计诊断与维护 clear_plan",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "diagnostics.clear_execute",
+      "title": "审计诊断与维护 clear_execute",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "backup.list",
+      "title": "新产品备份恢复 list",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "backup.policy_read",
+      "title": "新产品备份恢复 policy_read",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "backup.policy_save",
+      "title": "新产品备份恢复 policy_save",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "backup.create",
+      "title": "新产品备份恢复 create",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "backup.verify",
+      "title": "新产品备份恢复 verify",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "backup.restore_plan",
+      "title": "新产品备份恢复 restore_plan",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "backup.restore_execute",
+      "title": "新产品备份恢复 restore_execute",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "backup.restore_receipt",
+      "title": "新产品备份恢复 restore_receipt",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "backup.delete_plan",
+      "title": "新产品备份恢复 delete_plan",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "backup.delete_execute",
+      "title": "新产品备份恢复 delete_execute",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "updates.status",
+      "title": "平台与更新 status",
+      "category": "平台入口与更新闭环",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "updates.check",
+      "title": "平台与更新 check",
+      "category": "平台入口与更新闭环",
+      "operation_kind": "probe",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "updates.plan",
+      "title": "平台与更新 plan",
+      "category": "平台入口与更新闭环",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "updates.download",
+      "title": "平台与更新 download",
+      "category": "平台入口与更新闭环",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "updates.install",
+      "title": "平台与更新 install",
+      "category": "平台入口与更新闭环",
+      "operation_kind": "local",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "updates.restart",
+      "title": "平台与更新 restart",
+      "category": "平台入口与更新闭环",
+      "operation_kind": "local",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "updates.receipt",
+      "title": "平台与更新 receipt",
+      "category": "平台入口与更新闭环",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "updates.rollback_plan",
+      "title": "平台与更新 rollback_plan",
+      "category": "平台入口与更新闭环",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "updates.rollback_execute",
+      "title": "平台与更新 rollback_execute",
+      "category": "平台入口与更新闭环",
+      "operation_kind": "local",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    },
+    {
+      "id": "updates.platform_capabilities",
+      "title": "平台与更新 platform_capabilities",
+      "category": "平台入口与更新闭环",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "source": "docs/contracts/capabilities.json",
+      "status": "planned",
+      "verification_status": "not-run"
+    }
+  ],
+  "implementation_status": "planned",
+  "inherited_test_status": "not-run"
+}
