@@ -1,0 +1,29 @@
+{
+  "kind": "public-derived-control-summary",
+  "disclosure": "Derived summary, not raw argv/stdout. Original engineering record retained locally; no private launch paths are published.",
+  "scope": "Actual current control acceptance/refusal; not final candidate acceptance",
+  "operation_display": "Current readiness_gate actual gate invocation on current source",
+  "control_id": "readiness_gate",
+  "case": "positive",
+  "started_at": "2026-10-05T10:35:17.264997+00:00",
+  "finished_at": "2026-10-05T10:35:17.676578+00:00",
+  "observed_exit": 0,
+  "expected_exit": 0,
+  "observed_result": "accepted",
+  "rejection_reason": null,
+  "readiness_phase": "ready",
+  "implementation_blobs": {
+    "scripts/pmm_workflow.py": "dec0073a232bed9c1b329b7790d3945a19586ccb",
+    "docs/agents/readiness/validate_readiness.py": "3877f6bd7fa1cc972f1166ff4484784143c13e6c"
+  },
+  "source_head": "2c2aecc3629d22aff1ac4855900a3d45656a0f0a",
+  "original_record_git_blob": "bc30ecd7eb2669718e2b5dcf55e5a22cfdd89199",
+  "gate_events": [
+    {
+      "event": "PMM_PROBE_GATE_END",
+      "gate": "pmm_workflow.context(allow_pending=False)",
+      "observed_exit": 0,
+      "observed_result": "accepted"
+    }
+  ]
+}

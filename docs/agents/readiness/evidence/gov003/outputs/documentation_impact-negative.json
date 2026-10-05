@@ -1,0 +1,31 @@
+{
+  "kind": "public-derived-control-summary",
+  "disclosure": "Derived summary, not raw argv/stdout. Original engineering record retained locally; no private launch paths are published.",
+  "scope": "Actual current control acceptance/refusal; not final candidate acceptance",
+  "operation_display": "Current documentation_impact actual gate invocation with isolated negative mutation",
+  "control_id": "documentation_impact",
+  "case": "negative",
+  "started_at": "2026-10-05T10:31:11.545653+00:00",
+  "finished_at": "2026-10-05T10:31:11.775629+00:00",
+  "observed_exit": 1,
+  "expected_exit": 1,
+  "observed_result": "rejected",
+  "rejection_reason": "Secondary instructions do not import primary entry",
+  "readiness_phase": "pending-repair",
+  "implementation_blobs": {
+    "scripts/pmm_workflow.py": "dec0073a232bed9c1b329b7790d3945a19586ccb",
+    "AGENTS.md": "9d2ecb1ff1193cd7666d3879659ec9ddb1b97a77",
+    "CLAUDE.md": "0bf717f271a4bfac5cf3a84d9dd74401c6c1ec5f"
+  },
+  "source_head": "2c2aecc3629d22aff1ac4855900a3d45656a0f0a",
+  "original_record_git_blob": "1d2d7a7b0124efb0b62766d08c89dac15b7e4f94",
+  "gate_events": [
+    {
+      "event": "PMM_PROBE_GATE_END",
+      "gate": "pmm_governance.documentation",
+      "observed_exit": 1,
+      "observed_result": "rejected",
+      "reason": "Secondary instructions do not import primary entry"
+    }
+  ]
+}

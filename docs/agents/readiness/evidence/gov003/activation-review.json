@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "kind": "gov003-metadata-activation-current-context-review",
+  "kind": "gov003-published-activation-context-refresh",
   "result": "approved",
   "blocking_findings": 0,
   "reviewer": {
@@ -8,7 +8,7 @@
     "execution_id": "review_pmm_offline_stage",
     "model": null
   },
-  "observed_at": "2026-10-05T10:16:15.651712+00:00",
+  "observed_at": "2026-10-05T10:37:28.419782+00:00",
   "state_blob": "bf1173300f2109bd5f51a764c62d736963a9f9ea",
   "task_id": "GOV003",
   "plan_commit": "72865e54d66cf9f522244e4eabc1eada50b135fc",
@@ -43,8 +43,8 @@
         "data_access": "EFCore.Sqlite10.0.12 exists only in the new test project, with a synthetic test-only entity, Pooling=False and separate fresh databases. Foundation/Web have no direct external NuGet dependency or production schema. Dependency locks are current review inputs.",
         "background_jobs": "No custom application worker, queue, integration, authentication or data service starts; only the framework web-host service runs. Durable HostedServices/product cancellation/retry/recovery remain planned.",
         "cache_messaging": "No Redis, external broker or network cache. No account credential, token, service account or persistent security access is created.",
-        "testing": "New xUnit2.9.3/runner3.1.4/TestSDK17.14.1 cover distinct CLI, endpoint, dependency-registration, key-refusal and isolated SQLite/filesystem risks; new Python checks a real Linux host/socket and unchanged temporary runtime tree. Focused fixes get affected checks; final integration gets full applicable governance/foundation validation. Results are separately recorded, not inherited. GOV003 activation changes governance metadata only. Foundation acceptance remains bound to DEV001; future offline-domain work and its product tests are not yet authorized by activation.",
-        "hosting_ci": "Only the independent GitHub dot stage; exact SDK10, official locked NuGet restore, build, nonempty tests and real inert-host validation. Job-level DOTNET_GENERATE_ASPNET_CERTIFICATE=false is already published and inherited. Activation-only CI is not product acceptance. main remains read-only.",
+        "testing": "GOV003 adds focused phase/purpose/Catalog-scope and SDK/verify/delivery/CI-routing tests. SDK/runner stubs and synthetic Git fixtures are control-only evidence, never product acceptance. Current changed controls receive real positive/negative calls; one final complete applicable governance run binds the frozen candidate. DEV001 foundation/host product evidence remains its original accepted predecessor evidence because product source/dependencies are unchanged.",
+        "hosting_ci": "Only the independent GitHub dot stage. CI selects pinned SDK10 for development-foundation and development-offline-domain. Their context checks the actual stable SDK; verification/delivery execute the shared official locked restore, solution build/nonempty tests and real inert-host validation. Only foundation without a solution has the original activation-only exemption. Current GOV003 is governance-maintenance and changes no product source. Certificate suppression remains job-level false; main stays read-only.",
         "deployment_network": "No release/deploy, account setup, saved credentials, paid AI/TMDB or real media/data operation. Package restoration uses explicit official NuGet source. Application/test traffic is loopback; process socket sampling is not proof of every network moment. No development certificate generation or trust.",
         "ai_platform_shell": "GOV003 actual author pmm-gov003-author / enable_pmm_offline_domain_stage; model unknown/null. Independent reviewer must differ. Linux x86_64/Bash only; Windows/macOS/PowerShell7 product acceptance remains NOT-RUN."
       },
@@ -78,7 +78,8 @@
         "docs/workflow/GOV003.md",
         "docs/workflow/GOV003-applicability.md",
         "docs/workflow/GOV003-plan-publication.json",
-        "docs/workflow/GOV003.en.md"
+        "docs/workflow/GOV003.en.md",
+        "tests/governance/test_offline_domain.py"
       ],
       "execution_platforms": [
         {
@@ -88,14 +89,14 @@
         }
       ]
     },
-    "environment_blob": "0b5005cfca1f369753c58ed40503a04f22d6868f",
+    "environment_blob": "f635713e58120023b172d1a8b70059faec0336ce",
     "environment_sources": {
       "docs/agents/governance-profile.json": "a806605b2ef034b86519beda08731a3e3cc94b9b",
       "docs/requirements/retained-decisions.md": "9f8813e3bce3ca596da3b79c4216ca73701fb147",
-      ".github/workflows/verify-governance.yml": "b5d72523c5ea775ef439e7f2ca95d69692fddc44",
+      ".github/workflows/verify-governance.yml": "01d98aaa0d24f7cfcf96d20bd9af1f724a6c5f6d",
       "docs/agents/source-assets.json": "d0eaaee01acf3ab226fe4e7147639a335635d13b",
       "docs/agents/workflow-state.json": "bf1173300f2109bd5f51a764c62d736963a9f9ea",
-      "scripts/pmm_workflow.py": "28fbc2a2e0e96cb535296d2ee9d7b4e025f58325",
+      "scripts/pmm_workflow.py": "dec0073a232bed9c1b329b7790d3945a19586ccb",
       "global.json": "1769bc165d048c16924465fd1f3c67fa4f5f6944",
       "docs/workflow/DEV001.md": "9c9308e0153a2b559bd192528ac4d5ccba094bb5",
       "docs/workflow/DEV001-applicability.md": "47ec16d31a85767575557e3d3777728572bd62e2",
@@ -119,10 +120,11 @@
       "docs/workflow/GOV003.md": "d7ac1b0c5a18dcf8bfcf273ec6a6a5711b4790d9",
       "docs/workflow/GOV003-applicability.md": "0351add8acfe70e360c5f1160bd7962f76b05354",
       "docs/workflow/GOV003-plan-publication.json": "50335a6a7503ec4c94e41fed82d244115f58b96d",
-      "docs/workflow/GOV003.en.md": "2ab7fd1c7692736ab38bd96dd58f9a6969cab580"
+      "docs/workflow/GOV003.en.md": "2ab7fd1c7692736ab38bd96dd58f9a6969cab580",
+      "tests/governance/test_offline_domain.py": "d4aab62ea0e1576a352f955e2d20a99b7b6739fa"
     },
     "config_inventory": {
-      ".github/workflows/verify-governance.yml": "b5d72523c5ea775ef439e7f2ca95d69692fddc44",
+      ".github/workflows/verify-governance.yml": "01d98aaa0d24f7cfcf96d20bd9af1f724a6c5f6d",
       "PersonalMediaManager.sln": "184276bec77a3a10d71b5895e4fc473698bd4b8c",
       "global.json": "1769bc165d048c16924465fd1f3c67fa4f5f6944",
       "src/PersonalMediaManager.Foundation/PersonalMediaManager.Foundation.csproj": "e1f57b5a2194f165a40bdea2eba060a0e8f80e8b",
@@ -130,13 +132,7 @@
       "tests/foundation/PersonalMediaManager.Foundation.Tests.csproj": "c0558a10cc410055aec26590fc268048665d0f53"
     }
   },
-  "scope": "Current metadata-only state and repository/environment approval. No exact final candidate or remote publication acceptance is granted by this state-bound report.",
-  "readback": {
-    "target_ref": "refs/heads/dot/pmm-rebuild-20261005-gates",
-    "commit": "72865e54d66cf9f522244e4eabc1eada50b135fc",
-    "main_commit": "c09befa02cc27a0dc358322779798bb5e6d295e4",
-    "method": "Independent live git ls-remote observation during this review"
-  },
+  "scope": "Current governance implementation repository/environment context refresh under the unchanged published GOV003 activation. No new plan, task scope or final candidate acceptance is granted.",
   "bilingual_plan_review": {
     "result": "equivalent",
     "source_path": "docs/workflow/GOV003.md",
@@ -146,16 +142,27 @@
     "scope": "Full published authoritative Chinese scope and complete English derivative; negation, conditions, risk, authorization and draft-at-publication status are equivalent. Later document deltas require separate review."
   },
   "findings": [
-    "Independent current GOV003 repository/environment adoption review. Exact published plan/state/actual owned author and predecessor DEV001 acceptance chain were verified. New branch/task positive calls succeeded in the actual preparation; separate isolated wrong-branch and altered-frozen-card calls rejected for the intended reasons. Complete original engineering capture records were inspected and their Git blobs matched the public derived summaries; public reports are not raw logs. The other seven controls retain their unchanged accepted implementation bytes, original provenance and historical observations; they were not rerun or relabelled. All nine current control bindings pass structural verification. Current stable SDK10.0.401 was independently observed, with Linux x86_64/Bash and Python3.12.14. Foundation/Web/dependencies/locks/host behavior remain unchanged from accepted DEV001. The foundation temporary workspace remains single-owner and is not a production or race-resistant filesystem boundary. The four frozen plan documents include semantically equivalent Chinese authority and full English derivative. This is metadata-only current-context approval for GOV003 governance-maintenance, not offline-domain implementation or product acceptance. No full suite is claimed here. Exact candidate-bound activation review, trusted activation gate, stage publication/readback and CI remain required before ordinary first-write."
+    "Independent current implementation-context approval for bounded GOV003 governance-only work. Reviewed the minimal phase/purpose/Catalog source boundary and shared context/verification/delivery/CI routing changes, focused tests and changed bilingual explanations. Source ancestor prefixes and Catalog neighbor/Web/Foundation paths reject; offline-domain never receives the old no-solution foundation activation exemption. Existing product source/dependencies/locks and the five audited tools are unchanged. Eight refreshed control pairs and the provisional pending-repair readiness pair were independently compared with actual complete engineering capture records and their exact Git blobs. Branch/verification/hook probes are explicitly synthetic Git control evidence; the verifier runs the real pinned readiness suite plus a real minimal project suite and propagates an injected assertion failure. These records are not final candidate/product/remote acceptance. The initial focused-test module-discovery failure and narrow loader-isolation correction were inspected; all 11 focused tests subsequently passed, with no controller weakening. Ready-state readiness and independent-review pairs have now been independently closed: actual current context positives succeeded, isolated environment drift and author-execution reuse negatives rejected for the intended reasons, and all four complete original captures match their public summaries and exact Git blobs. Their execution reviewed the same observed context and implementation now bound here; this closing textual review adds no scope or behavioral change. All nine current control reports retain their actual classifications and bindings. This is current-context approval, not final candidate acceptance. The unchanged published state and predecessor evidence preserve their original bindings. Foundation single-owner cleanup and sampled-network limitations remain; business, real data/services, credentials, other-platform product behavior, main integration and release/deployment remain excluded. One full applicable verification must still bind the final frozen candidate."
   ],
-  "context_review": "docs/agents/readiness/evidence/gov003/context-review.json",
-  "context_review_blob": "e95845f73f0f7a0e9a5884fff09b3cbf7a85a9be",
   "current_control_evidence_blobs": {
-    "docs/agents/readiness/evidence/gov003/activation-controls/branch_gate.json": "3a967b4d541d17506cd4c5cd1ab674ba3de28a50",
-    "docs/agents/readiness/evidence/gov003/activation-outputs/branch_gate-positive.json": "5ce114f42adb9b248b037626b0548f5492808585",
-    "docs/agents/readiness/evidence/gov003/activation-outputs/branch_gate-negative.json": "d8d2f743b43ae30a47ec9eb9d8647ed8d9c33504",
-    "docs/agents/readiness/evidence/gov003/activation-controls/task_tracking.json": "ab4c55ce3724fc17b158ccfc565a942dba8a200b",
-    "docs/agents/readiness/evidence/gov003/activation-outputs/task_tracking-positive.json": "cdea1eedb852cdb66afda1b0d247c6244ec62fb7",
-    "docs/agents/readiness/evidence/gov003/activation-outputs/task_tracking-negative.json": "35992b7de00054aec79cf9d0bbf6da1e07a157d1"
-  }
+    "docs/agents/readiness/evidence/gov003/controls/branch_gate.json": "94f97b5707c7f604508361af570eddb9de30babb",
+    "docs/agents/readiness/evidence/gov003/controls/readiness_gate.json": "ccdab1e205f4a5ed4dbad84b49d26d4258a6aef3",
+    "docs/agents/readiness/evidence/gov003/controls/verification_gate.json": "fcd82e6221bebe1817d116b81fbac835716f9b60",
+    "docs/agents/readiness/evidence/gov003/controls/independent_review.json": "774811cc374f4b537b77bb93df88875d4d6343f5",
+    "docs/agents/readiness/evidence/gov003/controls/task_tracking.json": "3051b4cfc20c08da29f014a13b672047daf7298d",
+    "docs/agents/readiness/evidence/gov003/controls/documentation_impact.json": "4e2256dd9810a2abb710de9fbb909ad252deaede",
+    "docs/agents/readiness/evidence/gov003/controls/secret_handling.json": "1c5dc636436b32d462a765040fdfcf77e25cf326",
+    "docs/agents/readiness/evidence/gov003/controls/trigger_coverage.json": "4f9c5f8d352c0071645bbdee876d2a621430b553",
+    "docs/agents/readiness/evidence/gov003/controls/baseline_sync.json": "15f00a56d39063d32925bc16fbe606a65b00f67f"
+  },
+  "activation_origin": {
+    "commit": "2c2aecc3629d22aff1ac4855900a3d45656a0f0a",
+    "review_blob": "782c7e4f5f9552a46741b84253637c79cb794a16",
+    "observed_at": "2026-10-05T10:16:15.651712+00:00",
+    "scope": "Historical metadata-only activation context review before GOV003 implementation"
+  },
+  "implementation_context_review": "docs/agents/readiness/evidence/gov003/implementation-context-review.json",
+  "implementation_context_review_blob": "671828fa59991ace5fe26b9388a95b7340d384da",
+  "bilingual_review": "docs/agents/readiness/evidence/gov003/bilingual-review.json",
+  "bilingual_review_blob": "f208030e172305f36d637fb89f22762e5c44a08a"
 }

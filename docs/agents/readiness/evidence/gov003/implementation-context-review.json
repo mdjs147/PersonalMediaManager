@@ -1,19 +1,6 @@
 {
   "schema_version": 1,
-  "status": "ready",
-  "source": {
-    "repository": "https://github.com/mdjs147/ai-dev-baseline",
-    "commit": "23a774836c3edda9a5d16f06b7f4e60e9d6950f8"
-  },
-  "repository": {
-    "mode": "remote",
-    "reason": "Verified public PMM stage; default main is read-only and task delivery uses the isolated stage",
-    "primary_remote": "origin",
-    "default_branch": "refs/remotes/origin/main",
-    "base_ref": "refs/remotes/origin/dot/pmm-rebuild-20261005-gates",
-    "local_id": null
-  },
-  "environment_file": "docs/agents/readiness/environment-profile.json",
+  "result": "approved",
   "context": {
     "root_commits": [
       "fa73bfedb46113aed47a039535d3eb12e4f93031"
@@ -134,169 +121,17 @@
       "tests/foundation/PersonalMediaManager.Foundation.Tests.csproj": "c0558a10cc410055aec26590fc268048665d0f53"
     }
   },
-  "context_review": {
-    "status": "approved",
-    "reviewer": {
-      "actor_id": "pmm-gov003-independent-reviewer",
-      "execution_id": "review_pmm_offline_stage",
-      "model": null
-    },
-    "adopter": {
-      "actor_id": "pmm-gov003-author",
-      "execution_id": "enable_pmm_offline_domain_stage",
-      "model": null
-    },
-    "reviewed_at": "2026-10-05T10:37:28.419782+00:00",
-    "report": "docs/agents/readiness/evidence/gov003/implementation-context-review.json"
+  "reviewer": {
+    "actor_id": "pmm-gov003-independent-reviewer",
+    "execution_id": "review_pmm_offline_stage",
+    "model": null
   },
-  "entrypoints": {
-    "agent_instructions": "AGENTS.md",
-    "secondary_instructions": "CLAUDE.md",
-    "workflow_rules": ".claude/rules/git-workflow.md",
-    "guard_rules": ".claude/rules/guard-discipline.md",
-    "reviewer": ".claude/agents/code-reviewer.md",
-    "verification": "docs/agents/readiness/validate_readiness.py"
+  "adopter": {
+    "actor_id": "pmm-gov003-author",
+    "execution_id": "enable_pmm_offline_domain_stage",
+    "model": null
   },
-  "navigation": {
-    "adoption": "docs/agents/baseline-adoption.md",
-    "task_tracking": "docs/agents/issue-tracker.md",
-    "architecture": "docs/adr/README.md",
-    "runbook": "docs/runbook/README.md",
-    "domain": "docs/agents/domain.md",
-    "writing": "docs/agents/bilingual-writing/CORE.zh-CN.md",
-    "design": "docs/agents/interactive-design.md"
-  },
-  "controls": {
-    "branch_gate": {
-      "status": "adapted",
-      "objective": "Before writes, verify task branch, base, ownership and worktree safety.",
-      "implementation": [
-        "scripts/pmm_workflow.py",
-        ".claude/rules/git-workflow.md",
-        "docs/agents/workflow-state.json"
-      ],
-      "verification": [
-        "docs/agents/readiness/evidence/gov003/controls/branch_gate.json"
-      ],
-      "reason": "Current actual control calls bound to changed implementation Git blobs; synthetic cases explicitly marked, final candidate validation is separate.",
-      "replacement": "Published task resolution, explicit activation, actual lifecycle and exact-candidate acceptance; all required objectives preserved."
-    },
-    "readiness_gate": {
-      "status": "adapted",
-      "objective": "Revalidate adoption and observed context before every write session and delivery.",
-      "implementation": [
-        "scripts/pmm_workflow.py",
-        "docs/agents/readiness/validate_readiness.py"
-      ],
-      "verification": [
-        "docs/agents/readiness/evidence/gov003/controls/readiness_gate.json"
-      ],
-      "reason": "Current actual control calls bound to changed implementation Git blobs; synthetic cases explicitly marked, final candidate validation is separate.",
-      "replacement": "Published task resolution, explicit activation, actual lifecycle and exact-candidate acceptance; all required objectives preserved."
-    },
-    "verification_gate": {
-      "status": "adapted",
-      "objective": "Run applicable checks and preserve failure-sensitive evidence.",
-      "implementation": [
-        "scripts/verify_governance.py",
-        "scripts/pmm_workflow.py",
-        "tests/governance/test_successor.py",
-        "tests/governance/test_offline_domain.py"
-      ],
-      "verification": [
-        "docs/agents/readiness/evidence/gov003/controls/verification_gate.json"
-      ],
-      "reason": "Current actual control calls bound to changed implementation Git blobs; synthetic cases explicitly marked, final candidate validation is separate.",
-      "replacement": "Published task resolution, explicit activation, actual lifecycle and exact-candidate acceptance; all required objectives preserved."
-    },
-    "independent_review": {
-      "status": "adapted",
-      "objective": "Independently review applicable governance and behavioral changes.",
-      "implementation": [
-        "scripts/pmm_workflow.py",
-        ".claude/agents/code-reviewer.md"
-      ],
-      "verification": [
-        "docs/agents/readiness/evidence/gov003/controls/independent_review.json"
-      ],
-      "reason": "Current actual control calls bound to changed implementation Git blobs; synthetic cases explicitly marked, final candidate validation is separate.",
-      "replacement": "Published task resolution, explicit activation, actual lifecycle and exact-candidate acceptance; all required objectives preserved."
-    },
-    "task_tracking": {
-      "status": "adapted",
-      "objective": "Keep explicit task scope, acceptance conditions and completion evidence.",
-      "implementation": [
-        "scripts/pmm_workflow.py",
-        "docs/agents/workflow-state.json",
-        "docs/workflow/GOV003.md",
-        "docs/workflow/GOV003-plan-publication.json"
-      ],
-      "verification": [
-        "docs/agents/readiness/evidence/gov003/controls/task_tracking.json"
-      ],
-      "reason": "Current actual control calls bound to changed implementation Git blobs; synthetic cases explicitly marked, final candidate validation is separate.",
-      "replacement": "Published task resolution, explicit activation, actual lifecycle and exact-candidate acceptance; all required objectives preserved."
-    },
-    "documentation_impact": {
-      "status": "adapted",
-      "objective": "Maintain authoritative documentation according to changed behavior and control impact.",
-      "implementation": [
-        "scripts/pmm_workflow.py",
-        "AGENTS.md",
-        "CLAUDE.md"
-      ],
-      "verification": [
-        "docs/agents/readiness/evidence/gov003/controls/documentation_impact.json"
-      ],
-      "reason": "Current actual control calls bound to changed implementation Git blobs; synthetic cases explicitly marked, final candidate validation is separate.",
-      "replacement": "Published task resolution, explicit activation, actual lifecycle and exact-candidate acceptance; all required objectives preserved."
-    },
-    "secret_handling": {
-      "status": "adapted",
-      "objective": "Keep credentials and private data out of source and evidence.",
-      "implementation": [
-        "scripts/pmm_workflow.py",
-        ".claude/rules/guard-discipline.md"
-      ],
-      "verification": [
-        "docs/agents/readiness/evidence/gov003/controls/secret_handling.json"
-      ],
-      "reason": "Current actual control calls bound to changed implementation Git blobs; synthetic cases explicitly marked, final candidate validation is separate.",
-      "replacement": "Published task resolution, explicit activation, actual lifecycle and exact-candidate acceptance; all required objectives preserved."
-    },
-    "trigger_coverage": {
-      "status": "adapted",
-      "objective": "Declare actual local/CI trigger wiring and demonstrate positive and negative outcomes.",
-      "implementation": [
-        "scripts/pmm_workflow.py",
-        "scripts/pmm_governance.py",
-        "scripts/verify_governance.py",
-        ".githooks/pre-commit",
-        ".githooks/pre-push",
-        ".github/workflows/verify-governance.yml",
-        "tests/governance/test_successor.py",
-        "tests/governance/test_offline_domain.py"
-      ],
-      "verification": [
-        "docs/agents/readiness/evidence/gov003/controls/trigger_coverage.json"
-      ],
-      "reason": "Current actual control calls bound to changed implementation Git blobs; synthetic cases explicitly marked, final candidate validation is separate.",
-      "replacement": "Published task resolution, explicit activation, actual lifecycle and exact-candidate acceptance; all required objectives preserved."
-    },
-    "baseline_sync": {
-      "status": "adapted",
-      "objective": "Check source updates without bypassing same-version context drift review.",
-      "implementation": [
-        "scripts/pmm_workflow.py",
-        "scripts/pmm_governance.py",
-        "docs/agents/source-assets.json",
-        "docs/agents/readiness/validate_readiness.py"
-      ],
-      "verification": [
-        "docs/agents/readiness/evidence/gov003/controls/baseline_sync.json"
-      ],
-      "reason": "Current actual control calls bound to changed implementation Git blobs; synthetic cases explicitly marked, final candidate validation is separate.",
-      "replacement": "Published task resolution, explicit activation, actual lifecycle and exact-candidate acceptance; all required objectives preserved."
-    }
-  }
+  "scope": "repository-environment-adoption",
+  "reviewed_at": "2026-10-05T10:37:28.419782+00:00",
+  "findings": "Independent current implementation-context approval for bounded GOV003 governance-only work. Reviewed the minimal phase/purpose/Catalog source boundary and shared context/verification/delivery/CI routing changes, focused tests and changed bilingual explanations. Source ancestor prefixes and Catalog neighbor/Web/Foundation paths reject; offline-domain never receives the old no-solution foundation activation exemption. Existing product source/dependencies/locks and the five audited tools are unchanged. Eight refreshed control pairs and the provisional pending-repair readiness pair were independently compared with actual complete engineering capture records and their exact Git blobs. Branch/verification/hook probes are explicitly synthetic Git control evidence; the verifier runs the real pinned readiness suite plus a real minimal project suite and propagates an injected assertion failure. These records are not final candidate/product/remote acceptance. The initial focused-test module-discovery failure and narrow loader-isolation correction were inspected; all 11 focused tests subsequently passed, with no controller weakening. Ready-state readiness and independent-review pairs have now been independently closed: actual current context positives succeeded, isolated environment drift and author-execution reuse negatives rejected for the intended reasons, and all four complete original captures match their public summaries and exact Git blobs. Their execution reviewed the same observed context and implementation now bound here; this closing textual review adds no scope or behavioral change. All nine current control reports retain their actual classifications and bindings. This is current-context approval, not final candidate acceptance. The unchanged published state and predecessor evidence preserve their original bindings. Foundation single-owner cleanup and sampled-network limitations remain; business, real data/services, credentials, other-platform product behavior, main integration and release/deployment remain excluded. One full applicable verification must still bind the final frozen candidate."
 }

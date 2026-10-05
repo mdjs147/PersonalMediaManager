@@ -17,3 +17,13 @@ Keep hooks enabled. Set PMM_OPERATION=plan or activate, PMM_OLD_SHA to the fresh
 Same-task handoff is a reviewed activation metadata update: keep immutable plan, task scope, phase, construction base and previous participant history, add the actual replacement execution, publish/read back and recover in its real worktree. It is not actor impersonation or a new implementation acceptance.
 
 DEV001 activation checks SDK/current context and all governance suites; before source exists, foundation build/product checks are explicitly NOT-RUN. Implementation delivery then requires tracked dependency lock files, restore from the explicit official NuGet feed in locked mode, build/test with nonempty tests, and tests/foundation/verify_foundation.py proving an inert isolated host. CI provisions SDK10 for the foundation phase; generated build assets are never committed.
+
+## Bounded offline-domain continuation
+
+Offline-domain is an explicit development phase, not a foundation alias. A separately published card may grant only Catalog source paths, never a prefix that also captures Web/Foundation or the source root. For both .NET phases, context checks the actual stable SDK; verification and delivery execute the shared official locked-restore, build, nonempty-test and inert-host chain. Only the original foundation start without a solution may use its metadata-only activation exemption; offline-domain never uses that exemption. CI provisions the pinned SDK for both phases. Production business remains disabled.
+
+Reuse existing explicit authorization within its scope without asking again. Previous-card acceptance does not supply missing authorization, dependencies or activation for the next card. Recover as the actual assigned execution in its owned worktree. Commit or create the exact approved candidate first, then bind its independent test/review sidecars and run deliver before an already-authorized stage push. Preserve valid unchanged evidence with its original binding and supplement affected checks; never rename an old report as acceptance of a new candidate. Main merge, release, deployment and changes outside existing authority still require their own authorization.
+
+中文：offline-domain是明确开发阶段，不是foundation别名。另行发布的卡只可授予Catalog源码范围，不能用前缀同时涵盖Web/Foundation或源码根。两个.NET阶段的上下文检查核实实际稳定SDK，验证与交付执行共享的官方源锁定恢复、构建、非空测试和惯性宿主检查链；仅原始foundation无solution起步可使用纯元数据激活豁免，offline-domain不能使用。CI为两阶段安装锁定SDK，生产业务仍禁用。
+
+已有明确授权在其范围内复用，不重复询问；上一卡验收不补足下一卡缺失的授权、依赖或激活。以实际获分配执行者在自有工作区恢复。先提交或创建精确获批候选，再绑定独立测试/审查旁证，deliver通过后才执行已有授权的stage推送。未变有效证据保留原绑定并补验受影响项，不能改名旧报告冒充新候选验收；主干合并、发布、部署和越出既有权限的变化仍需各自授权。

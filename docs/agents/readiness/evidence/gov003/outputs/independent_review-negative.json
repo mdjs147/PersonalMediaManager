@@ -1,0 +1,30 @@
+{
+  "kind": "public-derived-control-summary",
+  "disclosure": "Derived summary, not raw argv/stdout. Original engineering record retained locally; no private launch paths are published.",
+  "scope": "Actual current control acceptance/refusal; not final candidate acceptance",
+  "operation_display": "Current independent_review actual gate invocation with isolated negative mutation",
+  "control_id": "independent_review",
+  "case": "negative",
+  "started_at": "2026-10-05T10:35:18.521086+00:00",
+  "finished_at": "2026-10-05T10:35:18.771501+00:00",
+  "observed_exit": 1,
+  "expected_exit": 1,
+  "observed_result": "rejected",
+  "rejection_reason": "Review not independent: execution_id",
+  "readiness_phase": "ready",
+  "implementation_blobs": {
+    "scripts/pmm_workflow.py": "dec0073a232bed9c1b329b7790d3945a19586ccb",
+    ".claude/agents/code-reviewer.md": "1f05ceade89c1236c9661bfe7a623f00920bcb02"
+  },
+  "source_head": "2c2aecc3629d22aff1ac4855900a3d45656a0f0a",
+  "original_record_git_blob": "4d25eddd8daa8c4b980a37e29c5eb26606723470",
+  "gate_events": [
+    {
+      "event": "PMM_PROBE_GATE_END",
+      "gate": "pmm_workflow.load_task real activation review; ready context when available",
+      "observed_exit": 1,
+      "observed_result": "rejected",
+      "reason": "Review not independent: execution_id"
+    }
+  ]
+}

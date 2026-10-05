@@ -51,3 +51,13 @@ The revision-2 plan was published and read back before dependent updates. Its so
 ## GOV002 successor repair
 
 The BA001 source/profile/card/evidence at a59311a is retained history. Active task authority now comes from immutable published plans and reviewed workflow-state, with new GOV002 control/context reports. The five source tool blobs are unchanged. The one-time five-file publication was reviewed separately before implementation; its original BA001 CI result is recorded honestly. A passing historical adoption does not activate DEV001, prove the new cycle, or validate the .NET product stack. Ordinary successor publication and activation use the trusted previous-stage controller and independent exact-candidate review.
+
+## GOV003 minimal documentation synchronization
+
+The applicable documentation source is baseline main 5b283b9918cbea02d8176a59f282ec7fa9248ed0, published through baseline PR5 with successful CI37290792282. Only card continuation/actual handoff, required versus optional evidence and committed-candidate/sidecar/deliver ordering are adapted into issue-tracker, git-workflow and readiness README, with this adoption record as the fourth location. Existing stricter PMM gates remain. The five audited tool assets and machine source pin stay at 23a7748; this is not a tool/schema upgrade or wholesale baseline import. No stopped source work, private prose, source-specific deployment policy or new security/network/credential authority is imported.
+
+The accepted DEV001 foundation remains a historical predecessor, including its own exact product checks. GOV003 changes only the governance representation of a later offline Catalog card and its inherited validation chain, with production business still disabled. Actual Chinese/English consistency for this card's changes is recorded separately with exact source/derived Git blobs and the real reviewer. Pending translations remain draft; no project-wide or baseline-English release is implied.
+
+中文：本次适用文档源为基线main 5b283b9918cbea02d8176a59f282ec7fa9248ed0，经基线PR5发布且CI37290792282成功。仅将逐卡接续/实际交接、必需与可选证据分层、已提交候选/旁证/deliver顺序适配到issue-tracker、git-workflow和readiness README，本接入记录为第四处。PMM已有更严格门禁保留；五份审计工具与机器source pin仍为23a7748，不属于工具/schema升级或整包导入，不引入已停止源工作、私有文字、源项目部署政策或新增安全/网络/凭据权限。
+
+已验收DEV001基座及其精确产品检查继续作为历史前驱。GOV003只修改后续离线Catalog卡的治理表示及继承验证链，生产业务仍禁用。本卡变化的实际中英一致性另以精确source/derived Git blob及真实审查者记录；待审翻译保持draft，不表示全项目或基线英文正式发布。

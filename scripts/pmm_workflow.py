@@ -19,7 +19,8 @@ STAGE=g.STAGE
 ANCHOR='a59311ae16b08d0268babc933abf7403a14a315f'
 STATE='docs/agents/workflow-state.json'
 MANIFEST=g.MANIFEST
-PHASES={'governance-maintenance':'governance','development-foundation':'foundation','requirements-design':'requirements'}
+PHASES={'governance-maintenance':'governance','development-foundation':'foundation','requirements-design':'requirements','development-offline-domain':'offline-domain'}
+DOTNET_PHASES={'development-foundation','development-offline-domain'}
 CORE=('scripts/pmm_workflow.py','scripts/pmm_governance.py','docs/agents/readiness/validate_readiness.py','docs/agents/readiness/readiness.schema.json')
 
 def blob_bytes(data):return hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest()
@@ -87,7 +88,10 @@ def descriptor(plan,task_id):
         v.relative_path(path.rstrip('/'))
         need(path not in ('','.', 'docs/','scripts/','src/','tests/'),'Unbounded scope')
         need(not path.startswith(('.git/','.github/workflows/')) or path in task['allowed_exact'],'Unbounded sensitive scope')
-    if task['purpose']!='foundation':need(not any(x.startswith('src/') for x in paths),'Non-foundation task grants product source')
+    if task['purpose']=='offline-domain':
+        need(not any('src/'.startswith(x) for x in task['allowed_prefixes']),'Offline-domain prefix overlaps product source root')
+        need(all(not x.startswith('src/') or x.startswith('src/PersonalMediaManager.Catalog/') for x in paths),'Offline-domain source must stay inside Catalog/')
+    elif task['purpose']!='foundation':need(not any(x.startswith('src/') for x in paths),'Non-foundation task grants product source')
     return task
 
 def load_task(root,live=False,allow_unpublished_activation=False):
@@ -174,7 +178,7 @@ def context(root,purpose,allow_pending=False,allow_unpublished_activation=False)
     state,task=load_task(root,allow_unpublished_activation=allow_unpublished_activation)
     need(purpose!='business' and purpose==task['purpose'],'Business or wrong task purpose rejected')
     manifest=read_json(v.confined(root,MANIFEST))
-    if task['phase']=='development-foundation':
+    if task['phase'] in DOTNET_PHASES:
         sdk=parse_json(v.confined(root,'global.json').read_text()).get('sdk',{})
         need(re.fullmatch(r'10\.\d+\.\d+',sdk.get('version','')) is not None and sdk.get('allowPrerelease') is False,'Foundation needs a reviewed stable SDK10 global.json pin')
         result=g.run(['dotnet','--version'],root);need(result.returncode==0 and re.fullmatch(r'10\.\d+\.\d+[^\s]*\s*',result.stdout),'Unreviewed .NET SDK; foundation blocked')
@@ -357,7 +361,7 @@ def delivery(root,candidate,base,evidence_path):
     context(root,task['purpose']);g.runtime(root);g.baseline(root);g.documentation(root);public_tree(root,extras)
     result=v.deliver(root,read_json(v.confined(root,MANIFEST)),MANIFEST,candidate,evidence_path,base)
     review=read_json(v.confined(root,evidence['review_report']));independent(review,state['activation']['authorized_executions'])
-    if task['phase']=='development-foundation':
+    if task['phase'] in DOTNET_PHASES:
         foundation_validation(root)
         need({path:v.blob(root,path) for path in extras}==sidecar_blobs,'Foundation checks changed frozen evidence')
         result=v.deliver(root,read_json(v.confined(root,MANIFEST)),MANIFEST,candidate,evidence_path,base)
@@ -398,9 +402,9 @@ def verify(root,bootstrap=False):
         count=unittest.TestLoader().discover(str(root/path),pattern='test_*.py').countTestCases();need(count>0,'Required suite empty: '+path)
         result=subprocess.run([sys.executable,'-m','unittest','discover','-s',path,'-p','test_*.py','-v'],cwd=root)
         need(result.returncode==0,'Required verification failed: '+path)
-    if task['phase']=='development-foundation':
+    if task['phase'] in DOTNET_PHASES:
         changed=git(root,'diff','--name-only',state['activation']['base_commit'],'HEAD').splitlines()
-        activation_only=changed and all(p in {STATE,MANIFEST,'docs/agents/readiness/environment-profile.json'} or (p=='global.json' and task['phase']=='development-foundation') or p.startswith('docs/agents/readiness/evidence/') for p in changed) and not (root/'PersonalMediaManager.sln').exists()
+        activation_only=task['phase']=='development-foundation' and changed and all(p in {STATE,MANIFEST,'docs/agents/readiness/environment-profile.json'} or p=='global.json' or p.startswith('docs/agents/readiness/evidence/') for p in changed) and not (root/'PersonalMediaManager.sln').exists()
         if activation_only:print('FOUNDATION_ACTIVATION_ONLY; SDK/context/governance checked; scaffold build/product tests NOT-RUN because implementation has not begun')
         else:foundation_validation(root)
     need(subprocess.run(['git','diff','--check'],cwd=root).returncode==0,'Whitespace check failed')

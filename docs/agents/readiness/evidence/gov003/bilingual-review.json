@@ -1,0 +1,152 @@
+{
+  "schema_version": 1,
+  "kind": "independent-bilingual-delta-review",
+  "task_id": "GOV003",
+  "result": "approved",
+  "semantic_result": "equivalent",
+  "blocking_findings": 0,
+  "reviewer": {
+    "actor_id": "pmm-gov003-independent-reviewer",
+    "execution_id": "review_pmm_offline_stage",
+    "model": null
+  },
+  "reviewed_at": "2026-10-05T10:34:29.470933+00:00",
+  "authoritative_language": "zh-CN",
+  "derived_language": "en",
+  "scope": "Only the complete frozen GOV003 task card pair and the Chinese explanations added or modified by this card with their corresponding English. Historical untouched project text and baseline-wide English publication are not reviewed or approved here.",
+  "entries": [
+    {
+      "source_path": "docs/workflow/GOV003.md",
+      "source_blob": "d7ac1b0c5a18dcf8bfcf273ec6a6a5711b4790d9",
+      "derived_path": "docs/workflow/GOV003.en.md",
+      "derived_blob": "2ab7fd1c7692736ab38bd96dd58f9a6969cab580",
+      "source_region_and_derived_scope": "Complete immutable published Chinese-authority task scope and complete English derivative",
+      "reviewer": {
+        "actor_id": "pmm-gov003-independent-reviewer",
+        "execution_id": "review_pmm_offline_stage",
+        "model": null
+      },
+      "reviewed_at": "2026-10-05T10:34:29.470933+00:00",
+      "result": "approved",
+      "semantic_result": "equivalent"
+    },
+    {
+      "source_path": "AGENTS.md",
+      "source_blob": "9d2ecb1ff1193cd7666d3879659ec9ddb1b97a77",
+      "derived_path": "AGENTS.md",
+      "derived_blob": "9d2ecb1ff1193cd7666d3879659ec9ddb1b97a77",
+      "source_region_and_derived_scope": "Updated closing Chinese authority paragraph and paired English paragraph; current .NET/source boundaries",
+      "reviewer": {
+        "actor_id": "pmm-gov003-independent-reviewer",
+        "execution_id": "review_pmm_offline_stage",
+        "model": null
+      },
+      "reviewed_at": "2026-10-05T10:34:29.470933+00:00",
+      "result": "approved",
+      "semantic_result": "equivalent"
+    },
+    {
+      "source_path": ".claude/rules/git-workflow.md",
+      "source_blob": "cda023ce0b014364778f3af0d1b72a7c14847e11",
+      "derived_path": ".claude/rules/git-workflow.md",
+      "derived_blob": "cda023ce0b014364778f3af0d1b72a7c14847e11",
+      "source_region_and_derived_scope": "New Bounded offline-domain continuation section: two Chinese paragraphs and their two English counterparts",
+      "reviewer": {
+        "actor_id": "pmm-gov003-independent-reviewer",
+        "execution_id": "review_pmm_offline_stage",
+        "model": null
+      },
+      "reviewed_at": "2026-10-05T10:34:29.470933+00:00",
+      "result": "approved",
+      "semantic_result": "equivalent"
+    },
+    {
+      "source_path": "docs/agents/domain.md",
+      "source_blob": "fface5783716eafd96cd775f2c01306fbbb30a2c",
+      "derived_path": "docs/agents/domain.md",
+      "derived_blob": "fface5783716eafd96cd775f2c01306fbbb30a2c",
+      "source_region_and_derived_scope": "Updated current domain boundary: two Chinese paragraphs and two English counterparts",
+      "reviewer": {
+        "actor_id": "pmm-gov003-independent-reviewer",
+        "execution_id": "review_pmm_offline_stage",
+        "model": null
+      },
+      "reviewed_at": "2026-10-05T10:34:29.470933+00:00",
+      "result": "approved",
+      "semantic_result": "equivalent"
+    },
+    {
+      "source_path": "docs/agents/issue-tracker.md",
+      "source_blob": "f1d978d66f16c83cdc4c244277b5b53449e80e7e",
+      "derived_path": "docs/agents/issue-tracker.md",
+      "derived_blob": "f1d978d66f16c83cdc4c244277b5b53449e80e7e",
+      "source_region_and_derived_scope": "New Card-by-card continuation section: two Chinese paragraphs and corresponding English",
+      "reviewer": {
+        "actor_id": "pmm-gov003-independent-reviewer",
+        "execution_id": "review_pmm_offline_stage",
+        "model": null
+      },
+      "reviewed_at": "2026-10-05T10:34:29.470933+00:00",
+      "result": "approved",
+      "semantic_result": "equivalent"
+    },
+    {
+      "source_path": "docs/agents/readiness/README.md",
+      "source_blob": "5f622732ab9445a0d2bf6ec9ad67bfddcfc587f9",
+      "derived_path": "docs/agents/readiness/README.md",
+      "derived_blob": "5f622732ab9445a0d2bf6ec9ad67bfddcfc587f9",
+      "source_region_and_derived_scope": "New Successor evidence applicability Chinese paragraph and corresponding English",
+      "reviewer": {
+        "actor_id": "pmm-gov003-independent-reviewer",
+        "execution_id": "review_pmm_offline_stage",
+        "model": null
+      },
+      "reviewed_at": "2026-10-05T10:34:29.470933+00:00",
+      "result": "approved",
+      "semantic_result": "equivalent"
+    },
+    {
+      "source_path": "docs/agents/baseline-adoption.md",
+      "source_blob": "b4c4f62dfec59696d41273bc4d3daf2bf62a60ac",
+      "derived_path": "docs/agents/baseline-adoption.md",
+      "derived_blob": "b4c4f62dfec59696d41273bc4d3daf2bf62a60ac",
+      "source_region_and_derived_scope": "New GOV003 minimal documentation synchronization section: two Chinese paragraphs and corresponding English",
+      "reviewer": {
+        "actor_id": "pmm-gov003-independent-reviewer",
+        "execution_id": "review_pmm_offline_stage",
+        "model": null
+      },
+      "reviewed_at": "2026-10-05T10:34:29.470933+00:00",
+      "result": "approved",
+      "semantic_result": "equivalent"
+    },
+    {
+      "source_path": "docs/workflow/GOV003-status.md",
+      "source_blob": "a5135cf2d8236605d63ffe6b638b2b0bf7dee0f2",
+      "derived_path": "docs/workflow/GOV003-status.md",
+      "derived_blob": "a5135cf2d8236605d63ffe6b638b2b0bf7dee0f2",
+      "source_region_and_derived_scope": "New Chinese status summary and English status/bullets; exact commit/run identifiers are supplemental English metadata",
+      "reviewer": {
+        "actor_id": "pmm-gov003-independent-reviewer",
+        "execution_id": "review_pmm_offline_stage",
+        "model": null
+      },
+      "reviewed_at": "2026-10-05T10:34:29.470933+00:00",
+      "result": "approved",
+      "semantic_result": "equivalent"
+    }
+  ],
+  "dimensions": {
+    "scope": "Equivalent bounded future Catalog phase, governance-only GOV003 work, minimum documentation adaptation and scoped translation",
+    "negation": "Equivalent no Web/Foundation expansion, business self-grant, product implementation, old data, credentials, main/force/release/deployment or tool upgrade",
+    "conditions": "Equivalent existing authority plus distinct published scope, accepted dependencies, independent activation, owned execution and current-candidate delivery evidence",
+    "validation": "Both languages now accurately state that context checks stable SDK and verification/delivery execute the inherited locked restore/build/nonempty tests/inert host chain; only original no-solution foundation can use its activation exemption",
+    "risk": "Equivalent distinctions among historical evidence, actual local control calls, synthetic fixture/stub routing, production/platform acceptance and non-CAS publication",
+    "status": "Equivalent planned-at-publication card and implementation-candidate status; draft-at-publication is historical, and unreviewed objects remain draft. DEV002 is unstarted and no final GOV003 delivery is claimed"
+  },
+  "limitations": [
+    "This is semantic review of the exact Git blobs recorded above, not machine translation or a project-wide translation release",
+    "Changing any reviewed source or derivative bytes requires a new scoped comparison and byte binding",
+    "Factual external publication/CI claims remain subject to their separately preserved exact-candidate receipts"
+  ]
+}

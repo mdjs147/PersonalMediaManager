@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "control_id": "documentation_impact",
+  "result": "passed",
+  "command": "Current actual paired control calls, normalized public display",
+  "exit_code": 0,
+  "observed_at": "2026-10-05T10:31:11.787362+00:00",
+  "implementation_blobs": {
+    "scripts/pmm_workflow.py": "dec0073a232bed9c1b329b7790d3945a19586ccb",
+    "AGENTS.md": "9d2ecb1ff1193cd7666d3879659ec9ddb1b97a77",
+    "CLAUDE.md": "0bf717f271a4bfac5cf3a84d9dd74401c6c1ec5f"
+  },
+  "positive_check": {
+    "command": "Current documentation_impact actual gate invocation on current source",
+    "expected_exit": 0,
+    "observed_exit": 0,
+    "expected_result": "accepted",
+    "observed_result": "accepted",
+    "output": "docs/agents/readiness/evidence/gov003/outputs/documentation_impact-positive.json"
+  },
+  "negative_check": {
+    "command": "Current documentation_impact actual gate invocation with isolated negative mutation",
+    "expected_exit": 1,
+    "observed_exit": 1,
+    "expected_result": "rejected",
+    "observed_result": "rejected",
+    "output": "docs/agents/readiness/evidence/gov003/outputs/documentation_impact-negative.json"
+  }
+}

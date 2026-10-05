@@ -1,0 +1,29 @@
+{
+  "kind": "public-derived-control-summary",
+  "disclosure": "Derived summary, not raw argv/stdout. Original engineering record retained locally; no private launch paths are published.",
+  "scope": "Actual current control acceptance/refusal; not final candidate acceptance",
+  "operation_display": "Current independent_review actual gate invocation on current source",
+  "control_id": "independent_review",
+  "case": "positive",
+  "started_at": "2026-10-05T10:35:18.051284+00:00",
+  "finished_at": "2026-10-05T10:35:18.507229+00:00",
+  "observed_exit": 0,
+  "expected_exit": 0,
+  "observed_result": "accepted",
+  "rejection_reason": null,
+  "readiness_phase": "ready",
+  "implementation_blobs": {
+    "scripts/pmm_workflow.py": "dec0073a232bed9c1b329b7790d3945a19586ccb",
+    ".claude/agents/code-reviewer.md": "1f05ceade89c1236c9661bfe7a623f00920bcb02"
+  },
+  "source_head": "2c2aecc3629d22aff1ac4855900a3d45656a0f0a",
+  "original_record_git_blob": "25da4f82a36b0b649c9c13040d4c4182582bec7e",
+  "gate_events": [
+    {
+      "event": "PMM_PROBE_GATE_END",
+      "gate": "pmm_workflow.load_task real activation review; ready context when available",
+      "observed_exit": 0,
+      "observed_result": "accepted"
+    }
+  ]
+}
