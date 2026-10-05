@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "kind": "successor-plan-publication",
+  "status": "planned",
+  "repository": "https://github.com/mdjs147/PersonalMediaManager.git",
+  "default_ref": "refs/heads/main",
+  "target_ref": "refs/heads/dot/pmm-rebuild-20261005-gates",
+  "expected_old": "ef27098dc73e2317dd69f3e5f3e285f6ac0bdf11",
+  "author": {
+    "actor_id": "pmm-gov003-author",
+    "execution_id": "enable_pmm_offline_domain_stage",
+    "model": null
+  },
+  "publication_branch": "refs/heads/dot/task/pmm-gov004-plan-20261005",
+  "publication_paths": [
+    "docs/workflow/GOV004.md",
+    "docs/workflow/GOV004.en.md",
+    "docs/workflow/GOV004-applicability.md",
+    "docs/workflow/GOV004-plan-publication.json"
+  ],
+  "tasks": {
+    "GOV004": {
+      "card": "docs/workflow/GOV004.md",
+      "status": "planned",
+      "phase": "governance-maintenance",
+      "purpose": "governance",
+      "task_branch": "refs/heads/dot/task/pmm-gov004-20261005",
+      "author": {
+        "actor_id": "pmm-gov004-author",
+        "execution_id": "separate_pmm_private_evidence",
+        "model": null
+      },
+      "dependencies": [
+        "GOV003"
+      ],
+      "allowed_exact": [
+        "scripts/pmm_evidence.py",
+        "scripts/pmm_governance.py",
+        "scripts/pmm_workflow.py",
+        "scripts/verify_governance.py",
+        ".github/workflows/verify-governance.yml",
+        ".githooks/pre-commit",
+        ".githooks/pre-push",
+        "AGENTS.md",
+        ".claude/rules/git-workflow.md",
+        ".claude/rules/guard-discipline.md",
+        ".claude/agents/code-reviewer.md",
+        "docs/agents/issue-tracker.md",
+        "docs/agents/readiness/README.md",
+        "docs/agents/baseline-adoption.md",
+        "docs/agents/baseline-readiness.json",
+        "docs/agents/readiness/environment-profile.json",
+        "docs/agents/workflow-state.json",
+        "docs/agents/readiness/pmm-evidence-v2.schema.json",
+        "docs/agents/readiness/pmm-evidence-policy.json",
+        "tests/governance/test_private_evidence.py",
+        "docs/workflow/GOV004-status.md"
+      ],
+      "allowed_prefixes": [
+        "docs/agents/readiness/evidence/"
+      ],
+      "business_allowed": false,
+      "applicability": "docs/workflow/GOV004-applicability.md",
+      "activation_required": true,
+      "required_checks": [
+        "private-original-byte-preservation-and-restore",
+        "exact-public-candidate-and-private-input-linkage",
+        "authenticated-reporting-account-not-workflow-signature",
+        "latest-status-request-serialization-and-failure-propagation",
+        "independent-private-review-and-test-provenance",
+        "public-output-allowlist-and-no-private-data-in-untrusted-jobs",
+        "all-nine-control-objectives",
+        "unchanged-five-audited-baseline-assets",
+        "one-time-fixed-base-transition-separately-reviewed",
+        "exact-stage-ci-liveness",
+        "independent-bilingual-delta-review"
+      ]
+    }
+  }
+}
