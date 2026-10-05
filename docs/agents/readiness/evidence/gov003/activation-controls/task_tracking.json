@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "control_id": "task_tracking",
+  "result": "passed",
+  "command": "Actual preparatory control pair; normalized display, private machine paths omitted",
+  "exit_code": 0,
+  "observed_at": "2026-10-05T10:15:02.185738+00:00",
+  "implementation_blobs": {
+    "scripts/pmm_workflow.py": "28fbc2a2e0e96cb535296d2ee9d7b4e025f58325",
+    "docs/agents/workflow-state.json": "bf1173300f2109bd5f51a764c62d736963a9f9ea",
+    "docs/workflow/GOV003.md": "d7ac1b0c5a18dcf8bfcf273ec6a6a5711b4790d9",
+    "docs/workflow/GOV003-plan-publication.json": "50335a6a7503ec4c94e41fed82d244115f58b96d"
+  },
+  "positive_check": {
+    "command": "Actual pmm_workflow.load_task(allow_unpublished_activation=True) + scope on current preparation",
+    "expected_exit": 0,
+    "observed_exit": 0,
+    "expected_result": "accepted",
+    "observed_result": "accepted",
+    "output": "docs/agents/readiness/evidence/gov003/activation-outputs/task_tracking-positive.json"
+  },
+  "negative_check": {
+    "command": "Actual pmm_workflow.load_task(allow_unpublished_activation=True) + scope with one deliberate isolated mutation",
+    "expected_exit": 1,
+    "observed_exit": 1,
+    "expected_result": "rejected",
+    "observed_result": "rejected",
+    "output": "docs/agents/readiness/evidence/gov003/activation-outputs/task_tracking-negative.json"
+  }
+}

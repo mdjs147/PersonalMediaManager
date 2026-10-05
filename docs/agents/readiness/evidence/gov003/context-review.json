@@ -1,19 +1,6 @@
 {
   "schema_version": 1,
-  "status": "ready",
-  "source": {
-    "repository": "https://github.com/mdjs147/ai-dev-baseline",
-    "commit": "23a774836c3edda9a5d16f06b7f4e60e9d6950f8"
-  },
-  "repository": {
-    "mode": "remote",
-    "reason": "Verified public PMM stage; default main is read-only and task delivery uses the isolated stage",
-    "primary_remote": "origin",
-    "default_branch": "refs/remotes/origin/main",
-    "base_ref": "refs/remotes/origin/dot/pmm-rebuild-20261005-gates",
-    "local_id": null
-  },
-  "environment_file": "docs/agents/readiness/environment-profile.json",
+  "result": "approved",
   "context": {
     "root_commits": [
       "fa73bfedb46113aed47a039535d3eb12e4f93031"
@@ -132,167 +119,17 @@
       "tests/foundation/PersonalMediaManager.Foundation.Tests.csproj": "c0558a10cc410055aec26590fc268048665d0f53"
     }
   },
-  "context_review": {
-    "status": "approved",
-    "reviewer": {
-      "actor_id": "pmm-gov003-independent-reviewer",
-      "execution_id": "review_pmm_offline_stage",
-      "model": null
-    },
-    "adopter": {
-      "actor_id": "pmm-gov003-author",
-      "execution_id": "enable_pmm_offline_domain_stage",
-      "model": null
-    },
-    "reviewed_at": "2026-10-05T10:16:15.651712+00:00",
-    "report": "docs/agents/readiness/evidence/gov003/context-review.json"
+  "reviewer": {
+    "actor_id": "pmm-gov003-independent-reviewer",
+    "execution_id": "review_pmm_offline_stage",
+    "model": null
   },
-  "entrypoints": {
-    "agent_instructions": "AGENTS.md",
-    "secondary_instructions": "CLAUDE.md",
-    "workflow_rules": ".claude/rules/git-workflow.md",
-    "guard_rules": ".claude/rules/guard-discipline.md",
-    "reviewer": ".claude/agents/code-reviewer.md",
-    "verification": "docs/agents/readiness/validate_readiness.py"
+  "adopter": {
+    "actor_id": "pmm-gov003-author",
+    "execution_id": "enable_pmm_offline_domain_stage",
+    "model": null
   },
-  "navigation": {
-    "adoption": "docs/agents/baseline-adoption.md",
-    "task_tracking": "docs/agents/issue-tracker.md",
-    "architecture": "docs/adr/README.md",
-    "runbook": "docs/runbook/README.md",
-    "domain": "docs/agents/domain.md",
-    "writing": "docs/agents/bilingual-writing/CORE.zh-CN.md",
-    "design": "docs/agents/interactive-design.md"
-  },
-  "controls": {
-    "branch_gate": {
-      "status": "adapted",
-      "objective": "Before writes, verify task branch, base, ownership and worktree safety.",
-      "implementation": [
-        "scripts/pmm_workflow.py",
-        ".claude/rules/git-workflow.md",
-        "docs/agents/workflow-state.json"
-      ],
-      "verification": [
-        "docs/agents/readiness/evidence/gov003/activation-controls/branch_gate.json"
-      ],
-      "reason": "GOV003 current activation requires fresh actual state-bound positive/negative evidence; no predecessor output is relabelled.",
-      "replacement": "Published task resolution, explicit activation, actual lifecycle and exact-candidate acceptance; all required objectives preserved."
-    },
-    "readiness_gate": {
-      "status": "adapted",
-      "objective": "Revalidate adoption and observed context before every write session and delivery.",
-      "implementation": [
-        "scripts/pmm_workflow.py",
-        "docs/agents/readiness/validate_readiness.py"
-      ],
-      "verification": [
-        "docs/agents/readiness/evidence/dev001/controls/readiness_gate.json"
-      ],
-      "reason": "Fresh DEV001 activation-preparation positive and isolated rejection; public outputs are explicitly normalized summaries of retained original records, not first-write or product acceptance.",
-      "replacement": "Published task resolution, explicit activation, actual lifecycle and exact-candidate acceptance; all required objectives preserved."
-    },
-    "verification_gate": {
-      "status": "adapted",
-      "objective": "Run applicable checks and preserve failure-sensitive evidence.",
-      "implementation": [
-        "scripts/verify_governance.py",
-        "scripts/pmm_workflow.py",
-        "tests/governance/test_successor.py"
-      ],
-      "verification": [
-        "docs/agents/readiness/evidence/gov002/controls/verification_gate.json"
-      ],
-      "reason": "Implementation bytes are unchanged from the accepted GOV002 maintenance; its original evidence remains explicitly historical. Current DEV001 governance suites are separately rerun and summarized.",
-      "replacement": "Published task resolution, explicit activation, actual lifecycle and exact-candidate acceptance; all required objectives preserved."
-    },
-    "independent_review": {
-      "status": "adapted",
-      "objective": "Independently review applicable governance and behavioral changes.",
-      "implementation": [
-        "scripts/pmm_workflow.py",
-        ".claude/agents/code-reviewer.md"
-      ],
-      "verification": [
-        "docs/agents/readiness/evidence/dev001/controls/independent_review.json"
-      ],
-      "reason": "Fresh DEV001 activation-preparation positive and isolated rejection; public outputs are explicitly normalized summaries of retained original records, not first-write or product acceptance.",
-      "replacement": "Published task resolution, explicit activation, actual lifecycle and exact-candidate acceptance; all required objectives preserved."
-    },
-    "task_tracking": {
-      "status": "adapted",
-      "objective": "Keep explicit task scope, acceptance conditions and completion evidence.",
-      "implementation": [
-        "scripts/pmm_workflow.py",
-        "docs/agents/workflow-state.json",
-        "docs/workflow/GOV003.md",
-        "docs/workflow/GOV003-plan-publication.json"
-      ],
-      "verification": [
-        "docs/agents/readiness/evidence/gov003/activation-controls/task_tracking.json"
-      ],
-      "reason": "GOV003 current activation requires fresh actual state-bound positive/negative evidence; no predecessor output is relabelled.",
-      "replacement": "Published task resolution, explicit activation, actual lifecycle and exact-candidate acceptance; all required objectives preserved."
-    },
-    "documentation_impact": {
-      "status": "adapted",
-      "objective": "Maintain authoritative documentation according to changed behavior and control impact.",
-      "implementation": [
-        "scripts/pmm_workflow.py",
-        "AGENTS.md",
-        "CLAUDE.md"
-      ],
-      "verification": [
-        "docs/agents/readiness/evidence/gov002/controls/documentation_impact.json"
-      ],
-      "reason": "Implementation bytes are unchanged from the accepted GOV002 maintenance; its original evidence remains explicitly historical. Current DEV001 governance suites are separately rerun and summarized.",
-      "replacement": "Published task resolution, explicit activation, actual lifecycle and exact-candidate acceptance; all required objectives preserved."
-    },
-    "secret_handling": {
-      "status": "adapted",
-      "objective": "Keep credentials and private data out of source and evidence.",
-      "implementation": [
-        "scripts/pmm_workflow.py",
-        ".claude/rules/guard-discipline.md"
-      ],
-      "verification": [
-        "docs/agents/readiness/evidence/gov002/controls/secret_handling.json"
-      ],
-      "reason": "Implementation bytes are unchanged from the accepted GOV002 maintenance; its original evidence remains explicitly historical. Current DEV001 governance suites are separately rerun and summarized.",
-      "replacement": "Published task resolution, explicit activation, actual lifecycle and exact-candidate acceptance; all required objectives preserved."
-    },
-    "trigger_coverage": {
-      "status": "adapted",
-      "objective": "Declare actual local/CI trigger wiring and demonstrate positive and negative outcomes.",
-      "implementation": [
-        "scripts/pmm_workflow.py",
-        "scripts/pmm_governance.py",
-        "scripts/verify_governance.py",
-        ".githooks/pre-commit",
-        ".githooks/pre-push",
-        ".github/workflows/verify-governance.yml",
-        "tests/governance/test_successor.py"
-      ],
-      "verification": [
-        "docs/agents/readiness/evidence/gov002-ci-maintenance/controls/trigger_coverage.json"
-      ],
-      "reason": "Implementation bytes are unchanged from the accepted GOV002 maintenance; its original evidence remains explicitly historical. Current DEV001 governance suites are separately rerun and summarized.",
-      "replacement": "Published task resolution, explicit activation, actual lifecycle and exact-candidate acceptance; all required objectives preserved."
-    },
-    "baseline_sync": {
-      "status": "adapted",
-      "objective": "Check source updates without bypassing same-version context drift review.",
-      "implementation": [
-        "scripts/pmm_workflow.py",
-        "scripts/pmm_governance.py",
-        "docs/agents/source-assets.json",
-        "docs/agents/readiness/validate_readiness.py"
-      ],
-      "verification": [
-        "docs/agents/readiness/evidence/gov002/controls/baseline_sync.json"
-      ],
-      "reason": "Implementation bytes are unchanged from the accepted GOV002 maintenance; its original evidence remains explicitly historical. Current DEV001 governance suites are separately rerun and summarized.",
-      "replacement": "Published task resolution, explicit activation, actual lifecycle and exact-candidate acceptance; all required objectives preserved."
-    }
-  }
+  "scope": "repository-environment-adoption",
+  "reviewed_at": "2026-10-05T10:16:15.651712+00:00",
+  "findings": "Independent current GOV003 repository/environment adoption review. Exact published plan/state/actual owned author and predecessor DEV001 acceptance chain were verified. New branch/task positive calls succeeded in the actual preparation; separate isolated wrong-branch and altered-frozen-card calls rejected for the intended reasons. Complete original engineering capture records were inspected and their Git blobs matched the public derived summaries; public reports are not raw logs. The other seven controls retain their unchanged accepted implementation bytes, original provenance and historical observations; they were not rerun or relabelled. All nine current control bindings pass structural verification. Current stable SDK10.0.401 was independently observed, with Linux x86_64/Bash and Python3.12.14. Foundation/Web/dependencies/locks/host behavior remain unchanged from accepted DEV001. The foundation temporary workspace remains single-owner and is not a production or race-resistant filesystem boundary. The four frozen plan documents include semantically equivalent Chinese authority and full English derivative. This is metadata-only current-context approval for GOV003 governance-maintenance, not offline-domain implementation or product acceptance. No full suite is claimed here. Exact candidate-bound activation review, trusted activation gate, stage publication/readback and CI remain required before ordinary first-write."
 }

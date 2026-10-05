@@ -1,0 +1,22 @@
+{
+  "kind": "public-derived-control-summary",
+  "scope": "Actual GOV003 unpublished activation preparation; isolated negative clone. No first-write or product acceptance.",
+  "control_id": "branch_gate",
+  "case": "positive",
+  "operation_display": "Actual pmm_workflow.owner",
+  "started_at": "2026-10-05T10:15:01.628687+00:00",
+  "finished_at": "2026-10-05T10:15:01.711889+00:00",
+  "observed_exit": 0,
+  "expected_exit": 0,
+  "observed_result": "accepted",
+  "rejection_reason": null,
+  "implementation_blobs": {
+    "scripts/pmm_workflow.py": "28fbc2a2e0e96cb535296d2ee9d7b4e025f58325",
+    ".claude/rules/git-workflow.md": "78eba01fd2292c1f2f7ffd166aef9dff99e8dd3d",
+    "docs/agents/workflow-state.json": "bf1173300f2109bd5f51a764c62d736963a9f9ea"
+  },
+  "source_head": "72865e54d66cf9f522244e4eabc1eada50b135fc",
+  "source_state_blob": "bf1173300f2109bd5f51a764c62d736963a9f9ea",
+  "original_record_git_blob": "f3d029d93d8b0d8ff2df61988f45d1acad736154",
+  "disclosure": "Derived public summary, not raw argv/stdout; original actual engineering record retained locally."
+}

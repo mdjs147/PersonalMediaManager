@@ -8,10 +8,10 @@
     "data_access": "EFCore.Sqlite10.0.12 exists only in the new test project, with a synthetic test-only entity, Pooling=False and separate fresh databases. Foundation/Web have no direct external NuGet dependency or production schema. Dependency locks are current review inputs.",
     "background_jobs": "No custom application worker, queue, integration, authentication or data service starts; only the framework web-host service runs. Durable HostedServices/product cancellation/retry/recovery remain planned.",
     "cache_messaging": "No Redis, external broker or network cache. No account credential, token, service account or persistent security access is created.",
-    "testing": "New xUnit2.9.3/runner3.1.4/TestSDK17.14.1 cover distinct CLI, endpoint, dependency-registration, key-refusal and isolated SQLite/filesystem risks; new Python checks a real Linux host/socket and unchanged temporary runtime tree. Focused fixes get affected checks; final integration gets full applicable governance/foundation validation. Results are separately recorded, not inherited.",
+    "testing": "New xUnit2.9.3/runner3.1.4/TestSDK17.14.1 cover distinct CLI, endpoint, dependency-registration, key-refusal and isolated SQLite/filesystem risks; new Python checks a real Linux host/socket and unchanged temporary runtime tree. Focused fixes get affected checks; final integration gets full applicable governance/foundation validation. Results are separately recorded, not inherited. GOV003 activation changes governance metadata only. Foundation acceptance remains bound to DEV001; future offline-domain work and its product tests are not yet authorized by activation.",
     "hosting_ci": "Only the independent GitHub dot stage; exact SDK10, official locked NuGet restore, build, nonempty tests and real inert-host validation. Job-level DOTNET_GENERATE_ASPNET_CERTIFICATE=false is already published and inherited. Activation-only CI is not product acceptance. main remains read-only.",
     "deployment_network": "No release/deploy, account setup, saved credentials, paid AI/TMDB or real media/data operation. Package restoration uses explicit official NuGet source. Application/test traffic is loopback; process socket sampling is not proof of every network moment. No development certificate generation or trust.",
-    "ai_platform_shell": "Primary author, separate test author and independent reviewer are assigned with unknown model null. Current Linux x86_64/Bash only; Windows/macOS/PowerShell7 product behavior remains NOT-RUN. Test workspace is single-owner and not a production or race-resistant filesystem boundary."
+    "ai_platform_shell": "GOV003 actual author pmm-gov003-author / enable_pmm_offline_domain_stage; model unknown/null. Independent reviewer must differ. Linux x86_64/Bash only; Windows/macOS/PowerShell7 product acceptance remains NOT-RUN."
   },
   "source_paths": [
     "docs/agents/governance-profile.json",
@@ -39,7 +39,11 @@
     "src/PersonalMediaManager.Web/FoundationHost.cs",
     "src/PersonalMediaManager.Foundation/FoundationOptions.cs",
     "src/PersonalMediaManager.Foundation/IsolatedTestWorkspace.cs",
-    "docs/requirements/dev001/technical-applicability.md"
+    "docs/requirements/dev001/technical-applicability.md",
+    "docs/workflow/GOV003.md",
+    "docs/workflow/GOV003-applicability.md",
+    "docs/workflow/GOV003-plan-publication.json",
+    "docs/workflow/GOV003.en.md"
   ],
   "execution_platforms": [
     {
