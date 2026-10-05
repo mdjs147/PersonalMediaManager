@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "control_id": "task_tracking",
+  "result": "passed",
+  "command": "Normalized display, not raw argv: Python invocation of scripts/pmm_workflow.py load_task(allow_unpublished_activation=True) and scope: immutable published plan and current task paths; private launch details retained locally",
+  "exit_code": 0,
+  "observed_at": "2026-10-05T07:24:33.008038+00:00",
+  "implementation_blobs": {
+    "scripts/pmm_workflow.py": "28fbc2a2e0e96cb535296d2ee9d7b4e025f58325",
+    "docs/agents/workflow-state.json": "d68b1926aa834a4762df224aa57a5c2e58f452c3",
+    "docs/workflow/DEV001.md": "9c9308e0153a2b559bd192528ac4d5ccba094bb5",
+    "docs/workflow/GOV002-plan-publication.json": "652dffac91df031d879f0dde0e3fd3d1018eac9b"
+  },
+  "positive_check": {
+    "command": "Normalized display, not raw argv: Python invocation of scripts/pmm_workflow.py load_task(allow_unpublished_activation=True) and scope: immutable published plan and current task paths with current approved preparation inputs",
+    "expected_exit": 0,
+    "observed_exit": 0,
+    "expected_result": "accepted",
+    "observed_result": "accepted",
+    "output": "docs/agents/readiness/evidence/dev001/outputs/20261005T072432588560Z-task_tracking-positive.json"
+  },
+  "negative_check": {
+    "command": "Normalized display, not raw argv: Python invocation of scripts/pmm_workflow.py load_task(allow_unpublished_activation=True) and scope: immutable published plan and current task paths; Isolated copy changed the frozen DEV001 card",
+    "expected_exit": 1,
+    "observed_exit": 1,
+    "expected_result": "rejected",
+    "observed_result": "rejected",
+    "output": "docs/agents/readiness/evidence/dev001/outputs/20261005T072432588560Z-task_tracking-negative.json"
+  }
+}

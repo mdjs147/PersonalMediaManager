@@ -1,32 +1,40 @@
 {
   "schema_version": 1,
   "anchor": "a59311ae16b08d0268babc933abf7403a14a315f",
-  "active_task": "GOV002",
+  "active_task": "DEV001",
   "plan_commit": "8437301c86c44e74beed3ac7220426741e67094b",
   "plan_path": "docs/workflow/GOV002-plan-publication.json",
   "activation": {
-    "task_id": "GOV002",
+    "task_id": "DEV001",
     "plan_commit": "8437301c86c44e74beed3ac7220426741e67094b",
-    "phase": "governance-maintenance",
-    "purpose": "governance",
+    "phase": "development-foundation",
+    "purpose": "foundation",
     "author": {
-      "actor_id": "pmm-successor-author",
-      "execution_id": "pmm-gov002-20261005T041801Z",
+      "actor_id": "pmm-dev001-author",
+      "execution_id": "pmm-dev001-20261005T061324Z",
       "model": null
     },
     "authorized_executions": [
       {
-        "actor_id": "pmm-successor-author",
-        "execution_id": "pmm-gov002-20261005T041801Z",
+        "actor_id": "pmm-dev001-author",
+        "execution_id": "pmm-dev001-20261005T061324Z",
+        "model": null
+      },
+      {
+        "actor_id": "pmm-dev001-test-author",
+        "execution_id": "pmm-dev001-tests-20261005T061657Z",
         "model": null
       }
     ],
     "predecessors": {
-      "BA-001": {
-        "commit": "a59311ae16b08d0268babc933abf7403a14a315f"
+      "GOV002": {
+        "commit": "d24f751d21e2bd997289ec32eab4a0c3a83f113e",
+        "report": "docs/agents/readiness/evidence/gov002-ci-maintenance/delivery/review.json",
+        "verification_report": "docs/agents/readiness/evidence/gov002-ci-maintenance/delivery/verification.json",
+        "acceptance_review": "docs/agents/readiness/evidence/gov002-ci-maintenance/delivery/acceptance-review.json"
       }
     },
-    "base_commit": "8437301c86c44e74beed3ac7220426741e67094b"
+    "base_commit": "d24f751d21e2bd997289ec32eab4a0c3a83f113e"
   },
-  "activation_review": "docs/agents/readiness/evidence/gov002-activation-review.json"
+  "activation_review": "docs/agents/readiness/evidence/dev001/activation-review.json"
 }

@@ -1,17 +1,17 @@
 {
   "schema_version": 1,
   "dimensions": {
-    "language_runtime": "Current: Python 3.12.x governance tooling; Git >=2.40,<3 and Bash 5.x, exact observed versions recorded by probes. Future .NET 10/C#14 is a retained requirement, no current product target.",
-    "web_host": "No current host. Future single Kestrel/Razor MVC/HTTP/MCP remains a requirement.",
-    "frontend": "No current frontend. Future packaged Bootstrap5/jQuery/Axios remains a requirement.",
-    "database": "No current database. Future SQLite3 remains a requirement.",
-    "data_access": "No current data access. Future EFCore10 Code First remains a requirement.",
-    "background_jobs": "No current worker. Future durable HostedServices remains a requirement.",
-    "cache_messaging": "No current or planned external cache/message middleware.",
-    "testing": "Current Python unittest plus actual Git/readiness invocation acceptance; future xUnit/API/Playwright/product tests are not implemented.",
-    "hosting_ci": "Public GitHub repository and read-only GitHub Actions governance verification; strict published Markdown cards; no main integration.",
-    "deployment_network": "No product deployment or real service credentials. Public Git reads and read-only CI; private source update discovery may be unavailable.",
-    "ai_platform_shell": "Actual agent execution on Linux x86_64 Bash; actual model unavailable and recorded null. Other product platforms/shells require separate evidence."
+    "language_runtime": "Activation: actual stable .NET SDK 10.0.401 and runtime 10.0.12 on Linux x86_64; C#14/net10.0 foundation intended. Python 3.12.x, Git >=2.40,<3 and Bash5 governance remain current. Scaffold build and product tests NOT-RUN until separately published activation.",
+    "web_host": "DEV001 authorizes only a new single loopback Kestrel host with inert Razor MVC shell and a foundation health response. No business HTTP/MCP routes, custom workers, authentication or key creation. Host implementation and startup checks NOT-RUN at activation.",
+    "frontend": "No current frontend. DEV001 may build only an inert Razor shell with local styles; Bootstrap5/jQuery/Axios stay planned for later feature cards and are not fetched from CDNs.",
+    "database": "DEV001 may create new temporary isolated empty SQLite databases for foundation tests only, never choose/read/probe/import any old or real media database, backup or directory. SQLite execution NOT-RUN at activation.",
+    "data_access": "EFCore10 Code First remains the target. A fresh minimal offline SQLite test base may use pinned official Microsoft.EntityFrameworkCore.Sqlite 10.0.12; no product entity schema, migrations or live store are approved. Package restore/build NOT-RUN at activation.",
+    "background_jobs": "No application worker or durable queue may start in this card. HostedServices are a retained future requirement with all product cancellation/retry/recovery tests NOT-RUN.",
+    "cache_messaging": "No Redis, external message broker or network cache. No new credential, saved auth or service account is required or permitted.",
+    "testing": "Fresh independent xUnit 2.9.3, xunit.runner.visualstudio 3.1.4 and Microsoft.NET.Test.Sdk 17.14.1 are intended from official NuGet; exact dependency locks and new temporary SQLite/filesystem plus inert-host tests are required for implementation delivery. Governance suites rerun at activation; old product tests and counts excluded.",
+    "hosting_ci": "Only the published isolated GitHub dot stage. CI provisions SDK from exact global.json, validates activation-only context/governance before source exists, then requires locked official NuGet restore, actual build/nonempty tests and inert-isolated host checks at implementation delivery. Main stays read-only.",
+    "deployment_network": "No release/deploy, real account/service/media access, paid AI, TMDB, credential generation or production permissions. Restore only from explicit official NuGet feed using approved tooling/cache; startup and tests use loopback and newly created temporary data only.",
+    "ai_platform_shell": "Actual independent author/test/reviewer executions declared; unavailable model recorded null. Current Linux x86_64/Bash only. Windows/macOS and PowerShell7 product acceptance remain NOT-RUN and require their own evidence."
   },
   "source_paths": [
     "docs/agents/governance-profile.json",
@@ -19,7 +19,11 @@
     ".github/workflows/verify-governance.yml",
     "docs/agents/source-assets.json",
     "docs/agents/workflow-state.json",
-    "scripts/pmm_workflow.py"
+    "scripts/pmm_workflow.py",
+    "global.json",
+    "docs/workflow/DEV001.md",
+    "docs/workflow/DEV001-applicability.md",
+    "docs/workflow/GOV002-plan-publication.json"
   ],
   "execution_platforms": [
     {

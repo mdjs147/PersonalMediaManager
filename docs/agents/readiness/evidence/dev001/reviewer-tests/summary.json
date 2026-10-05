@@ -1,0 +1,38 @@
+{
+  "kind": "independent-dev001-activation-governance-verification",
+  "result": "passed",
+  "observed_at": "2026-10-05T07:25:48.775179+00:00",
+  "executed_by": {
+    "actor_id": "pmm-dev001-activation-reviewer",
+    "execution_id": "review_dev001_activation",
+    "model": null
+  },
+  "source_head": "d24f751d21e2bd997289ec32eab4a0c3a83f113e",
+  "state_blob": "d68b1926aa834a4762df224aa57a5c2e58f452c3",
+  "checks": [
+    {
+      "suite": "baseline",
+      "normalized_command": "python3 -B -m unittest discover -s docs/agents/readiness -p test_*.py -v",
+      "started_at": "2026-10-05T07:22:34.954948+00:00",
+      "finished_at": "2026-10-05T07:22:42.221247+00:00",
+      "exit_code": 0,
+      "executed_tests": 59,
+      "output": "docs/agents/readiness/evidence/dev001/reviewer-tests/baseline-output.json",
+      "output_blob": "d7500146bfacc983c124e9bceb9c58fa4a0013cb",
+      "raw_output_sha256": "4029547ccefe5e860fe976bc9cef5cd98ded055f47e4dc43f02d7b7af97f07d8"
+    },
+    {
+      "suite": "governance",
+      "normalized_command": "python3 -B -m unittest discover -s tests/governance -p test_*.py -v",
+      "started_at": "2026-10-05T07:22:42.221481+00:00",
+      "finished_at": "2026-10-05T07:24:15.444433+00:00",
+      "exit_code": 0,
+      "executed_tests": 143,
+      "output": "docs/agents/readiness/evidence/dev001/reviewer-tests/governance-output.json",
+      "output_blob": "bec28271585e8966019036855af5f202c11cc66e",
+      "raw_output_sha256": "74d14db3e729f95ff182f3be3559950ddc407d2c2925f0f47ba4082e5facfe11"
+    }
+  ],
+  "evidence_form": "Privacy-minimized public projections of a fresh independent run. Original execution times and results are preserved; raw output hashes were independently recomputed and matched the original records. Machine paths and raw logs remain local. This projection review is not an additional test run.",
+  "limitations": "These governance tests ran in the actual DEV001 activation preparation tree before final candidate creation. They include synthetic fixtures and SDK governance stubs, not foundation product tests. Final exact-candidate review, published-activation verification and CI remain required. Product implementation and product tests remain NOT-RUN."
+}

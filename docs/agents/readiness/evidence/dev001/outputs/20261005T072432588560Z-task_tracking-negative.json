@@ -1,0 +1,28 @@
+{
+  "kind": "public-derived-control-summary",
+  "disclosure": "Derived public summary. Original execution records are retained locally; absolute host locations and launch details are omitted. Results are unchanged. This is not verbatim stdout or raw argv.",
+  "control_id": "task_tracking",
+  "case": "negative",
+  "scope": "Unpublished activation preparation; no first-write, product or remote publication acceptance",
+  "operation_display": "Normalized display, not raw argv: Python invocation of scripts/pmm_workflow.py load_task(allow_unpublished_activation=True) and scope: immutable published plan and current task paths; Isolated copy changed the frozen DEV001 card",
+  "started_at": "2026-10-05T07:24:32.854121+00:00",
+  "finished_at": "2026-10-05T07:24:33.003216+00:00",
+  "observed_exit": 1,
+  "expected_exit": 1,
+  "result": "rejected",
+  "rejection_reason": "Frozen published plan changed: docs/workflow/DEV001.md",
+  "isolated_negative": true,
+  "source_head": "d24f751d21e2bd997289ec32eab4a0c3a83f113e",
+  "source_state_blob": "d68b1926aa834a4762df224aa57a5c2e58f452c3",
+  "implementation_blobs": {
+    "scripts/pmm_workflow.py": "28fbc2a2e0e96cb535296d2ee9d7b4e025f58325",
+    "docs/agents/workflow-state.json": "d68b1926aa834a4762df224aa57a5c2e58f452c3",
+    "docs/workflow/DEV001.md": "9c9308e0153a2b559bd192528ac4d5ccba094bb5",
+    "docs/workflow/GOV002-plan-publication.json": "652dffac91df031d879f0dde0e3fd3d1018eac9b"
+  },
+  "original_record_sha256": "8fe9a66960e7df165e3089f4a3f3b136e8e0dacca76f3ad0077d059bc59f74ab",
+  "original_record_git_blob": "4d950ef937303f1c4d065abe86834ffe41dbdd90",
+  "original_stdout_sha256": "bcf412221a4ab5ec18e2ad586980f4f6cd2a75df3f0a3ca9a60f42bd6eb381db",
+  "original_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "projection_created_at": "2026-10-05T07:26:56.313316+00:00"
+}

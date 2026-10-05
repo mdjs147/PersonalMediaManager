@@ -1,0 +1,95 @@
+{
+  "kind": "dev001-final-state-context-review",
+  "result": "approved",
+  "blocking_findings": 0,
+  "reviewer": {
+    "actor_id": "pmm-dev001-activation-reviewer",
+    "execution_id": "review_dev001_activation",
+    "model": null
+  },
+  "observed_at": "2026-10-05T07:29:10.828531+00:00",
+  "state_blob": "d68b1926aa834a4762df224aa57a5c2e58f452c3",
+  "task_id": "DEV001",
+  "plan_commit": "8437301c86c44e74beed3ac7220426741e67094b",
+  "context": {
+    "root_commits": [
+      "fa73bfedb46113aed47a039535d3eb12e4f93031"
+    ],
+    "local_id": null,
+    "remotes": {
+      "origin": {
+        "fetch": [
+          "https://github.com/mdjs147/PersonalMediaManager.git"
+        ],
+        "push": [
+          "https://github.com/mdjs147/PersonalMediaManager.git"
+        ]
+      }
+    },
+    "default_branch": "refs/remotes/origin/main",
+    "base_ref": "refs/remotes/origin/dot/pmm-rebuild-20261005-gates",
+    "source": {
+      "repository": "https://github.com/mdjs147/ai-dev-baseline",
+      "commit": "23a774836c3edda9a5d16f06b7f4e60e9d6950f8"
+    },
+    "environment": {
+      "schema_version": 1,
+      "dimensions": {
+        "language_runtime": "Activation: actual stable .NET SDK 10.0.401 and runtime 10.0.12 on Linux x86_64; C#14/net10.0 foundation intended. Python 3.12.x, Git >=2.40,<3 and Bash5 governance remain current. Scaffold build and product tests NOT-RUN until separately published activation.",
+        "web_host": "DEV001 authorizes only a new single loopback Kestrel host with inert Razor MVC shell and a foundation health response. No business HTTP/MCP routes, custom workers, authentication or key creation. Host implementation and startup checks NOT-RUN at activation.",
+        "frontend": "No current frontend. DEV001 may build only an inert Razor shell with local styles; Bootstrap5/jQuery/Axios stay planned for later feature cards and are not fetched from CDNs.",
+        "database": "DEV001 may create new temporary isolated empty SQLite databases for foundation tests only, never choose/read/probe/import any old or real media database, backup or directory. SQLite execution NOT-RUN at activation.",
+        "data_access": "EFCore10 Code First remains the target. A fresh minimal offline SQLite test base may use pinned official Microsoft.EntityFrameworkCore.Sqlite 10.0.12; no product entity schema, migrations or live store are approved. Package restore/build NOT-RUN at activation.",
+        "background_jobs": "No application worker or durable queue may start in this card. HostedServices are a retained future requirement with all product cancellation/retry/recovery tests NOT-RUN.",
+        "cache_messaging": "No Redis, external message broker or network cache. No new credential, saved auth or service account is required or permitted.",
+        "testing": "Fresh independent xUnit 2.9.3, xunit.runner.visualstudio 3.1.4 and Microsoft.NET.Test.Sdk 17.14.1 are intended from official NuGet; exact dependency locks and new temporary SQLite/filesystem plus inert-host tests are required for implementation delivery. Governance suites rerun at activation; old product tests and counts excluded.",
+        "hosting_ci": "Only the published isolated GitHub dot stage. CI provisions SDK from exact global.json, validates activation-only context/governance before source exists, then requires locked official NuGet restore, actual build/nonempty tests and inert-isolated host checks at implementation delivery. Main stays read-only.",
+        "deployment_network": "No release/deploy, real account/service/media access, paid AI, TMDB, credential generation or production permissions. Restore only from explicit official NuGet feed using approved tooling/cache; startup and tests use loopback and newly created temporary data only.",
+        "ai_platform_shell": "Actual independent author/test/reviewer executions declared; unavailable model recorded null. Current Linux x86_64/Bash only. Windows/macOS and PowerShell7 product acceptance remain NOT-RUN and require their own evidence."
+      },
+      "source_paths": [
+        "docs/agents/governance-profile.json",
+        "docs/requirements/retained-decisions.md",
+        ".github/workflows/verify-governance.yml",
+        "docs/agents/source-assets.json",
+        "docs/agents/workflow-state.json",
+        "scripts/pmm_workflow.py",
+        "global.json",
+        "docs/workflow/DEV001.md",
+        "docs/workflow/DEV001-applicability.md",
+        "docs/workflow/GOV002-plan-publication.json"
+      ],
+      "execution_platforms": [
+        {
+          "system": "Linux",
+          "machine": "x86_64",
+          "shell": "bash"
+        }
+      ]
+    },
+    "environment_blob": "534e6436907e2d6fe5f8c21986c3906fd80f73e6",
+    "environment_sources": {
+      "docs/agents/governance-profile.json": "a806605b2ef034b86519beda08731a3e3cc94b9b",
+      "docs/requirements/retained-decisions.md": "9f8813e3bce3ca596da3b79c4216ca73701fb147",
+      ".github/workflows/verify-governance.yml": "b5d72523c5ea775ef439e7f2ca95d69692fddc44",
+      "docs/agents/source-assets.json": "d0eaaee01acf3ab226fe4e7147639a335635d13b",
+      "docs/agents/workflow-state.json": "d68b1926aa834a4762df224aa57a5c2e58f452c3",
+      "scripts/pmm_workflow.py": "28fbc2a2e0e96cb535296d2ee9d7b4e025f58325",
+      "global.json": "1769bc165d048c16924465fd1f3c67fa4f5f6944",
+      "docs/workflow/DEV001.md": "9c9308e0153a2b559bd192528ac4d5ccba094bb5",
+      "docs/workflow/DEV001-applicability.md": "47ec16d31a85767575557e3d3777728572bd62e2",
+      "docs/workflow/GOV002-plan-publication.json": "652dffac91df031d879f0dde0e3fd3d1018eac9b"
+    },
+    "config_inventory": {
+      ".github/workflows/verify-governance.yml": "b5d72523c5ea775ef439e7f2ca95d69692fddc44",
+      "global.json": "1769bc165d048c16924465fd1f3c67fa4f5f6944"
+    }
+  },
+  "ownership_blob": "0b43d8618129cb9966c376b36a719d2ad01cac81",
+  "verification_summary": "docs/agents/readiness/evidence/dev001/reviewer-tests/summary.json",
+  "verification_summary_blob": "99d212ab74284011b716037f82da773b8b0b278c",
+  "scope": "Exact metadata-only activation state, public evidence projection and ready foundation context. Candidate acceptance, publication/readback and first-write remain separate requirements.",
+  "findings": [
+    "Approved exact DEV001 metadata-only state and current repository/environment context at accepted GOV002 maintenance base d24f751d21e2bd997289ec32eab4a0c3a83f113e. The immutable plan and all five published documents remain unchanged at 8437301c86c44e74beed3ac7220426741e67094b; scope remains a fresh inert foundation with no business operations. The new predecessor candidate/tree/base, independent review, verification, public output and acceptance receipt are bound correctly. Current stable SDK 10.0.401, .NET/ASP.NET runtime 10.0.12 and Linux x86_64/Bash were independently observed. Local certificate generation is disabled, and the accepted CI job now also declares DOTNET_GENERATE_ASPNET_CERTIFICATE=false. This reviews the setting and governance evidence; actual foundation product CI has not run. Pinned 23a7748 baseline assets match. All nine current control bindings pass. Four new DEV001 branch/task/readiness/independence pairs preserve actual positive exit 0 and exact negative exit 1 results, were independently compared with original records, and were independently reexecuted. Five unchanged control implementations retain accurately labelled accepted GOV002 evidence, including the new CI trigger evidence. Fresh independent suites passed 59 baseline and 143 governance tests; six new CI-setting regressions are part of the 143, not product or certificate-execution acceptance. The public test and control outputs are explicitly normalized derived summaries, not verbatim logs or original invocation records; their source hashes and result fields match preserved original evidence. This observation does not backdate or invent any execution. Assigned primary and test executions and their bounded ownership partition are reviewed; this reviewer is distinct from both. All 26 current activation paths were checked for scope and public content, without expanding or rewriting previously published historical evidence. Current complete foundation context validation passes. No solution, product source or foundation test implementation exists; product/UI/database/cross-platform checks remain NOT-RUN. Separate trusted registered preparation, exact-candidate review, non-force stage-only publication, fresh remote readback/CI and owned-worktree first-write remain required. New build, package-lock or environment configuration requires renewed context review."
+  ]
+}

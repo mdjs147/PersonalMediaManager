@@ -1,0 +1,27 @@
+{
+  "kind": "public-derived-control-summary",
+  "disclosure": "Derived public summary. Original execution records are retained locally; absolute host locations and launch details are omitted. Results are unchanged. This is not verbatim stdout or raw argv.",
+  "control_id": "branch_gate",
+  "case": "negative",
+  "scope": "Unpublished activation preparation; no first-write, product or remote publication acceptance",
+  "operation_display": "Normalized display, not raw argv: Python invocation of scripts/pmm_workflow.py owner: actual assigned DEV001 identity and owned task branch; Isolated copy placed on a deliberately wrong task branch",
+  "started_at": "2026-10-05T07:21:05.703269+00:00",
+  "finished_at": "2026-10-05T07:21:05.797056+00:00",
+  "observed_exit": 1,
+  "expected_exit": 1,
+  "result": "rejected",
+  "rejection_reason": "Wrong task branch/detached worktree",
+  "isolated_negative": true,
+  "source_head": "d24f751d21e2bd997289ec32eab4a0c3a83f113e",
+  "source_state_blob": "d68b1926aa834a4762df224aa57a5c2e58f452c3",
+  "implementation_blobs": {
+    "scripts/pmm_workflow.py": "28fbc2a2e0e96cb535296d2ee9d7b4e025f58325",
+    ".claude/rules/git-workflow.md": "78eba01fd2292c1f2f7ffd166aef9dff99e8dd3d",
+    "docs/agents/workflow-state.json": "d68b1926aa834a4762df224aa57a5c2e58f452c3"
+  },
+  "original_record_sha256": "d8a78b8cafe791435b56ddb4c156b2abec4f4dff0ba999a609fdd46ee52a29e6",
+  "original_record_git_blob": "befc3131ec12c3527f9c7704b51421ca6e221a14",
+  "original_stdout_sha256": "0cdeeed77ac45a59f92a8cda713251879541f4623605742f2b023a4346f1df30",
+  "original_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "projection_created_at": "2026-10-05T07:26:56.312566+00:00"
+}

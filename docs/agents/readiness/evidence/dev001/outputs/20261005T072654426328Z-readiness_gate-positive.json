@@ -1,0 +1,26 @@
+{
+  "kind": "public-derived-control-summary",
+  "disclosure": "Derived public summary. Original execution records are retained locally; absolute host locations and launch details are omitted. Results are unchanged. This is not verbatim stdout or raw argv.",
+  "control_id": "readiness_gate",
+  "case": "positive",
+  "scope": "Unpublished activation preparation; no first-write, product or remote publication acceptance",
+  "operation_display": "Normalized display, not raw argv: Python invocation of scripts/pmm_workflow.py load_task and context(foundation, allow_unpublished_activation=True): actual SDK and reviewed repository/environment with current approved preparation inputs",
+  "started_at": "2026-10-05T07:26:54.426464+00:00",
+  "finished_at": "2026-10-05T07:26:55.048977+00:00",
+  "observed_exit": 0,
+  "expected_exit": 0,
+  "result": "accepted",
+  "rejection_reason": null,
+  "isolated_negative": false,
+  "source_head": "d24f751d21e2bd997289ec32eab4a0c3a83f113e",
+  "source_state_blob": "d68b1926aa834a4762df224aa57a5c2e58f452c3",
+  "implementation_blobs": {
+    "scripts/pmm_workflow.py": "28fbc2a2e0e96cb535296d2ee9d7b4e025f58325",
+    "docs/agents/readiness/validate_readiness.py": "3877f6bd7fa1cc972f1166ff4484784143c13e6c"
+  },
+  "original_record_sha256": "177e46e11e3b06c085033de39bd14390e2399da47689c899f1a7320c22aa04a3",
+  "original_record_git_blob": "538e0e6cc7cdfebb632e45cc1f03742e2ca421e5",
+  "original_stdout_sha256": "c338674a5a3b695a82a1756ef4d17f8c16d66ebcc6e821fdb0bcfb561d138338",
+  "original_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "projection_created_at": "2026-10-05T07:26:56.313506+00:00"
+}

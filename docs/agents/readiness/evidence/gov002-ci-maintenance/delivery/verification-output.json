@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "kind": "normalized-verification-summary",
+  "observed_at": "2026-10-05T07:09:34.545753+00:00",
+  "candidate_commit": "d24f751d21e2bd997289ec32eab4a0c3a83f113e",
+  "command": "Normalized display only; not original argv: python3 scripts/verify_governance.py; git diff --check 8437301c86c44e74beed3ac7220426741e67094b HEAD",
+  "actual_exit_code": 0,
+  "top_level_tests": {
+    "pinned_baseline": 59,
+    "historical_governance_compatibility": 36,
+    "successor_regressions": 101,
+    "ci_certificate_regressions": 6,
+    "total": 202
+  },
+  "result_marker": "PMM_SUCCESSOR_VERIFIED; business operations remain blocked",
+  "raw_evidence_sha256": "ccfe25e56d182a8279b2dac6632f4d8fb41ef761619326ff5f6d6887ad1bed1a",
+  "representation": "Normalized public summary of the actual exact-candidate execution. Original raw output is retained locally for independent review, with its digest above. Internal absolute locations, fixture traces and repeated nested test output are omitted. This is not the complete raw output. Nested fixture suites are not counted again.",
+  "limits": [
+    "No real .NET or certificate command was executed in this governance-maintenance verification.",
+    "The prior accepted A/B rehearsal remains historical supporting evidence for the unchanged controller; it was not repeated.",
+    "Remote publication and CI are separate checks and are not claimed here."
+  ]
+}
