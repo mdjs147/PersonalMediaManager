@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "kind": "planned-dev002-file-ownership",
+  "status": "planned-not-activation",
+  "primary_author": {
+    "actor_id": "pmm-dev002-author",
+    "execution_id": "build_pmm_offline_catalog",
+    "model": null
+  },
+  "participants": [
+    {
+      "identity": {
+        "actor_id": "pmm-dev002-author",
+        "execution_id": "build_pmm_offline_catalog",
+        "model": null
+      },
+      "owns": [
+        "src/PersonalMediaManager.Catalog/Domain/",
+        "Catalog project and packages.lock.json",
+        "tests/catalog project and packages.lock.json",
+        "PersonalMediaManager.sln",
+        "requirements/PRJ/context/status/documentation and integration"
+      ]
+    },
+    {
+      "identity": {
+        "actor_id": "pmm-dev002-persistence-author",
+        "execution_id": "implement_catalog_persistence",
+        "model": null
+      },
+      "owns": [
+        "src/PersonalMediaManager.Catalog/Persistence/"
+      ]
+    },
+    {
+      "identity": {
+        "actor_id": "pmm-dev002-test-author",
+        "execution_id": "write_catalog_risk_tests",
+        "model": null
+      },
+      "owns": [
+        "tests/catalog/ test source only; no project or lock edits"
+      ]
+    }
+  ],
+  "rules": [
+    "This record grants no activation or write permission. Independently reviewed activation must name actual participating executions.",
+    "Every author performs first-write/recover in an independent owned clone; no shared index or worktree.",
+    "The primary freezes the actual C# domain/command/preview contract before parallel persistence and tests.",
+    "Only the primary integrates projects, locks and solution; central package versions and current Foundation/Web source remain unchanged.",
+    "The reviewer is independent of the plan publisher and all three implementation authors."
+  ]
+}
