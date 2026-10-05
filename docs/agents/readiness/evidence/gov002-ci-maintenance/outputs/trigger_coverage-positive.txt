@@ -1,0 +1,16 @@
+GOV002 CI maintenance: trigger_coverage positive
+Evidence class: isolated synthetic local Git repository and local bare remote
+Trigger: git commit with the registered .githooks/pre-commit hook
+Command: git commit --allow-empty -m 'Synthetic external registered-hook probe'
+Condition: Authorized fixture actor and execution
+Observed at: 2026-10-05T06:59:33.871302+00:00
+Actual child process exit: 0
+Observed gate result: accepted
+
+Observed gate output (selected exact line):
+PMM_SUCCESSOR_GATE_VERIFIED commit GOV002
+
+This normalized extract omits temporary locations and fixture setup output.
+Fixture actor/review declarations are synthetic test inputs, not production independent approval.
+The changed CI job environment is checked separately by tests/governance/test_ci_certificate.py.
+This local hook pair does not execute .NET or certificate operations and does not prove remote CI success.

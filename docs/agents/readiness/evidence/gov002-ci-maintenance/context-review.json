@@ -1,15 +1,6 @@
 {
+  "schema_version": 1,
   "result": "approved",
-  "blocking_findings": 0,
-  "reviewer": {
-    "actor_id": "pmm-successor-plan-reviewer",
-    "execution_id": "pmm-successor-review-20261005T042251Z",
-    "model": null
-  },
-  "observed_at": "2026-10-05T07:04:00.805139+00:00",
-  "state_blob": "dee85424346b2dead0837238d36292d6b199d812",
-  "task_id": "GOV002",
-  "plan_commit": "8437301c86c44e74beed3ac7220426741e67094b",
   "context": {
     "root_commits": [
       "fa73bfedb46113aed47a039535d3eb12e4f93031"
@@ -75,16 +66,17 @@
       ".github/workflows/verify-governance.yml": "b5d72523c5ea775ef439e7f2ca95d69692fddc44"
     }
   },
-  "scope": "same-task maintenance context refresh",
-  "findings": [
-    "Fresh independent current-context review for the already published GOV002 activation; state, assigned author, authorized executions, predecessor and construction base are unchanged.",
-    "The immutable published plan supplies scope. This refresh binds the changed job-level CI certificate-suppression setting and does not grant new task permissions.",
-    "The complete earlier activation and acceptance observations remain in accepted 9bb4bae5cd8838ca01d6d12f3dc4e8a5ff8767e6 history. This observation is not backdated and does not approve the maintenance final candidate or DEV001 activation."
-  ],
-  "checks": {
-    "construction_base": "8437301c86c44e74beed3ac7220426741e67094b",
-    "accepted_stage_observed": "9bb4bae5cd8838ca01d6d12f3dc4e8a5ff8767e6",
-    "main_observed": "c09befa02cc27a0dc358322779798bb5e6d295e4",
-    "context_review": "docs/agents/readiness/evidence/gov002-ci-maintenance/context-review.json"
-  }
+  "reviewer": {
+    "actor_id": "pmm-successor-plan-reviewer",
+    "execution_id": "pmm-successor-review-20261005T042251Z",
+    "model": null
+  },
+  "adopter": {
+    "actor_id": "pmm-successor-author",
+    "execution_id": "pmm-gov002-20261005T041801Z",
+    "model": null
+  },
+  "scope": "repository-environment-adoption",
+  "reviewed_at": "2026-10-05T07:04:00.805139+00:00",
+  "findings": "Approved the independently observed current repository/environment/adoption context for the same active GOV002 maintenance task. Immutable plan 8437301c86c44e74beed3ac7220426741e67094b already allows the workflow, governance tests, status and evidence; state, construction base, author, controllers and five pinned source assets are unchanged. The only observed-context change since accepted 9bb4bae5cd8838ca01d6d12f3dc4e8a5ff8767e6 is workflow blob b5d72523c5ea775ef439e7f2ca95d69692fddc44. Its job-level string false precedes every CI step. Six focused layout, removal, enabling-value, step-override and child-environment regression tests independently passed; these do not execute .NET or inspect certificate stores. The refreshed registered-hook trigger pair was independently compared with preserved actual captures: positive exit 0 and unauthorized actor rejection exit 1, in isolated synthetic local Git fixtures. Public excerpts accurately retain results and selected markers, with temporary setup details omitted. The other eight control implementation maps remain byte-identical and their original observations are retained as supporting history, not described as new runs. Current context approval does not approve the new final candidate, remote CI, DEV001 activation or product readiness. Final full governance verification and exact-candidate acceptance remain separate. Official setting semantics: https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-environment-variables#dotnet_generate_aspnet_certificate"
 }

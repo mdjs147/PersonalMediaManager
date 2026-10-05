@@ -70,13 +70,13 @@
     "environment_sources": {
       "docs/agents/governance-profile.json": "a806605b2ef034b86519beda08731a3e3cc94b9b",
       "docs/requirements/retained-decisions.md": "9f8813e3bce3ca596da3b79c4216ca73701fb147",
-      ".github/workflows/verify-governance.yml": "87c0c7de4816f525ffd19659be9f8a2e6ee5b43f",
+      ".github/workflows/verify-governance.yml": "b5d72523c5ea775ef439e7f2ca95d69692fddc44",
       "docs/agents/source-assets.json": "d0eaaee01acf3ab226fe4e7147639a335635d13b",
       "docs/agents/workflow-state.json": "dee85424346b2dead0837238d36292d6b199d812",
       "scripts/pmm_workflow.py": "28fbc2a2e0e96cb535296d2ee9d7b4e025f58325"
     },
     "config_inventory": {
-      ".github/workflows/verify-governance.yml": "87c0c7de4816f525ffd19659be9f8a2e6ee5b43f"
+      ".github/workflows/verify-governance.yml": "b5d72523c5ea775ef439e7f2ca95d69692fddc44"
     }
   },
   "context_review": {
@@ -91,8 +91,8 @@
       "execution_id": "pmm-gov002-20261005T041801Z",
       "model": null
     },
-    "reviewed_at": "2026-10-05T05:22:41.992285+00:00",
-    "report": "docs/agents/readiness/evidence/gov002/context-review.json"
+    "reviewed_at": "2026-10-05T07:04:00.805139+00:00",
+    "report": "docs/agents/readiness/evidence/gov002-ci-maintenance/context-review.json"
   },
   "entrypoints": {
     "agent_instructions": "AGENTS.md",
@@ -221,7 +221,7 @@
         "tests/governance/test_successor.py"
       ],
       "verification": [
-        "docs/agents/readiness/evidence/gov002/controls/trigger_coverage.json"
+        "docs/agents/readiness/evidence/gov002-ci-maintenance/controls/trigger_coverage.json"
       ],
       "reason": "Fresh GOV002 successor control evidence replaces no historical BA001 evidence.",
       "replacement": "Published task resolution, explicit activation, actual lifecycle and exact-candidate acceptance; all required objectives preserved."

@@ -11,3 +11,13 @@ This file is not an approval token or a final completion claim. Exact-candidate 
 DEV001 remains planned for a new offline engineering foundation; it requires separately reviewed activation, actual stable SDK10 selection and fresh applicability/context. No business source, handler, worker, real service/account, media operation, deployment or main integration is introduced by GOV002.
 
 中文：本页记录已核实的实施和控制事实，不把旧BA001通过、初始自举、合成回归或未完成的后续步骤当作最终交付。真正接受取决于精确候选旁证、不同真实执行的后继演练和远端CI；DEV001仍待独立激活，当前没有业务实现。
+
+## Registered maintenance: suppress first-run CI certificate generation
+
+Recorded before implementation on 2026-10-05, from accepted stage 9bb4bae5cd8838ca01d6d12f3dc4e8a5ff8767e6. GOV002 is still the active published task and its immutable scope already includes the workflow, governance tests, this status file and current context/control evidence. This entry does not amend its frozen card or plan or reopen product development.
+
+The bounded change sets DOTNET_GENERATE_ASPNET_CERTIFICATE to the string false for the entire CI verification job, including SDK setup and later restore/build/test child processes. Add a focused regression checking the workflow setting and rejecting its removal, enabling value or step-level override. Refresh only affected trigger/context evidence; unchanged implementation/control evidence remains historical supporting evidence. No certificate is generated, installed or trusted by this maintenance.
+
+Acceptance requires enabled commit hooks, fresh applicable governance verification, independent current-context and exact-candidate review, stage-only non-force publication/readback, successful exact-commit CI and a newly reviewed predecessor receipt before DEV001 activation resumes. Prior GOV002 acceptance remains bound to 9bb4bae; it cannot approve this new candidate.
+
+Reference: https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-environment-variables#dotnet_generate_aspnet_certificate

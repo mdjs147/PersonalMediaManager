@@ -9,6 +9,8 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-24.04
+    env:
+      DOTNET_GENERATE_ASPNET_CERTIFICATE: 'false'
     steps:
       - uses: actions/checkout@v4
         with:
