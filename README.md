@@ -10,3 +10,5 @@ This stage contains a new governance-only restart plan. Product implementation s
 - main, release, deployment, real accounts and production media remain outside this stage authorization
 
 当前只重新接入并验证基线治理；产品实现为零。既有需求设计作为输入保留，历史开发和测试不计入新验收。
+
+The current adoption plan follows baseline main 23a7748 and its stable GEN/TECH/USER ADR categories. Prior adoption work remains pending until revalidated under this revision.

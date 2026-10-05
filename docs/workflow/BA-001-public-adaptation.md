@@ -1,6 +1,6 @@
 # BA-001 public baseline adaptation plan
 
-Source: 64a1124f1cff4e427697fb437f340c5c21ffe572. This is an explicit public adaptation, not an unchanged core copy. No private personal prose is published. Every generic control objective remains required. This table is published before implementation.
+Source: 23a774836c3edda9a5d16f06b7f4e60e9d6950f8. This is an explicit public adaptation, not an unchanged core copy. No private personal prose is published. Every generic control objective remains required. This table is published before implementation.
 
 ## Generic control replacements
 
@@ -11,186 +11,195 @@ Source: 64a1124f1cff4e427697fb437f340c5c21ffe572. This is an explicit public ada
 - Trigger coverage: actual local/CI command invocations and deliberate missing-call failures
 - Baseline synchronization: explicit pinned source and live check procedure; same-source drift never bypasses local validation
 
+## Revision and stable namespace boundary
+
+This revision follows the authorized baseline-main ADR classification. GEN12/TECH33/USER0 are source inventory, not installed or accepted PMM decisions. Existing project files/IDs remain intact; future project decisions use PRJ. Generic verification, language and byte-integrity objectives apply now even when their source files live in the technical layer. No USER rule is invented.
+
 ## Per-file core disposition
 
 | Source path | Disposition / public replacement |
 |---|---|
-| core/.claude/agents/decision-advisor.md | Project-authored reviewer/decision-advisor role guides; distinct actual author/reviewer evidence |
-| core/.claude/rules/git-workflow.md | Project-authored .claude/rules/git-workflow.md plus actual preflight/delivery gate; stage-only target and frozen published scope |
-| core/.claude/rules/guard-discipline.md | Project-authored .claude/rules/guard-discipline.md plus real trigger/negative acceptance |
-| core/AGENTS.template.md | Project-authored root instruction replacement; all generic objectives retained, private/source-specific prose excluded |
-| core/CLAUDE.template.md | Project-authored root instruction replacement; all generic objectives retained, private/source-specific prose excluded |
-| core/docs/adr/MIGRATION-5610067.json | Project-authored docs/adr/project/ADR-0001-governance-adoption.zh-CN.md and ADR index; no old ADR migration applies to this empty implementation |
-| core/docs/adr/README.md | Project-authored docs/adr/project/ADR-0001-governance-adoption.zh-CN.md and ADR index; no old ADR migration applies to this empty implementation |
-| core/docs/adr/baseline/ADR-0008-guard-trigger-surface-and-local-gate.zh.md | Project-authored docs/adr/project/ADR-0001-governance-adoption.zh-CN.md and ADR index; no old ADR migration applies to this empty implementation |
-| core/docs/adr/baseline/ADR-0009-construction-discipline.zh.md | Project-authored docs/adr/project/ADR-0001-governance-adoption.zh-CN.md and ADR index; no old ADR migration applies to this empty implementation |
-| core/docs/adr/baseline/ADR-0014-commit-merge-push-review-order.zh.md | Project-authored docs/adr/project/ADR-0001-governance-adoption.zh-CN.md and ADR index; no old ADR migration applies to this empty implementation |
-| core/docs/adr/baseline/ADR-0019-comment-and-document-maintenance-scope.zh.md | Project-authored docs/adr/project/ADR-0001-governance-adoption.zh-CN.md and ADR index; no old ADR migration applies to this empty implementation |
-| core/docs/adr/baseline/ADR-0020-off-ledger-debt-sweep-criteria.zh.md | Project-authored docs/adr/project/ADR-0001-governance-adoption.zh-CN.md and ADR index; no old ADR migration applies to this empty implementation |
-| core/docs/adr/baseline/ADR-0024-claude-branch-naming-convention.zh.md | Project-authored docs/adr/project/ADR-0001-governance-adoption.zh-CN.md and ADR index; no old ADR migration applies to this empty implementation |
-| core/docs/adr/baseline/ADR-0033-remote-increment-review-dedup.zh.md | Project-authored docs/adr/project/ADR-0001-governance-adoption.zh-CN.md and ADR index; no old ADR migration applies to this empty implementation |
-| core/docs/adr/baseline/ADR-0041-interactive-design-and-alternative-validation.zh.md | Project-authored docs/adr/project/ADR-0001-governance-adoption.zh-CN.md and ADR index; no old ADR migration applies to this empty implementation |
-| core/docs/adr/baseline/ADR-0042-single-source-bilingual-writing.zh.md | Project-authored docs/adr/project/ADR-0001-governance-adoption.zh-CN.md and ADR index; no old ADR migration applies to this empty implementation |
-| core/docs/adr/baseline/ADR-0043-existing-version-records-for-file-checks.zh.md | Project-authored docs/adr/project/ADR-0001-governance-adoption.zh-CN.md and ADR index; no old ADR migration applies to this empty implementation |
-| core/docs/adr/baseline/ADR-0044-baseline-adoption-readiness-and-evidence.zh.md | Project-authored docs/adr/project/ADR-0001-governance-adoption.zh-CN.md and ADR index; no old ADR migration applies to this empty implementation |
-| core/docs/adr/project/README.md | Project-authored docs/adr/project/ADR-0001-governance-adoption.zh-CN.md and ADR index; no old ADR migration applies to this empty implementation |
-| core/docs/agents/READINESS-TRANSLATION.json | Project-authored docs/agents/baseline-adoption.md and readiness/README.md describe unchanged tool contract, current scope and limits; no unreviewed translation release claim |
-| core/docs/agents/baseline-readiness.en.md | Project-authored docs/agents/baseline-adoption.md and readiness/README.md describe unchanged tool contract, current scope and limits; no unreviewed translation release claim |
-| core/docs/agents/baseline-readiness.zh-CN.md | Project-authored docs/agents/baseline-adoption.md and readiness/README.md describe unchanged tool contract, current scope and limits; no unreviewed translation release claim |
-| core/docs/agents/bilingual-writing/CORE.en.md | Project-authored docs/agents/bilingual-writing/CORE.zh-CN.md; Chinese source and faithful English delivery policy; no inherited product or translation-completion claims |
-| core/docs/agents/bilingual-writing/CORE.zh-CN.md | Project-authored docs/agents/bilingual-writing/CORE.zh-CN.md; Chinese source and faithful English delivery policy; no inherited product or translation-completion claims |
-| core/docs/agents/bilingual-writing/README.md | Project-authored docs/agents/bilingual-writing/CORE.zh-CN.md; Chinese source and faithful English delivery policy; no inherited product or translation-completion claims |
-| core/docs/agents/bilingual-writing/TERMINOLOGY.csv | Project-authored docs/agents/bilingual-writing/CORE.zh-CN.md; Chinese source and faithful English delivery policy; no inherited product or translation-completion claims |
-| core/docs/agents/bilingual-writing/TRANSLATION-MANIFEST.json | Project-authored docs/agents/bilingual-writing/CORE.zh-CN.md; Chinese source and faithful English delivery policy; no inherited product or translation-completion claims |
-| core/docs/agents/bilingual-writing/verify_translation.py | Project-authored docs/agents/bilingual-writing/CORE.zh-CN.md; Chinese source and faithful English delivery policy; no inherited product or translation-completion claims |
-| core/docs/agents/domain.md | Project-authored docs/agents/domain.md; retained requirements, no implementation status |
-| core/docs/agents/interactive-design.md | Project-authored docs/agents/interactive-design.md; preserve risk-based design obligations; no product UI in this card |
-| core/docs/agents/issue-tracker.md | Project-authored docs/agents/issue-tracker.md; repository cards replace ADO-specific workflow |
-| core/docs/agents/readiness/README.md | Project-authored docs/agents/baseline-adoption.md and readiness/README.md describe unchanged tool contract, current scope and limits; no unreviewed translation release claim |
-| core/docs/agents/readiness/baseline-readiness.template.json | Byte-preserved audited tool asset at docs/agents/readiness/baseline-readiness.template.json; regression output remains synthetic, never product evidence |
-| core/docs/agents/readiness/environment-profile.template.json | Byte-preserved audited tool asset at docs/agents/readiness/environment-profile.template.json; regression output remains synthetic, never product evidence |
-| core/docs/agents/readiness/readiness.schema.json | Byte-preserved audited tool asset at docs/agents/readiness/readiness.schema.json; regression output remains synthetic, never product evidence |
-| core/docs/agents/readiness/test_readiness.py | Byte-preserved audited tool asset at docs/agents/readiness/test_readiness.py; regression output remains synthetic, never product evidence |
-| core/docs/agents/readiness/validate_readiness.py | Byte-preserved audited tool asset at docs/agents/readiness/validate_readiness.py; regression output remains synthetic, never product evidence |
-| core/docs/agents/shared-subagents.md | Project-authored reviewer/decision-advisor role guides; distinct actual author/reviewer evidence |
-| core/docs/lessons.md | Project-authored governance navigation and applicability records retain relevant objective; no historical lessons or private source prose copied |
-| core/docs/runbook/README.md | Project-authored governance navigation and applicability records retain relevant objective; no historical lessons or private source prose copied |
+| core/.claude/agents/decision-advisor.md | Project-authored .claude/agents/decision-advisor.md; confirmed decisions remain separate from proposals |
+| core/.claude/rules/git-workflow.md | Project-authored .claude/rules/git-workflow.md and actual Git/task/context/delivery gates |
+| core/.claude/rules/guard-discipline.md | Project-authored .claude/rules/guard-discipline.md and actual Git/task/context/delivery gates |
+| core/AGENTS.template.md | Project-authored AGENTS.md with actual gate commands and complete mandatory navigation |
+| core/CLAUDE.template.md | Project-authored CLAUDE.md imports the same root instructions |
+| core/docs/adr/MIGRATION-5610067.json | Public namespace/source mapping in docs/adr/baseline/ and project-authored governance ADR; retain generic objectives and technical-section conditions; preserve every existing project file and ID |
+| core/docs/adr/MIGRATION-ac17fa7.json | Public namespace/source mapping in docs/adr/baseline/ and project-authored governance ADR; retain generic objectives and technical-section conditions; preserve every existing project file and ID |
+| core/docs/adr/README.md | Public namespace/source mapping in docs/adr/baseline/ and project-authored governance ADR; retain generic objectives and technical-section conditions; preserve every existing project file and ID |
+| core/docs/adr/baseline/general/0001-guard-trigger-surface-and-local-gate.md | Public namespace/source mapping in docs/adr/baseline/ and project-authored governance ADR; retain generic objectives and technical-section conditions; preserve every existing project file and ID |
+| core/docs/adr/baseline/general/0002-construction-discipline.md | Public namespace/source mapping in docs/adr/baseline/ and project-authored governance ADR; retain generic objectives and technical-section conditions; preserve every existing project file and ID |
+| core/docs/adr/baseline/general/0003-commit-merge-push-review-order.md | Public namespace/source mapping in docs/adr/baseline/ and project-authored governance ADR; retain generic objectives and technical-section conditions; preserve every existing project file and ID |
+| core/docs/adr/baseline/general/0004-comment-and-document-maintenance-scope.md | Public namespace/source mapping in docs/adr/baseline/ and project-authored governance ADR; retain generic objectives and technical-section conditions; preserve every existing project file and ID |
+| core/docs/adr/baseline/general/0005-off-ledger-debt-sweep-criteria.md | Public namespace/source mapping in docs/adr/baseline/ and project-authored governance ADR; retain generic objectives and technical-section conditions; preserve every existing project file and ID |
+| core/docs/adr/baseline/general/0006-claude-branch-naming-convention.md | Public namespace/source mapping in docs/adr/baseline/ and project-authored governance ADR; retain generic objectives and technical-section conditions; preserve every existing project file and ID |
+| core/docs/adr/baseline/general/0007-remote-increment-review-dedup.md | Public namespace/source mapping in docs/adr/baseline/ and project-authored governance ADR; retain generic objectives and technical-section conditions; preserve every existing project file and ID |
+| core/docs/adr/baseline/general/0008-interactive-design-and-alternative-validation.md | Public namespace/source mapping in docs/adr/baseline/ and project-authored governance ADR; retain generic objectives and technical-section conditions; preserve every existing project file and ID |
+| core/docs/adr/baseline/general/0009-single-source-bilingual-writing.md | Public namespace/source mapping in docs/adr/baseline/ and project-authored governance ADR; retain generic objectives and technical-section conditions; preserve every existing project file and ID |
+| core/docs/adr/baseline/general/0010-existing-version-records-for-file-checks.md | Public namespace/source mapping in docs/adr/baseline/ and project-authored governance ADR; retain generic objectives and technical-section conditions; preserve every existing project file and ID |
+| core/docs/adr/baseline/general/0011-baseline-adoption-readiness-and-evidence.md | Public namespace/source mapping in docs/adr/baseline/ and project-authored governance ADR; retain generic objectives and technical-section conditions; preserve every existing project file and ID |
+| core/docs/adr/baseline/general/0012-adr-category-namespaces.md | Public namespace/source mapping in docs/adr/baseline/ and project-authored governance ADR; retain generic objectives and technical-section conditions; preserve every existing project file and ID |
+| core/docs/adr/baseline/general/README.md | Public namespace/source mapping in docs/adr/baseline/ and project-authored governance ADR; retain generic objectives and technical-section conditions; preserve every existing project file and ID |
+| core/docs/adr/baseline/technology/README.md | Public namespace/source mapping in docs/adr/baseline/ and project-authored governance ADR; retain generic objectives and technical-section conditions; preserve every existing project file and ID |
+| core/docs/adr/baseline/user/README.md | Public namespace/source mapping in docs/adr/baseline/ and project-authored governance ADR; retain generic objectives and technical-section conditions; preserve every existing project file and ID |
+| core/docs/adr/project/README.md | Public namespace/source mapping in docs/adr/baseline/ and project-authored governance ADR; retain generic objectives and technical-section conditions; preserve every existing project file and ID |
+| core/docs/agents/READINESS-TRANSLATION.json | Project-authored adoption/readiness/runbook/navigation documents retain relevant generic objective without private/source-specific prose |
+| core/docs/agents/baseline-readiness.en.md | Project-authored adoption/readiness/runbook/navigation documents retain relevant generic objective without private/source-specific prose |
+| core/docs/agents/baseline-readiness.zh-CN.md | Project-authored adoption/readiness/runbook/navigation documents retain relevant generic objective without private/source-specific prose |
+| core/docs/agents/bilingual-writing/CORE.en.md | Project-authored docs/agents/bilingual-writing/CORE.zh-CN.md and independent language/scope review; no private source prose or inherited translation-completion claim |
+| core/docs/agents/bilingual-writing/CORE.zh-CN.md | Project-authored docs/agents/bilingual-writing/CORE.zh-CN.md and independent language/scope review; no private source prose or inherited translation-completion claim |
+| core/docs/agents/bilingual-writing/README.md | Project-authored docs/agents/bilingual-writing/CORE.zh-CN.md and independent language/scope review; no private source prose or inherited translation-completion claim |
+| core/docs/agents/bilingual-writing/TERMINOLOGY.csv | Project-authored docs/agents/bilingual-writing/CORE.zh-CN.md and independent language/scope review; no private source prose or inherited translation-completion claim |
+| core/docs/agents/bilingual-writing/TRANSLATION-MANIFEST.json | Project-authored docs/agents/bilingual-writing/CORE.zh-CN.md and independent language/scope review; no private source prose or inherited translation-completion claim |
+| core/docs/agents/bilingual-writing/verify_translation.py | Project-authored docs/agents/bilingual-writing/CORE.zh-CN.md and independent language/scope review; no private source prose or inherited translation-completion claim |
+| core/docs/agents/domain.md | Project-authored governance/domain/design/task/reviewer documents retain generic objective; no ADO or platform assumptions |
+| core/docs/agents/interactive-design.md | Project-authored governance/domain/design/task/reviewer documents retain generic objective; no ADO or platform assumptions |
+| core/docs/agents/issue-tracker.md | Project-authored governance/domain/design/task/reviewer documents retain generic objective; no ADO or platform assumptions |
+| core/docs/agents/readiness/README.md | Project-authored adoption/readiness/runbook/navigation documents retain relevant generic objective without private/source-specific prose |
+| core/docs/agents/readiness/baseline-readiness.template.json | Byte-preserved audited tool asset at docs/agents/readiness/baseline-readiness.template.json; regressions stay synthetic, never product evidence |
+| core/docs/agents/readiness/environment-profile.template.json | Byte-preserved audited tool asset at docs/agents/readiness/environment-profile.template.json; regressions stay synthetic, never product evidence |
+| core/docs/agents/readiness/readiness.schema.json | Byte-preserved audited tool asset at docs/agents/readiness/readiness.schema.json; regressions stay synthetic, never product evidence |
+| core/docs/agents/readiness/test_readiness.py | Byte-preserved audited tool asset at docs/agents/readiness/test_readiness.py; regressions stay synthetic, never product evidence |
+| core/docs/agents/readiness/validate_readiness.py | Byte-preserved audited tool asset at docs/agents/readiness/validate_readiness.py; regressions stay synthetic, never product evidence |
+| core/docs/agents/shared-subagents.md | Project-authored governance/domain/design/task/reviewer documents retain generic objective; no ADO or platform assumptions |
+| core/docs/lessons.md | Project-authored adoption/readiness/runbook/navigation documents retain relevant generic objective without private/source-specific prose |
+| core/docs/runbook/README.md | Project-authored adoption/readiness/runbook/navigation documents retain relevant generic objective without private/source-specific prose |
 
-## Per-file .NET layer disposition
+## Per-file technical layer disposition
 
-All .NET-layer files are outside this governance-only executable target: no application, project, database, host, UI or deployment object exists yet. Their technology-specific checks are not reported as passed. Future product introduction reopens per-file applicability and blocks on required replacements. The .NET reviewer structure is replaced now by a stack-independent PMM reviewer, so the independent-review objective is not deferred.
+Current executable scope is Python/Git/Bash governance only. Future PMM product technology remains .NET10/C#14 and the previously confirmed stack. Technology-specific targets do not exist yet and their checks are not declared passed. Generic verification, language consistency, encoded source integrity, task and review obligations are implemented now by project verifier/writing/reviewer/source-integrity controls.
 
 | Source path | Disposition |
 |---|---|
-| stack-dotnet/.agents/skills/db-migrate/SKILL.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/.agents/skills/language-check/SKILL.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/.agents/skills/new-module/SKILL.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/.agents/skills/verify/SKILL.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/.claude/agents/code-reviewer.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/.claude/hooks/deny-external-cdn.ps1 | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/.claude/hooks/deny-http-verbs.ps1 | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/.claude/hooks/deny-ts.ps1 | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/.claude/rules/api-auth.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/.claude/rules/architecture.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/.claude/rules/csharp-standards.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/.claude/rules/db-redlines.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/.claude/rules/frontend.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/.claude/rules/testing.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/.claude/settings.json | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/.claude/skills/db-migrate/SKILL.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/.claude/skills/language-check/SKILL.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/.claude/skills/new-module/SKILL.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/.claude/skills/verify/SKILL.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/.codex/config.toml | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/.codex/hooks/deny-external-cdn.ps1 | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/.codex/hooks/deny-http-verbs.ps1 | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/.codex/hooks/deny-ts.ps1 | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/.codex/hooks.json | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/.editorconfig | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/.gitattributes | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/AGENTS.stack-dotnet.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/Directory.Build.props | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/Directory.Build.targets | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/azure-pipelines.yml | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/docs/adr/baseline/ADR-0001-bootstrap5-ui-framework.zh.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/docs/adr/baseline/ADR-0002-third-party-assets-vendored-local.zh.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/docs/adr/baseline/ADR-0003-http-verbs-get-post-only.zh.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/docs/adr/baseline/ADR-0004-infrastructure-table-scaffold-scope.zh.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/docs/adr/baseline/ADR-0005-dev-phase-db-script-execution.zh.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/docs/adr/baseline/ADR-0006-dataprotection-key-ring-config.zh.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/docs/adr/baseline/ADR-0007-class-homing-convention.zh.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/docs/adr/baseline/ADR-0010-single-appsettings-config-source.zh.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/docs/adr/baseline/ADR-0011-api-exposure-and-auth-layering.zh.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/docs/adr/baseline/ADR-0012-platform-quality-baseline.zh.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/docs/adr/baseline/ADR-0013-api-security-code-layer.zh.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/docs/adr/baseline/ADR-0015-static-asset-version-stamp.zh.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/docs/adr/baseline/ADR-0016-api-endpoint-host-boundary.zh.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/docs/adr/baseline/ADR-0017-api-controller-endpoint-form.zh.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/docs/adr/baseline/ADR-0018-index-retreat-primary-key-and-unique-only.zh.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/docs/adr/baseline/ADR-0021-ps1-utf8-bom-required.zh.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/docs/adr/baseline/ADR-0022-api-docs-exposure-gate.zh.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/docs/adr/baseline/ADR-0023-dev-demo-seed-in-sql.zh.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/docs/adr/baseline/ADR-0025-danger-action-confirm-form.zh.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/docs/adr/baseline/ADR-0026-machine-facing-text-i18n.zh.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/docs/adr/baseline/ADR-0027-ddl-ef-parity-guard.zh.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/docs/adr/baseline/ADR-0028-utc-instant-wire-contract.zh.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/docs/adr/baseline/ADR-0029-auth-rate-limit-client-ip-partition.zh.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/docs/adr/baseline/ADR-0030-cache-payload-shape-and-key-version.zh.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/docs/adr/baseline/ADR-0031-constraint-and-index-naming-convention.zh.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/docs/adr/baseline/ADR-0032-uniqueness-in-application-layer.zh.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/docs/adr/baseline/ADR-0034-foreign-key-and-default-constraint-relaxation.zh.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/docs/adr/baseline/ADR-0035-column-type-tightening.zh.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/docs/adr/baseline/ADR-0036-single-domain-api-exposure.zh.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/docs/adr/baseline/ADR-0037-single-host-web-direct-handler.zh.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/docs/adr/baseline/ADR-0038-local-development-sign-in-bypass.zh.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/docs/adr/baseline/ADR-0039-optional-feature-config-degrades-instead-of-fail-fast.zh.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/docs/adr/baseline/ADR-0040-test-layering-and-authoring-gate.zh.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/docs/lessons.md | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/scripts/build.ps1 | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/scripts/check-redlines.ps1 | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/scripts/db-apply-baseline.ps1 | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/scripts/dev.ps1 | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/scripts/new-dataprotection-key.ps1 | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/scripts/new-secrets.ps1 | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/scripts/scaffold-entities.ps1 | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/scripts/scan-compliance.ps1 | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/scripts/test.ps1 | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/ApiDocsWiringRulesTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/ApiEndpointFormRulesTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/ApiPublicSurfaceRulesTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/BaselineSchema.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/BaselineUniqueNullabilityRulesTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/CSharpSourceScan.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/CommentScopeRulesTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/ConfigurationDefaultsRulesTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/ContractInstantNamingRulesTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/CurrentCultureAssignmentRulesTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/DdlEfParityRulesTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/DebtMarkerLedgerRulesTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/DependencyRulesTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/DevSignInBypassRulesTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/DevelopmentOnlyRoutingRulesTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/DevelopmentSettingsPolicyTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/EndpointExposureCoverageRulesTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/ExclusionVerification.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/ForbiddenSurfaceWords.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/HandlerAuthorizationDeclarationTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/HandlerAuthorizationParityRulesTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/HostCompositionCoverageTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/HostRouteTable.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/JobRegistrationSurfaceRulesTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/JsonInstantNormalizationRulesTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/MessageResourceKeyRulesTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/ModuleHttpBoundaryRulesTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/OutboundHttpVerbRulesTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/PagedQueryRulesTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/ParallelIntakeScope.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/ProductionForbiddenSurfaceRulesTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/PublicIdRulesTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/RateLimitPartitionRulesTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/RepositoryRoot.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/RequestQueryLogSuppressionTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/RoutePrefixOwnershipRulesTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/ScopeDisposalWalk.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/SeedLiteralCapacityRulesTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/ServerFingerprintConfigurationTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/SingleFlightResolutionRulesTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/SourceScanScope.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/SqlConstraintNamingTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/SqlServerTextCapacityRulesTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/UploadRequestCeilingTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/UserLayerRulesTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/WebApiDataAccessBoundaryRulesTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/WebHandlerGateRulesTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/WebNoOutboundHttpClientRulesTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/WebSourceScan.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/ZhCnResxPunctuationRulesTests.cs | Not installed in governance-only phase; no current technical object; future applicability review required |
-| stack-dotnet/tests/__Project__.ArchitectureTests/__Project__.ArchitectureTests.csproj | Not installed in governance-only phase; no current technical object; future applicability review required |
+| stack-dotnet/.agents/skills/db-migrate/SKILL.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/.agents/skills/language-check/SKILL.md | Technical mechanism not installed; generic verification/language/encoding objective replaced now by scripts/verify_governance.py, PMM writing/reviewer rules and exact imported-source checks |
+| stack-dotnet/.agents/skills/new-module/SKILL.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/.agents/skills/verify/SKILL.md | Technical mechanism not installed; generic verification/language/encoding objective replaced now by scripts/verify_governance.py, PMM writing/reviewer rules and exact imported-source checks |
+| stack-dotnet/.claude/agents/code-reviewer.md | Stack-independent PMM reviewer replacement is active now; only product-specific checks await actual product targets |
+| stack-dotnet/.claude/hooks/deny-external-cdn.ps1 | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/.claude/hooks/deny-http-verbs.ps1 | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/.claude/hooks/deny-ts.ps1 | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/.claude/rules/api-auth.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/.claude/rules/architecture.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/.claude/rules/csharp-standards.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/.claude/rules/db-redlines.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/.claude/rules/frontend.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/.claude/rules/testing.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/.claude/settings.json | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/.claude/skills/db-migrate/SKILL.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/.claude/skills/language-check/SKILL.md | Technical mechanism not installed; generic verification/language/encoding objective replaced now by scripts/verify_governance.py, PMM writing/reviewer rules and exact imported-source checks |
+| stack-dotnet/.claude/skills/new-module/SKILL.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/.claude/skills/verify/SKILL.md | Technical mechanism not installed; generic verification/language/encoding objective replaced now by scripts/verify_governance.py, PMM writing/reviewer rules and exact imported-source checks |
+| stack-dotnet/.codex/config.toml | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/.codex/hooks/deny-external-cdn.ps1 | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/.codex/hooks/deny-http-verbs.ps1 | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/.codex/hooks/deny-ts.ps1 | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/.codex/hooks.json | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/.editorconfig | Technical mechanism not installed; generic verification/language/encoding objective replaced now by scripts/verify_governance.py, PMM writing/reviewer rules and exact imported-source checks |
+| stack-dotnet/.gitattributes | Technical mechanism not installed; generic verification/language/encoding objective replaced now by scripts/verify_governance.py, PMM writing/reviewer rules and exact imported-source checks |
+| stack-dotnet/AGENTS.stack-dotnet.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/Directory.Build.props | Technical mechanism not installed; generic verification/language/encoding objective replaced now by scripts/verify_governance.py, PMM writing/reviewer rules and exact imported-source checks |
+| stack-dotnet/Directory.Build.targets | Technical mechanism not installed; generic verification/language/encoding objective replaced now by scripts/verify_governance.py, PMM writing/reviewer rules and exact imported-source checks |
+| stack-dotnet/azure-pipelines.yml | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/docs/adr/baseline/technology/0001-bootstrap5-ui-framework.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/docs/adr/baseline/technology/0002-third-party-assets-vendored-local.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/docs/adr/baseline/technology/0003-http-verbs-get-post-only.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/docs/adr/baseline/technology/0004-infrastructure-table-scaffold-scope.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/docs/adr/baseline/technology/0005-dev-phase-db-script-execution.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/docs/adr/baseline/technology/0006-dataprotection-key-ring-config.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/docs/adr/baseline/technology/0007-class-homing-convention.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/docs/adr/baseline/technology/0008-single-appsettings-config-source.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/docs/adr/baseline/technology/0009-api-exposure-and-auth-layering.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/docs/adr/baseline/technology/0010-platform-quality-baseline.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/docs/adr/baseline/technology/0011-api-security-code-layer.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/docs/adr/baseline/technology/0012-static-asset-version-stamp.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/docs/adr/baseline/technology/0013-api-endpoint-host-boundary.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/docs/adr/baseline/technology/0014-api-controller-endpoint-form.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/docs/adr/baseline/technology/0015-index-retreat-primary-key-and-unique-only.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/docs/adr/baseline/technology/0016-ps1-utf8-bom-required.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/docs/adr/baseline/technology/0017-api-docs-exposure-gate.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/docs/adr/baseline/technology/0018-dev-demo-seed-in-sql.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/docs/adr/baseline/technology/0019-danger-action-confirm-form.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/docs/adr/baseline/technology/0020-machine-facing-text-i18n.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/docs/adr/baseline/technology/0021-ddl-ef-parity-guard.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/docs/adr/baseline/technology/0022-utc-instant-wire-contract.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/docs/adr/baseline/technology/0023-auth-rate-limit-client-ip-partition.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/docs/adr/baseline/technology/0024-cache-payload-shape-and-key-version.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/docs/adr/baseline/technology/0025-constraint-and-index-naming-convention.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/docs/adr/baseline/technology/0026-uniqueness-in-application-layer.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/docs/adr/baseline/technology/0027-foreign-key-and-default-constraint-relaxation.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/docs/adr/baseline/technology/0028-column-type-tightening.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/docs/adr/baseline/technology/0029-single-domain-api-exposure.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/docs/adr/baseline/technology/0030-single-host-web-direct-handler.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/docs/adr/baseline/technology/0031-local-development-sign-in-bypass.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/docs/adr/baseline/technology/0032-optional-feature-config-degrades-instead-of-fail-fast.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/docs/adr/baseline/technology/0033-test-layering-and-authoring-gate.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/docs/lessons.md | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/scripts/build.ps1 | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/scripts/check-redlines.ps1 | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/scripts/db-apply-baseline.ps1 | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/scripts/dev.ps1 | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/scripts/new-dataprotection-key.ps1 | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/scripts/new-secrets.ps1 | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/scripts/scaffold-entities.ps1 | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/scripts/scan-compliance.ps1 | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/scripts/test.ps1 | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/ApiDocsWiringRulesTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/ApiEndpointFormRulesTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/ApiPublicSurfaceRulesTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/BaselineSchema.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/BaselineUniqueNullabilityRulesTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/CSharpSourceScan.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/CommentScopeRulesTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/ConfigurationDefaultsRulesTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/ContractInstantNamingRulesTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/CurrentCultureAssignmentRulesTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/DdlEfParityRulesTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/DebtMarkerLedgerRulesTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/DependencyRulesTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/DevSignInBypassRulesTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/DevelopmentOnlyRoutingRulesTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/DevelopmentSettingsPolicyTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/EndpointExposureCoverageRulesTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/ExclusionVerification.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/ForbiddenSurfaceWords.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/HandlerAuthorizationDeclarationTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/HandlerAuthorizationParityRulesTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/HostCompositionCoverageTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/HostRouteTable.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/JobRegistrationSurfaceRulesTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/JsonInstantNormalizationRulesTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/MessageResourceKeyRulesTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/ModuleHttpBoundaryRulesTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/OutboundHttpVerbRulesTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/PagedQueryRulesTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/ParallelIntakeScope.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/ProductionForbiddenSurfaceRulesTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/PublicIdRulesTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/RateLimitPartitionRulesTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/RepositoryRoot.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/RequestQueryLogSuppressionTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/RoutePrefixOwnershipRulesTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/ScopeDisposalWalk.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/SeedLiteralCapacityRulesTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/ServerFingerprintConfigurationTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/SingleFlightResolutionRulesTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/SourceScanScope.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/SqlConstraintNamingTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/SqlServerTextCapacityRulesTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/UploadRequestCeilingTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/UserLayerRulesTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/WebApiDataAccessBoundaryRulesTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/WebHandlerGateRulesTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/WebNoOutboundHttpClientRulesTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/WebSourceScan.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/ZhCnResxPunctuationRulesTests.cs | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
+| stack-dotnet/tests/__Project__.ArchitectureTests/__Project__.ArchitectureTests.csproj | No current technical object in governance-only phase; generic sections/targets retain project replacements, future technology applicability must be reviewed before product work |
 
-## Excluded source areas
+## Excluded and preserved areas
 
-Baseline maintenance scripts/tests/workflows/tasks, examples and deploy-reference are not downstream assets and are not copied. No historical PMM code, local gate, tests, pass counts, private chat or raw private documents are included.
+Baseline-maintenance scripts/tests/CI/tasks, examples and deploy-reference are not copied. No old PMM implementation, tests, gate or old pass count is imported. Existing project ADRs and project/README are never overwritten by source synchronization. Private personal text, raw documents and permission rules are excluded.
 
-## Verification boundary
+## Evidence boundary
 
-The final adoption record expands this published mapping with actual replacement paths, invocation surfaces and per-control positive/negative evidence. Missing replacement or failed evidence keeps adoption pending. Source import byte identity is checked against Git objects; the complete publication tree is independently reviewed.
+Final adoption records map retained objectives to real replacements and actual positive/negative invocation evidence. Source/tool byte identity is checked from fixed Git objects. Per-control evidence, context approval, final candidate review and CI must be revalidated under the new plan/source binding; prior pending or cancelled work supplies no acceptance.
