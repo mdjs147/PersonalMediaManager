@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Fresh offline foundation primitives; no business capabilities.</Description>
+  </PropertyGroup>
+</Project>

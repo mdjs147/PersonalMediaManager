@@ -1,0 +1,2173 @@
+{
+  "schema_version": 1,
+  "scope": "Fresh engineering foundation only; this file authorizes no business operation.",
+  "source": "docs/requirements/rebuild-mapping.json",
+  "design_inputs": {
+    "confirmed": [
+      {
+        "id": "CONFIRMED-01",
+        "classification": "confirmed",
+        "description": "全新独立产品；不读取、探测、导入、迁移或兼容旧 PMM 数据库及备份。",
+        "source": "docs/contracts/decisions.zh-CN.md#已确认的产品决定"
+      },
+      {
+        "id": "CONFIRMED-02",
+        "classification": "confirmed",
+        "description": ".NET 10 / C# 14；一个 Kestrel 宿主承载 Razor MVC、HTTP 和 MCP。",
+        "source": "docs/contracts/decisions.zh-CN.md#已确认的产品决定"
+      },
+      {
+        "id": "CONFIRMED-03",
+        "classification": "confirmed",
+        "description": "Bootstrap 5、jQuery、Axios 随产品本地打包；SQLite 3 / EF Core 10 Code First；HostedServices 持久任务；不引入 Redis 或外部消息中间件。",
+        "source": "docs/contracts/decisions.zh-CN.md#已确认的产品决定"
+      },
+      {
+        "id": "CONFIRMED-04",
+        "classification": "confirmed",
+        "description": "采用 xUnit、真实隔离 SQLite 与临时文件系统、API 合同及 Playwright；Windows、Linux、macOS 的证据分别记录。",
+        "source": "docs/contracts/decisions.zh-CN.md#已确认的产品决定"
+      },
+      {
+        "id": "CONFIRMED-05",
+        "classification": "confirmed",
+        "description": "GitHub、Actions、Issues；Bash 和 PowerShell 7 的行为按实际平台验证。",
+        "source": "docs/contracts/decisions.zh-CN.md#已确认的产品决定"
+      },
+      {
+        "id": "CONFIRMED-06",
+        "classification": "confirmed",
+        "description": "规则加 TMDB 为默认识别路径；AI 可选；MCP 客户端提案不隐式启用付费 AI。",
+        "source": "docs/contracts/decisions.zh-CN.md#已确认的产品决定"
+      },
+      {
+        "id": "CONFIRMED-07",
+        "classification": "confirmed",
+        "description": "完整产品范围保留本地作品、人工资料、复杂季集覆盖、保留原版的主动音轨处理和受控来源目标重叠。",
+        "source": "docs/contracts/decisions.zh-CN.md#已确认的产品决定"
+      },
+      {
+        "id": "CONFIRMED-08",
+        "classification": "confirmed",
+        "description": "默认不自动覆盖；替换前保全；撤销结果服从实际磁盘事实；UI、HTTP、MCP 共用领域规则。",
+        "source": "docs/contracts/decisions.zh-CN.md#已确认的产品决定"
+      },
+      {
+        "id": "CONFIRMED-09",
+        "classification": "confirmed",
+        "description": "已确认视觉方向仅为设计参考；对象级播放和下载链接不扩展为媒体下载器或播放服务。",
+        "source": "docs/contracts/decisions.zh-CN.md#已确认的产品决定"
+      }
+    ],
+    "proposals": [
+      {
+        "id": "E01",
+        "classification": "proposal",
+        "description": "源代际、身份与覆盖决定、不可变计划、批准、执行 journal 的拆分及共用应用层。",
+        "source": "docs/contracts/decisions.zh-CN.md#供独立评审后实施的工程决定"
+      },
+      {
+        "id": "E02",
+        "classification": "proposal",
+        "description": "持久队列、lease/fencing、意图 journal、检查点和事实核查机制；不声称跨 SQLite 与文件系统的分布式原子事务。",
+        "source": "docs/contracts/decisions.zh-CN.md#供独立评审后实施的工程决定"
+      },
+      {
+        "id": "E03",
+        "classification": "proposal",
+        "description": "精确版本范围、幂等、执行时重验、恢复不复活批准、批内成功不重复执行的具体实现机制。",
+        "source": "docs/contracts/decisions.zh-CN.md#供独立评审后实施的工程决定"
+      },
+      {
+        "id": "E04",
+        "classification": "proposal",
+        "description": "完整内容校验、保全副本及操作证据保留的具体机制。",
+        "source": "docs/contracts/decisions.zh-CN.md#供独立评审后实施的工程决定"
+      },
+      {
+        "id": "E05",
+        "classification": "proposal",
+        "description": "最小能力授权、合成身份和 fake 适配器的具体实现。",
+        "source": "docs/contracts/decisions.zh-CN.md#供独立评审后实施的工程决定"
+      },
+      {
+        "id": "DOMAIN-SCHEMAS",
+        "classification": "proposal",
+        "description": "领域实体、字段、键、索引、算法、状态编码、DTO 和逐能力接口设计均须在对应新卡中重新审查；不从已确认结果推定字段级批准。",
+        "source": "docs/contracts/domain-model.zh-CN.md#1.3-设计状态标签"
+      }
+    ],
+    "unresolved": [
+      {
+        "id": "D01",
+        "classification": "unresolved",
+        "description": "默认 Move/Copy 与目录覆盖行为。",
+        "source": "docs/contracts/decisions.zh-CN.md#未定产品策略及安全施工取值"
+      },
+      {
+        "id": "D02",
+        "classification": "unresolved",
+        "description": "冲突时询问、跳过及替换策略。",
+        "source": "docs/contracts/decisions.zh-CN.md#未定产品策略及安全施工取值"
+      },
+      {
+        "id": "D03",
+        "classification": "unresolved",
+        "description": "原版与替换版保留期限、恢复介质及空间处置。",
+        "source": "docs/contracts/decisions.zh-CN.md#未定产品策略及安全施工取值"
+      },
+      {
+        "id": "D04",
+        "classification": "unresolved",
+        "description": "角色、匿名、LAN 和远程访问策略。",
+        "source": "docs/contracts/decisions.zh-CN.md#未定产品策略及安全施工取值"
+      },
+      {
+        "id": "D05",
+        "classification": "unresolved",
+        "description": "各平台入口等价范围和实际验收次序。",
+        "source": "docs/contracts/decisions.zh-CN.md#未定产品策略及安全施工取值"
+      },
+      {
+        "id": "D06",
+        "classification": "unresolved",
+        "description": "同目录决定复用范围与期限。",
+        "source": "docs/contracts/decisions.zh-CN.md#未定产品策略及安全施工取值"
+      },
+      {
+        "id": "D07",
+        "classification": "unresolved",
+        "description": "发行版、复杂覆盖表达与消费端 NFO 兼容。",
+        "source": "docs/contracts/decisions.zh-CN.md#未定产品策略及安全施工取值"
+      },
+      {
+        "id": "D08",
+        "classification": "unresolved",
+        "description": "AI 预算、模型白名单、提供商能力和默认批量。",
+        "source": "docs/contracts/decisions.zh-CN.md#未定产品策略及安全施工取值"
+      },
+      {
+        "id": "D09",
+        "classification": "unresolved",
+        "description": "完成度分母及未知目录、特别篇、版本的处理。",
+        "source": "docs/contracts/decisions.zh-CN.md#未定产品策略及安全施工取值"
+      },
+      {
+        "id": "D10",
+        "classification": "unresolved",
+        "description": "精确清理对象和审计、恢复证据保留期限。",
+        "source": "docs/contracts/decisions.zh-CN.md#未定产品策略及安全施工取值"
+      },
+      {
+        "id": "D11",
+        "classification": "unresolved",
+        "description": "新产品恢复切换时的数据取舍及切换前状态保全。",
+        "source": "docs/contracts/decisions.zh-CN.md#未定产品策略及安全施工取值"
+      },
+      {
+        "id": "D12",
+        "classification": "unresolved",
+        "description": "自动更新、实际安装和回滚窗口。",
+        "source": "docs/contracts/decisions.zh-CN.md#未定产品策略及安全施工取值"
+      },
+      {
+        "id": "D13",
+        "classification": "unresolved",
+        "description": "通知停用、既有队列目的地及网络出口策略。",
+        "source": "docs/contracts/decisions.zh-CN.md#未定产品策略及安全施工取值"
+      },
+      {
+        "id": "D14",
+        "classification": "unresolved",
+        "description": "MCP 访问与本机确认的具体授权边界。",
+        "source": "docs/contracts/decisions.zh-CN.md#未定产品策略及安全施工取值"
+      },
+      {
+        "id": "D15",
+        "classification": "unresolved",
+        "description": "设置的实际消费者、生效时点和维护对象集合。",
+        "source": "docs/contracts/decisions.zh-CN.md#未定产品策略及安全施工取值"
+      }
+    ]
+  },
+  "shared_transport_contract": {
+    "status": "planned",
+    "verification_status": "not-run",
+    "rule": "UI, HTTP and MCP must use the same reviewed application/domain rules, authorization decisions and stable failure meanings; transport adapters must not bypass those rules.",
+    "permissions": "No business permission, account role, anonymous/LAN/remote policy or MCP grant is implemented or approved here. D04 and D14 remain unresolved.",
+    "failure_consistency": "Future cards must test equivalent denied, stale, cancelled, conflicting and partial-failure outcomes across all implemented transports. No such business behavior is passed by foundation tests."
+  },
+  "capabilities": [
+    {
+      "id": "system.status",
+      "category": "基础与受限访问",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "system.readiness",
+      "category": "基础与受限访问",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "system.setup_status",
+      "category": "基础与受限访问",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "system.initialize",
+      "category": "基础与受限访问",
+      "operation_kind": "local",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "system.capabilities",
+      "category": "基础与受限访问",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "accounts.list",
+      "category": "基础与受限访问",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "accounts.create",
+      "category": "基础与受限访问",
+      "operation_kind": "local",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "accounts.disable",
+      "category": "基础与受限访问",
+      "operation_kind": "local",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "accounts.delete",
+      "category": "基础与受限访问",
+      "operation_kind": "local",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "accounts.change_password",
+      "category": "基础与受限访问",
+      "operation_kind": "local",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "accounts.revoke_sessions",
+      "category": "基础与受限访问",
+      "operation_kind": "local",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "accounts.list_sessions",
+      "category": "基础与受限访问",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "accounts.mcp_access_read",
+      "category": "基础与受限访问",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "accounts.mcp_access_grant",
+      "category": "基础与受限访问",
+      "operation_kind": "local",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "accounts.mcp_access_revoke",
+      "category": "基础与受限访问",
+      "operation_kind": "local",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "sources.list",
+      "category": "来源扫描与文件代际",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "sources.get",
+      "category": "来源扫描与文件代际",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "sources.save",
+      "category": "来源扫描与文件代际",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "sources.pause",
+      "category": "来源扫描与文件代际",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "sources.resume",
+      "category": "来源扫描与文件代际",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "sources.probe",
+      "category": "来源扫描与文件代际",
+      "operation_kind": "probe",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "sources.scan",
+      "category": "来源扫描与文件代际",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "sources.scan_all",
+      "category": "来源扫描与文件代际",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "sources.intake_path",
+      "category": "来源扫描与文件代际",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "sources.formats_read",
+      "category": "来源扫描与文件代际",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "sources.formats_save",
+      "category": "来源扫描与文件代际",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "sources.ignore_rules_read",
+      "category": "来源扫描与文件代际",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "sources.ignore_rules_save",
+      "category": "来源扫描与文件代际",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "sources.ignore_preview",
+      "category": "来源扫描与文件代际",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "sources.overlap_preview",
+      "category": "来源扫描与文件代际",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "tasks.list",
+      "category": "持久操作与阶段回执",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "tasks.get",
+      "category": "持久操作与阶段回执",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "tasks.stages",
+      "category": "持久操作与阶段回执",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "tasks.cancel",
+      "category": "持久操作与阶段回执",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "tasks.reconcile",
+      "category": "持久操作与阶段回执",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "tasks.retry_plan",
+      "category": "持久操作与阶段回执",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "tasks.retry_execute",
+      "category": "持久操作与阶段回执",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "tasks.reanalyze",
+      "category": "持久操作与阶段回执",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "tasks.events",
+      "category": "持久操作与阶段回执",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "recognition.context",
+      "category": "识别证据与人工采用",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "recognition.parse_preview",
+      "category": "识别证据与人工采用",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "recognition.candidates",
+      "category": "识别证据与人工采用",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "recognition.tmdb_search",
+      "category": "识别证据与人工采用",
+      "operation_kind": "probe",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "recognition.tmdb_details",
+      "category": "识别证据与人工采用",
+      "operation_kind": "probe",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "recognition.catalog_refresh",
+      "category": "识别证据与人工采用",
+      "operation_kind": "probe",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "recognition.submit_suggestion",
+      "category": "识别证据与人工采用",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "recognition.adopt_suggestion",
+      "category": "识别证据与人工采用",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "recognition.decision_get",
+      "category": "识别证据与人工采用",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "recognition.decision_save",
+      "category": "识别证据与人工采用",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "recognition.numbering_preview",
+      "category": "识别证据与人工采用",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "recognition.numbering_save",
+      "category": "识别证据与人工采用",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "recognition.directory_binding_read",
+      "category": "识别证据与人工采用",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "recognition.directory_binding_save",
+      "category": "识别证据与人工采用",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "recognition.directory_binding_revoke",
+      "category": "识别证据与人工采用",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "recognition.markers_inspect",
+      "category": "识别证据与人工采用",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "recognition.episode_group_preview",
+      "category": "识别证据与人工采用",
+      "operation_kind": "probe",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "works.list",
+      "category": "本地作品与复杂覆盖",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "works.get",
+      "category": "本地作品与复杂覆盖",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "works.create_local",
+      "category": "本地作品与复杂覆盖",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "works.save_metadata",
+      "category": "本地作品与复杂覆盖",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "works.link_external_preview",
+      "category": "本地作品与复杂覆盖",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "works.link_external_apply",
+      "category": "本地作品与复杂覆盖",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "works.unlink_external",
+      "category": "本地作品与复杂覆盖",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "works.merge_plan",
+      "category": "本地作品与复杂覆盖",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "works.merge_execute",
+      "category": "本地作品与复杂覆盖",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "works.coverage_read",
+      "category": "本地作品与复杂覆盖",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "works.coverage_save",
+      "category": "本地作品与复杂覆盖",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "organize.plan",
+      "category": "分类命名与安全归档",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "organize.plan_get",
+      "category": "分类命名与安全归档",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "organize.plan_validate",
+      "category": "分类命名与安全归档",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "organize.plan_approve",
+      "category": "分类命名与安全归档",
+      "operation_kind": "approve",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "organize.plan_revoke",
+      "category": "分类命名与安全归档",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "organize.execute",
+      "category": "分类命名与安全归档",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "organize.receipt",
+      "category": "分类命名与安全归档",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "organize.auto_policy_read",
+      "category": "分类命名与安全归档",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "organize.auto_policy_save",
+      "category": "分类命名与安全归档",
+      "operation_kind": "local",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "categories.list",
+      "category": "分类命名与安全归档",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "categories.save",
+      "category": "分类命名与安全归档",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "categories.delete",
+      "category": "分类命名与安全归档",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "categories.rules_read",
+      "category": "分类命名与安全归档",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "categories.rules_save",
+      "category": "分类命名与安全归档",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "categories.rules_preview",
+      "category": "分类命名与安全归档",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "categories.naming_read",
+      "category": "分类命名与安全归档",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "categories.naming_save",
+      "category": "分类命名与安全归档",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "categories.naming_preview",
+      "category": "分类命名与安全归档",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "assets.manifest",
+      "category": "伴生音轨与来源清理",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "assets.sidecar_plan",
+      "category": "伴生音轨与来源清理",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "assets.sidecar_execute",
+      "category": "伴生音轨与来源清理",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "assets.subtitle_candidates",
+      "category": "伴生音轨与来源清理",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "assets.subtitle_search",
+      "category": "伴生音轨与来源清理",
+      "operation_kind": "probe",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "assets.subtitle_files",
+      "category": "伴生音轨与来源清理",
+      "operation_kind": "probe",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "assets.subtitle_download_plan",
+      "category": "伴生音轨与来源清理",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "assets.subtitle_download_execute",
+      "category": "伴生音轨与来源清理",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "assets.subtitle_download_history",
+      "category": "伴生音轨与来源清理",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "assets.audio_probe",
+      "category": "伴生音轨与来源清理",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "assets.audio_transform_plan",
+      "category": "伴生音轨与来源清理",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "assets.audio_transform_execute",
+      "category": "伴生音轨与来源清理",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "assets.audio_original_restore_plan",
+      "category": "伴生音轨与来源清理",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "assets.audio_original_restore_execute",
+      "category": "伴生音轨与来源清理",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "assets.cleanup_plan",
+      "category": "伴生音轨与来源清理",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "assets.cleanup_execute",
+      "category": "伴生音轨与来源清理",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "recovery.undo_plan",
+      "category": "撤销纠错与孤儿恢复",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "recovery.undo_execute",
+      "category": "撤销纠错与孤儿恢复",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "recovery.reopen_plan",
+      "category": "撤销纠错与孤儿恢复",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "recovery.reopen_execute",
+      "category": "撤销纠错与孤儿恢复",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "recovery.orphan_scan",
+      "category": "撤销纠错与孤儿恢复",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "recovery.orphan_claim_plan",
+      "category": "撤销纠错与孤儿恢复",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "recovery.orphan_claim_execute",
+      "category": "撤销纠错与孤儿恢复",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "recovery.relocate_plan",
+      "category": "撤销纠错与孤儿恢复",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "recovery.relocate_execute",
+      "category": "撤销纠错与孤儿恢复",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "recovery.delete_record_plan",
+      "category": "撤销纠错与孤儿恢复",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "recovery.delete_record_execute",
+      "category": "撤销纠错与孤儿恢复",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "library.list",
+      "category": "媒体库与对象级外链",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "library.recent",
+      "category": "媒体库与对象级外链",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "library.work",
+      "category": "媒体库与对象级外链",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "library.season",
+      "category": "媒体库与对象级外链",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "library.asset",
+      "category": "媒体库与对象级外链",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "library.facets",
+      "category": "媒体库与对象级外链",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "library.statistics",
+      "category": "媒体库与对象级外链",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "library.metadata_refresh",
+      "category": "媒体库与对象级外链",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "library.existence_scan",
+      "category": "媒体库与对象级外链",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "library.audio_scan",
+      "category": "媒体库与对象级外链",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "links.list",
+      "category": "媒体库与对象级外链",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "links.save",
+      "category": "媒体库与对象级外链",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "links.remove",
+      "category": "媒体库与对象级外链",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "links.restore",
+      "category": "媒体库与对象级外链",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "links.resolve_open",
+      "category": "媒体库与对象级外链",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "links.tmdb_register",
+      "category": "媒体库与对象级外链",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "rules.list",
+      "category": "规则建议与离线验证",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "rules.get",
+      "category": "规则建议与离线验证",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "rules.save_draft",
+      "category": "规则建议与离线验证",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "rules.propose",
+      "category": "规则建议与离线验证",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "rules.validate",
+      "category": "规则建议与离线验证",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "rules.impact",
+      "category": "规则建议与离线验证",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "rules.activate",
+      "category": "规则建议与离线验证",
+      "operation_kind": "approve",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "rules.rollback",
+      "category": "规则建议与离线验证",
+      "operation_kind": "approve",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "rules.test_cases_list",
+      "category": "规则建议与离线验证",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "rules.test_cases_save",
+      "category": "规则建议与离线验证",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "rules.test_cases_import",
+      "category": "规则建议与离线验证",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "rules.test_cases_disable",
+      "category": "规则建议与离线验证",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "rules.test_cases_replay",
+      "category": "规则建议与离线验证",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "rules.test_cases_approve_expected",
+      "category": "规则建议与离线验证",
+      "operation_kind": "approve",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "rules.runs",
+      "category": "规则建议与离线验证",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "ai.providers_list",
+      "category": "可选AI与完整诊断",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "ai.provider_save",
+      "category": "可选AI与完整诊断",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "ai.provider_delete",
+      "category": "可选AI与完整诊断",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "ai.credential_set",
+      "category": "可选AI与完整诊断",
+      "operation_kind": "local",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "ai.primary_select",
+      "category": "可选AI与完整诊断",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "ai.health_known",
+      "category": "可选AI与完整诊断",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "ai.test_connection",
+      "category": "可选AI与完整诊断",
+      "operation_kind": "probe",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "ai.unblock",
+      "category": "可选AI与完整诊断",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "ai.quota_read",
+      "category": "可选AI与完整诊断",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "ai.quota_save",
+      "category": "可选AI与完整诊断",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "ai.quota_reset",
+      "category": "可选AI与完整诊断",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "ai.batch_policy_read",
+      "category": "可选AI与完整诊断",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "ai.batch_policy_save",
+      "category": "可选AI与完整诊断",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "ai.suggest",
+      "category": "可选AI与完整诊断",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "ai.calls",
+      "category": "可选AI与完整诊断",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "ai.call_diagnostic",
+      "category": "可选AI与完整诊断",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "ai.call_cancel",
+      "category": "可选AI与完整诊断",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "models.list",
+      "category": "本地模型生命周期",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "models.get",
+      "category": "本地模型生命周期",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "models.download_plan",
+      "category": "本地模型生命周期",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "models.download_execute",
+      "category": "本地模型生命周期",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "models.download_cancel",
+      "category": "本地模型生命周期",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "models.verify",
+      "category": "本地模型生命周期",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "models.start",
+      "category": "本地模型生命周期",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "models.stop",
+      "category": "本地模型生命周期",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "models.activate",
+      "category": "本地模型生命周期",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "models.remove_plan",
+      "category": "本地模型生命周期",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "models.remove_execute",
+      "category": "本地模型生命周期",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "models.resources",
+      "category": "本地模型生命周期",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "settings.catalog",
+      "category": "有效设置与通知连接",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "settings.read",
+      "category": "有效设置与通知连接",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "settings.save",
+      "category": "有效设置与通知连接",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "settings.reset_plan",
+      "category": "有效设置与通知连接",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "settings.reset_execute",
+      "category": "有效设置与通知连接",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "settings.effective",
+      "category": "有效设置与通知连接",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "settings.tmdb_test",
+      "category": "有效设置与通知连接",
+      "operation_kind": "probe",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "settings.subtitle_test",
+      "category": "有效设置与通知连接",
+      "operation_kind": "probe",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "settings.proxy_test",
+      "category": "有效设置与通知连接",
+      "operation_kind": "probe",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "settings.ffmpeg_test",
+      "category": "有效设置与通知连接",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "settings.credential_set",
+      "category": "有效设置与通知连接",
+      "operation_kind": "local",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "notifications.subscriptions",
+      "category": "有效设置与通知连接",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "notifications.save",
+      "category": "有效设置与通知连接",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "notifications.disable",
+      "category": "有效设置与通知连接",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "notifications.test",
+      "category": "有效设置与通知连接",
+      "operation_kind": "probe",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "notifications.deliveries",
+      "category": "有效设置与通知连接",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "notifications.retry",
+      "category": "有效设置与通知连接",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "notifications.alerts",
+      "category": "有效设置与通知连接",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "notifications.acknowledge",
+      "category": "有效设置与通知连接",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "diagnostics.timeline",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "diagnostics.logs",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "diagnostics.export_plan",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "diagnostics.export_execute",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "diagnostics.retention_read",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "diagnostics.retention_save",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "diagnostics.clear_plan",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "diagnostics.clear_execute",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "backup.list",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "backup.policy_read",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "backup.policy_save",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "write",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "backup.create",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "backup.verify",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "backup.restore_plan",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "backup.restore_execute",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "backup.restore_receipt",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "backup.delete_plan",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "backup.delete_execute",
+      "category": "诊断导出与新数据恢复",
+      "operation_kind": "execute",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "updates.status",
+      "category": "平台入口与更新闭环",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "updates.check",
+      "category": "平台入口与更新闭环",
+      "operation_kind": "probe",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "updates.plan",
+      "category": "平台入口与更新闭环",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "updates.download",
+      "category": "平台入口与更新闭环",
+      "operation_kind": "job",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "updates.install",
+      "category": "平台入口与更新闭环",
+      "operation_kind": "local",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "updates.restart",
+      "category": "平台入口与更新闭环",
+      "operation_kind": "local",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "updates.receipt",
+      "category": "平台入口与更新闭环",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "updates.rollback_plan",
+      "category": "平台入口与更新闭环",
+      "operation_kind": "preview",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "updates.rollback_execute",
+      "category": "平台入口与更新闭环",
+      "operation_kind": "local",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    },
+    {
+      "id": "updates.platform_capabilities",
+      "category": "平台入口与更新闭环",
+      "operation_kind": "read",
+      "classification": "proposal",
+      "implementation_status": "planned",
+      "verification_status": "not-run",
+      "acceptance_inherited": false
+    }
+  ]
+}

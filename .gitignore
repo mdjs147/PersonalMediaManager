@@ -1,2 +1,10 @@
 __pycache__/
 *.pyc
+
+# Reproducible build and test outputs
+**/bin/
+**/obj/
+**/TestResults/
+.vs/
+*.user
+*.suo

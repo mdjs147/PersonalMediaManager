@@ -38,17 +38,17 @@
     "environment": {
       "schema_version": 1,
       "dimensions": {
-        "language_runtime": "Activation: actual stable .NET SDK 10.0.401 and runtime 10.0.12 on Linux x86_64; C#14/net10.0 foundation intended. Python 3.12.x, Git >=2.40,<3 and Bash5 governance remain current. Scaffold build and product tests NOT-RUN until separately published activation.",
-        "web_host": "DEV001 authorizes only a new single loopback Kestrel host with inert Razor MVC shell and a foundation health response. No business HTTP/MCP routes, custom workers, authentication or key creation. Host implementation and startup checks NOT-RUN at activation.",
-        "frontend": "No current frontend. DEV001 may build only an inert Razor shell with local styles; Bootstrap5/jQuery/Axios stay planned for later feature cards and are not fetched from CDNs.",
-        "database": "DEV001 may create new temporary isolated empty SQLite databases for foundation tests only, never choose/read/probe/import any old or real media database, backup or directory. SQLite execution NOT-RUN at activation.",
-        "data_access": "EFCore10 Code First remains the target. A fresh minimal offline SQLite test base may use pinned official Microsoft.EntityFrameworkCore.Sqlite 10.0.12; no product entity schema, migrations or live store are approved. Package restore/build NOT-RUN at activation.",
-        "background_jobs": "No application worker or durable queue may start in this card. HostedServices are a retained future requirement with all product cancellation/retry/recovery tests NOT-RUN.",
-        "cache_messaging": "No Redis, external message broker or network cache. No new credential, saved auth or service account is required or permitted.",
-        "testing": "Fresh independent xUnit 2.9.3, xunit.runner.visualstudio 3.1.4 and Microsoft.NET.Test.Sdk 17.14.1 are intended from official NuGet; exact dependency locks and new temporary SQLite/filesystem plus inert-host tests are required for implementation delivery. Governance suites rerun at activation; old product tests and counts excluded.",
-        "hosting_ci": "Only the published isolated GitHub dot stage. CI provisions SDK from exact global.json, validates activation-only context/governance before source exists, then requires locked official NuGet restore, actual build/nonempty tests and inert-isolated host checks at implementation delivery. Main stays read-only.",
-        "deployment_network": "No release/deploy, real account/service/media access, paid AI, TMDB, credential generation or production permissions. Restore only from explicit official NuGet feed using approved tooling/cache; startup and tests use loopback and newly created temporary data only.",
-        "ai_platform_shell": "Actual independent author/test/reviewer executions declared; unavailable model recorded null. Current Linux x86_64/Bash only. Windows/macOS and PowerShell7 product acceptance remain NOT-RUN and require their own evidence."
+        "language_runtime": "Current fresh foundation targets net10.0/C#14 with stable SDK10.0.401 pinned and observed .NET/ASP.NET10.0.12. Python3.12.x/Git2/Bash5 governance remains. Current constrained local build uses DOTNET_PROCESSOR_COUNT=1, DOTNET_CLI_USE_MSBUILD_SERVER=0 and MSBUILDDISABLENODEREUSE=1; shared compilation is disabled in the project. All projects and tests still execute.",
+        "web_host": "Current single Kestrel created with an empty configuration builder, fixed Production and one IPv4 loopback HTTP listener. Only GET/HEAD inert Razor root and foundation health routes. No business HTTP/MCP routes, custom worker, account or network-client registration. Data Protection key management/prewarm are removed and cryptographic operations explicitly reject.",
+        "frontend": "Current compiled local inert Razor shell with inline styles; no CDN, scripts, forms or business interactions. Bootstrap5/jQuery/Axios and visual/business interaction acceptance remain planned for later cards.",
+        "database": "Only newly created unique temporary empty directories can hold fresh synthetic SQLite test databases. The host does not create a database or choose a media path. No old/real media DB or backup may be probed, imported, migrated or opened.",
+        "data_access": "EFCore.Sqlite10.0.12 exists only in the new test project, with a synthetic test-only entity, Pooling=False and separate fresh databases. Foundation/Web have no direct external NuGet dependency or production schema. Dependency locks are current review inputs.",
+        "background_jobs": "No custom application worker, queue, integration, authentication or data service starts; only the framework web-host service runs. Durable HostedServices/product cancellation/retry/recovery remain planned.",
+        "cache_messaging": "No Redis, external broker or network cache. No account credential, token, service account or persistent security access is created.",
+        "testing": "New xUnit2.9.3/runner3.1.4/TestSDK17.14.1 cover distinct CLI, endpoint, dependency-registration, key-refusal and isolated SQLite/filesystem risks; new Python checks a real Linux host/socket and unchanged temporary runtime tree. Focused fixes get affected checks; final integration gets full applicable governance/foundation validation. Results are separately recorded, not inherited.",
+        "hosting_ci": "Only the independent GitHub dot stage; exact SDK10, official locked NuGet restore, build, nonempty tests and real inert-host validation. Job-level DOTNET_GENERATE_ASPNET_CERTIFICATE=false is already published and inherited. Activation-only CI is not product acceptance. main remains read-only.",
+        "deployment_network": "No release/deploy, account setup, saved credentials, paid AI/TMDB or real media/data operation. Package restoration uses explicit official NuGet source. Application/test traffic is loopback; process socket sampling is not proof of every network moment. No development certificate generation or trust.",
+        "ai_platform_shell": "Primary author, separate test author and independent reviewer are assigned with unknown model null. Current Linux x86_64/Bash only; Windows/macOS/PowerShell7 product behavior remains NOT-RUN. Test workspace is single-owner and not a production or race-resistant filesystem boundary."
       },
       "source_paths": [
         "docs/agents/governance-profile.json",
@@ -60,7 +60,23 @@
         "global.json",
         "docs/workflow/DEV001.md",
         "docs/workflow/DEV001-applicability.md",
-        "docs/workflow/GOV002-plan-publication.json"
+        "docs/workflow/GOV002-plan-publication.json",
+        "Directory.Build.props",
+        "Directory.Packages.props",
+        ".editorconfig",
+        ".gitignore",
+        "PersonalMediaManager.sln",
+        "src/PersonalMediaManager.Foundation/PersonalMediaManager.Foundation.csproj",
+        "src/PersonalMediaManager.Foundation/packages.lock.json",
+        "src/PersonalMediaManager.Web/PersonalMediaManager.Web.csproj",
+        "src/PersonalMediaManager.Web/packages.lock.json",
+        "tests/foundation/PersonalMediaManager.Foundation.Tests.csproj",
+        "tests/foundation/packages.lock.json",
+        "tests/foundation/verify_foundation.py",
+        "src/PersonalMediaManager.Web/FoundationHost.cs",
+        "src/PersonalMediaManager.Foundation/FoundationOptions.cs",
+        "src/PersonalMediaManager.Foundation/IsolatedTestWorkspace.cs",
+        "docs/requirements/dev001/technical-applicability.md"
       ],
       "execution_platforms": [
         {
@@ -70,7 +86,7 @@
         }
       ]
     },
-    "environment_blob": "534e6436907e2d6fe5f8c21986c3906fd80f73e6",
+    "environment_blob": "d5d0cb9adabf0fe7ebec304e1a07e8a7cb897a32",
     "environment_sources": {
       "docs/agents/governance-profile.json": "a806605b2ef034b86519beda08731a3e3cc94b9b",
       "docs/requirements/retained-decisions.md": "9f8813e3bce3ca596da3b79c4216ca73701fb147",
@@ -81,11 +97,31 @@
       "global.json": "1769bc165d048c16924465fd1f3c67fa4f5f6944",
       "docs/workflow/DEV001.md": "9c9308e0153a2b559bd192528ac4d5ccba094bb5",
       "docs/workflow/DEV001-applicability.md": "47ec16d31a85767575557e3d3777728572bd62e2",
-      "docs/workflow/GOV002-plan-publication.json": "652dffac91df031d879f0dde0e3fd3d1018eac9b"
+      "docs/workflow/GOV002-plan-publication.json": "652dffac91df031d879f0dde0e3fd3d1018eac9b",
+      "Directory.Build.props": "6a5e1ab72d4891d903f6e9871274548db33d0d03",
+      "Directory.Packages.props": "84fe71369f59ec7f17a09265a620895f9e721349",
+      ".editorconfig": "54d198e81519989ef479d5d0213a8c68d6590d08",
+      ".gitignore": "d95720ed7bff45fa69a23e950864732b7fd01ed6",
+      "PersonalMediaManager.sln": "184276bec77a3a10d71b5895e4fc473698bd4b8c",
+      "src/PersonalMediaManager.Foundation/PersonalMediaManager.Foundation.csproj": "e1f57b5a2194f165a40bdea2eba060a0e8f80e8b",
+      "src/PersonalMediaManager.Foundation/packages.lock.json": "6afd6786b95a8c85febce85cf6219643ee860872",
+      "src/PersonalMediaManager.Web/PersonalMediaManager.Web.csproj": "542f3518908e56159558d51f47897c5ae21a2d3a",
+      "src/PersonalMediaManager.Web/packages.lock.json": "0ca5dcccac001f38b48bd80a0f99e30bca732a98",
+      "tests/foundation/PersonalMediaManager.Foundation.Tests.csproj": "c0558a10cc410055aec26590fc268048665d0f53",
+      "tests/foundation/packages.lock.json": "bd262a417e95d387fe90786478539b6e767c4ae0",
+      "tests/foundation/verify_foundation.py": "122f98b56bea3c1736719c0f706479bc4587659e",
+      "src/PersonalMediaManager.Web/FoundationHost.cs": "8ac82d7c61dd2fc421216846ce2a9e49a18157a1",
+      "src/PersonalMediaManager.Foundation/FoundationOptions.cs": "765c81d64e501f4188d9ed7ef3199039127816b0",
+      "src/PersonalMediaManager.Foundation/IsolatedTestWorkspace.cs": "3440a97e15e9e33fcf9f131adc9bf782684d676a",
+      "docs/requirements/dev001/technical-applicability.md": "83a9a61956982033e216b5269557e6661c579f22"
     },
     "config_inventory": {
       ".github/workflows/verify-governance.yml": "b5d72523c5ea775ef439e7f2ca95d69692fddc44",
-      "global.json": "1769bc165d048c16924465fd1f3c67fa4f5f6944"
+      "PersonalMediaManager.sln": "184276bec77a3a10d71b5895e4fc473698bd4b8c",
+      "global.json": "1769bc165d048c16924465fd1f3c67fa4f5f6944",
+      "src/PersonalMediaManager.Foundation/PersonalMediaManager.Foundation.csproj": "e1f57b5a2194f165a40bdea2eba060a0e8f80e8b",
+      "src/PersonalMediaManager.Web/PersonalMediaManager.Web.csproj": "542f3518908e56159558d51f47897c5ae21a2d3a",
+      "tests/foundation/PersonalMediaManager.Foundation.Tests.csproj": "c0558a10cc410055aec26590fc268048665d0f53"
     }
   },
   "context_review": {
@@ -100,8 +136,8 @@
       "execution_id": "pmm-dev001-20261005T061324Z",
       "model": null
     },
-    "reviewed_at": "2026-10-05T07:29:10.828531+00:00",
-    "report": "docs/agents/readiness/evidence/dev001/context-review.json"
+    "reviewed_at": "2026-10-05T08:16:52.905667+00:00",
+    "report": "docs/agents/readiness/evidence/dev001/implementation-context-review.json"
   },
   "entrypoints": {
     "agent_instructions": "AGENTS.md",
