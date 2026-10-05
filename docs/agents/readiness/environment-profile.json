@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "dimensions": {
+    "language_runtime": "Current: Python 3.12.x governance tooling; Git >=2.40,<3 and Bash 5.x, exact observed versions recorded by probes. Future .NET 10/C#14 is a retained requirement, no current product target.",
+    "web_host": "No current host. Future single Kestrel/Razor MVC/HTTP/MCP remains a requirement.",
+    "frontend": "No current frontend. Future packaged Bootstrap5/jQuery/Axios remains a requirement.",
+    "database": "No current database. Future SQLite3 remains a requirement.",
+    "data_access": "No current data access. Future EFCore10 Code First remains a requirement.",
+    "background_jobs": "No current worker. Future durable HostedServices remains a requirement.",
+    "cache_messaging": "No current or planned external cache/message middleware.",
+    "testing": "Current Python unittest plus actual Git/readiness invocation acceptance; future xUnit/API/Playwright/product tests are not implemented.",
+    "hosting_ci": "Public GitHub repository and read-only GitHub Actions governance verification; strict published Markdown cards; no main integration.",
+    "deployment_network": "No product deployment or real service credentials. Public Git reads and read-only CI; private source update discovery may be unavailable.",
+    "ai_platform_shell": "Actual agent execution on Linux x86_64 Bash; actual model unavailable and recorded null. Other product platforms/shells require separate evidence."
+  },
+  "source_paths": [
+    "docs/agents/governance-profile.json",
+    "docs/requirements/retained-decisions.md",
+    ".github/workflows/verify-governance.yml",
+    "docs/agents/source-assets.json"
+  ],
+  "execution_platforms": [
+    {
+      "system": "Linux",
+      "machine": "x86_64",
+      "shell": "bash"
+    }
+  ]
+}

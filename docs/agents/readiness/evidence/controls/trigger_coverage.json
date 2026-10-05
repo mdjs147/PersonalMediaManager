@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "control_id": "trigger_coverage",
+  "result": "passed",
+  "command": "python3 /workspace/shared/pmm-ba001-control-harness.py --control trigger_coverage",
+  "exit_code": 0,
+  "observed_at": "2026-10-05T03:18:20.291629Z",
+  "positive_check": {
+    "command": "export SHELL=\"$(readlink /proc/$$/exe)\"; PMM_ACTOR=pmm-adoption-author git commit --allow-empty -m \"Independent accepted registered-hook probe\"",
+    "expected_result": "accepted",
+    "observed_result": "accepted",
+    "expected_exit": 0,
+    "observed_exit": 0,
+    "output": "docs/agents/readiness/evidence/outputs/trigger_coverage-positive.txt"
+  },
+  "negative_check": {
+    "command": "export SHELL=\"$(readlink /proc/$$/exe)\"; PMM_ACTOR=wrong-actor git commit --allow-empty -m \"Independent rejected registered-hook probe\"",
+    "expected_result": "rejected",
+    "observed_result": "rejected",
+    "expected_exit": 1,
+    "observed_exit": 1,
+    "output": "docs/agents/readiness/evidence/outputs/trigger_coverage-negative.txt"
+  },
+  "implementation_blobs": {
+    ".githooks/pre-commit": "47078100f91bcb1944be264bbce6cd21f4c62310",
+    ".githooks/pre-push": "397b69d8d96b849bf724107f77ac2f3af548e5a2",
+    "scripts/pmm_governance.py": "03b1687a6b83e48aae0ffa45b29d887e76d0a0b0",
+    "scripts/verify_governance.py": "bd6501310c01b3c2b8ada643c96264e2d5bb56fa",
+    "tests/governance/test_governance.py": "91410d9f12136d5541dba9b316c9fdaf75d0fcf0",
+    ".github/workflows/verify-governance.yml": "cc2a6185469523dc71e9152ed91ea2896c14815c"
+  }
+}

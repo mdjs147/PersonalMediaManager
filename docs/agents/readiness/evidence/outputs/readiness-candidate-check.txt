@@ -1,0 +1,4 @@
+Command: python3 docs/agents/readiness/validate_readiness.py check-context --root . --manifest docs/agents/readiness/evidence/candidate-ready.json
+Observed: 2026-10-05T03:27:14.537974+00:00
+Exit: 0
+PASS: current repository, environment, navigation and controls are ready

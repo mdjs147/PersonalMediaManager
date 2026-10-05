@@ -1,0 +1,4 @@
+Actual command: python3 scripts/pmm_governance.py context
+Observed: 2026-10-05T03:30:04.913077+00:00
+Exit: 1
+PMM_GATE_REJECTED: Missing regular file: docs/agents/domain.md

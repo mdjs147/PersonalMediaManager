@@ -1,0 +1,1015 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/ai-dev-baseline/readiness.schema.json",
+  "title": "Baseline readiness and candidate evidence, v1",
+  "$defs": {
+    "actor": {
+      "type": "object",
+      "properties": {
+        "actor_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "execution_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        }
+      },
+      "required": [
+        "actor_id",
+        "execution_id",
+        "model"
+      ],
+      "additionalProperties": false
+    },
+    "environment": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "dimensions": {
+          "type": "object",
+          "properties": {
+            "language_runtime": {
+              "type": "string",
+              "minLength": 1
+            },
+            "web_host": {
+              "type": "string",
+              "minLength": 1
+            },
+            "frontend": {
+              "type": "string",
+              "minLength": 1
+            },
+            "database": {
+              "type": "string",
+              "minLength": 1
+            },
+            "data_access": {
+              "type": "string",
+              "minLength": 1
+            },
+            "background_jobs": {
+              "type": "string",
+              "minLength": 1
+            },
+            "cache_messaging": {
+              "type": "string",
+              "minLength": 1
+            },
+            "testing": {
+              "type": "string",
+              "minLength": 1
+            },
+            "hosting_ci": {
+              "type": "string",
+              "minLength": 1
+            },
+            "deployment_network": {
+              "type": "string",
+              "minLength": 1
+            },
+            "ai_platform_shell": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "language_runtime",
+            "web_host",
+            "frontend",
+            "database",
+            "data_access",
+            "background_jobs",
+            "cache_messaging",
+            "testing",
+            "hosting_ci",
+            "deployment_network",
+            "ai_platform_shell"
+          ],
+          "additionalProperties": false
+        },
+        "source_paths": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "execution_platforms": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "system": {
+                "type": "string",
+                "minLength": 1
+              },
+              "machine": {
+                "type": "string",
+                "minLength": 1
+              },
+              "shell": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "system",
+              "machine",
+              "shell"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "schema_version",
+        "dimensions",
+        "source_paths",
+        "execution_platforms"
+      ],
+      "additionalProperties": false
+    },
+    "context": {
+      "type": "object",
+      "properties": {
+        "remotes": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "fetch": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 1,
+                "uniqueItems": true
+              },
+              "push": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 1,
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "fetch",
+              "push"
+            ],
+            "additionalProperties": false
+          },
+          "minProperties": 0
+        },
+        "default_branch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "base_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "environment": {
+          "$ref": "#/$defs/environment"
+        },
+        "environment_blob": {
+          "type": "string",
+          "pattern": "(?:[0-9a-f]{40}|[0-9a-f]{64})"
+        },
+        "environment_sources": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "(?:[0-9a-f]{40}|[0-9a-f]{64})"
+          },
+          "minProperties": 1
+        },
+        "config_inventory": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "(?:[0-9a-f]{40}|[0-9a-f]{64})"
+          },
+          "minProperties": 0
+        },
+        "root_commits": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "(?:[0-9a-f]{40}|[0-9a-f]{64})"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "local_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "source": {
+          "type": "object",
+          "properties": {
+            "repository": {
+              "type": "string",
+              "minLength": 1
+            },
+            "commit": {
+              "type": "string",
+              "pattern": "(?:[0-9a-f]{40}|[0-9a-f]{64})"
+            }
+          },
+          "required": [
+            "repository",
+            "commit"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "remotes",
+        "default_branch",
+        "base_ref",
+        "environment",
+        "environment_blob",
+        "environment_sources",
+        "config_inventory",
+        "root_commits",
+        "local_id",
+        "source"
+      ],
+      "additionalProperties": false
+    },
+    "control": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "implemented",
+            "adapted",
+            "omitted"
+          ]
+        },
+        "objective": {
+          "type": "string",
+          "minLength": 1
+        },
+        "implementation": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0,
+          "uniqueItems": true
+        },
+        "verification": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0,
+          "uniqueItems": true
+        },
+        "reason": {
+          "type": "string"
+        },
+        "replacement": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "objective",
+        "implementation",
+        "verification",
+        "reason",
+        "replacement"
+      ],
+      "additionalProperties": false
+    },
+    "context_report": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "result": {
+          "type": "string",
+          "enum": [
+            "approved",
+            "rejected",
+            "pending"
+          ]
+        },
+        "context": {
+          "$ref": "#/$defs/context"
+        },
+        "reviewer": {
+          "$ref": "#/$defs/actor"
+        },
+        "reviewed_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "findings": {
+          "type": "string",
+          "minLength": 1
+        },
+        "adopter": {
+          "$ref": "#/$defs/actor"
+        },
+        "scope": {
+          "const": "repository-environment-adoption"
+        }
+      },
+      "required": [
+        "schema_version",
+        "result",
+        "context",
+        "reviewer",
+        "reviewed_at",
+        "findings",
+        "adopter",
+        "scope"
+      ],
+      "additionalProperties": false
+    },
+    "control_report": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "control_id": {
+          "type": "string",
+          "enum": [
+            "branch_gate",
+            "readiness_gate",
+            "verification_gate",
+            "independent_review",
+            "task_tracking",
+            "documentation_impact",
+            "secret_handling",
+            "trigger_coverage",
+            "baseline_sync"
+          ]
+        },
+        "result": {
+          "type": "string",
+          "enum": [
+            "passed",
+            "failed",
+            "pending"
+          ]
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1
+        },
+        "exit_code": {
+          "type": "integer"
+        },
+        "observed_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "positive_check": {
+          "type": "object",
+          "properties": {
+            "command": {
+              "type": "string",
+              "minLength": 1
+            },
+            "expected_result": {
+              "enum": [
+                "accepted",
+                "rejected"
+              ],
+              "type": "string"
+            },
+            "observed_result": {
+              "enum": [
+                "accepted",
+                "rejected"
+              ],
+              "type": "string"
+            },
+            "expected_exit": {
+              "type": "integer"
+            },
+            "observed_exit": {
+              "type": "integer"
+            },
+            "output": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "command",
+            "expected_result",
+            "observed_result",
+            "expected_exit",
+            "observed_exit",
+            "output"
+          ],
+          "additionalProperties": false
+        },
+        "negative_check": {
+          "type": "object",
+          "properties": {
+            "command": {
+              "type": "string",
+              "minLength": 1
+            },
+            "expected_result": {
+              "enum": [
+                "accepted",
+                "rejected"
+              ],
+              "type": "string"
+            },
+            "observed_result": {
+              "enum": [
+                "accepted",
+                "rejected"
+              ],
+              "type": "string"
+            },
+            "expected_exit": {
+              "type": "integer"
+            },
+            "observed_exit": {
+              "type": "integer"
+            },
+            "output": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "command",
+            "expected_result",
+            "observed_result",
+            "expected_exit",
+            "observed_exit",
+            "output"
+          ],
+          "additionalProperties": false
+        },
+        "implementation_blobs": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "(?:[0-9a-f]{40}|[0-9a-f]{64})"
+          },
+          "minProperties": 1
+        }
+      },
+      "required": [
+        "schema_version",
+        "control_id",
+        "result",
+        "command",
+        "exit_code",
+        "observed_at",
+        "positive_check",
+        "negative_check",
+        "implementation_blobs"
+      ],
+      "additionalProperties": false
+    },
+    "delivery": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "candidate_commit": {
+          "type": "string",
+          "pattern": "(?:[0-9a-f]{40}|[0-9a-f]{64})"
+        },
+        "candidate_tree": {
+          "type": "string",
+          "pattern": "(?:[0-9a-f]{40}|[0-9a-f]{64})"
+        },
+        "base_commit": {
+          "type": "string",
+          "pattern": "(?:[0-9a-f]{40}|[0-9a-f]{64})"
+        },
+        "diff_paths": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "task": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "scope_paths": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "author": {
+              "$ref": "#/$defs/actor"
+            }
+          },
+          "required": [
+            "path",
+            "scope_paths",
+            "author"
+          ],
+          "additionalProperties": false
+        },
+        "verification_report": {
+          "type": "string",
+          "minLength": 1
+        },
+        "review_report": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "schema_version",
+        "candidate_commit",
+        "candidate_tree",
+        "base_commit",
+        "diff_paths",
+        "task",
+        "verification_report",
+        "review_report"
+      ],
+      "additionalProperties": false
+    },
+    "verification_report": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "kind": {
+          "const": "verification"
+        },
+        "candidate_commit": {
+          "type": "string",
+          "pattern": "(?:[0-9a-f]{40}|[0-9a-f]{64})"
+        },
+        "candidate_tree": {
+          "type": "string",
+          "pattern": "(?:[0-9a-f]{40}|[0-9a-f]{64})"
+        },
+        "base_commit": {
+          "type": "string",
+          "pattern": "(?:[0-9a-f]{40}|[0-9a-f]{64})"
+        },
+        "diff_paths": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "task_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "result": {
+          "type": "string",
+          "enum": [
+            "passed",
+            "failed",
+            "pending"
+          ]
+        },
+        "observed_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "executed_by": {
+          "$ref": "#/$defs/actor"
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "command": {
+                "type": "string",
+                "minLength": 1
+              },
+              "exit_code": {
+                "type": "integer"
+              },
+              "result": {
+                "type": "string",
+                "enum": [
+                  "passed",
+                  "failed",
+                  "pending"
+                ]
+              },
+              "output": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "command",
+              "exit_code",
+              "result",
+              "output"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "schema_version",
+        "kind",
+        "candidate_commit",
+        "candidate_tree",
+        "base_commit",
+        "diff_paths",
+        "task_path",
+        "result",
+        "observed_at",
+        "executed_by",
+        "checks"
+      ],
+      "additionalProperties": false
+    },
+    "review_report": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "kind": {
+          "const": "review"
+        },
+        "candidate_commit": {
+          "type": "string",
+          "pattern": "(?:[0-9a-f]{40}|[0-9a-f]{64})"
+        },
+        "candidate_tree": {
+          "type": "string",
+          "pattern": "(?:[0-9a-f]{40}|[0-9a-f]{64})"
+        },
+        "base_commit": {
+          "type": "string",
+          "pattern": "(?:[0-9a-f]{40}|[0-9a-f]{64})"
+        },
+        "diff_paths": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "task_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "result": {
+          "type": "string",
+          "enum": [
+            "approved",
+            "changes_requested",
+            "pending"
+          ]
+        },
+        "observed_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reviewer": {
+          "$ref": "#/$defs/actor"
+        },
+        "blocking_findings": {
+          "type": "integer"
+        },
+        "findings": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "schema_version",
+        "kind",
+        "candidate_commit",
+        "candidate_tree",
+        "base_commit",
+        "diff_paths",
+        "task_path",
+        "result",
+        "observed_at",
+        "reviewer",
+        "blocking_findings",
+        "findings"
+      ],
+      "additionalProperties": false
+    },
+    "manifest": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "ready"
+          ]
+        },
+        "source": {
+          "type": "object",
+          "properties": {
+            "repository": {
+              "type": "string",
+              "minLength": 1
+            },
+            "commit": {
+              "type": "string",
+              "pattern": "(?:[0-9a-f]{40}|[0-9a-f]{64})"
+            }
+          },
+          "required": [
+            "repository",
+            "commit"
+          ],
+          "additionalProperties": false
+        },
+        "repository": {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": [
+                "remote",
+                "local-only"
+              ]
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            },
+            "primary_remote": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1
+            },
+            "default_branch": {
+              "type": "string",
+              "minLength": 1
+            },
+            "base_ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "local_id": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1
+            }
+          },
+          "required": [
+            "mode",
+            "reason",
+            "primary_remote",
+            "default_branch",
+            "base_ref",
+            "local_id"
+          ],
+          "additionalProperties": false
+        },
+        "environment_file": {
+          "type": "string",
+          "minLength": 1
+        },
+        "context": {
+          "type": "object"
+        },
+        "context_review": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "approved"
+              ]
+            },
+            "reviewer": {
+              "$ref": "#/$defs/actor"
+            },
+            "reviewed_at": {
+              "type": "string",
+              "minLength": 1
+            },
+            "report": {
+              "type": "string",
+              "minLength": 1
+            },
+            "adopter": {
+              "$ref": "#/$defs/actor"
+            }
+          },
+          "required": [
+            "status",
+            "reviewer",
+            "reviewed_at",
+            "report",
+            "adopter"
+          ],
+          "additionalProperties": false
+        },
+        "entrypoints": {
+          "type": "object",
+          "properties": {
+            "agent_instructions": {
+              "type": "string",
+              "minLength": 1
+            },
+            "secondary_instructions": {
+              "type": "string",
+              "minLength": 1
+            },
+            "workflow_rules": {
+              "type": "string",
+              "minLength": 1
+            },
+            "guard_rules": {
+              "type": "string",
+              "minLength": 1
+            },
+            "reviewer": {
+              "type": "string",
+              "minLength": 1
+            },
+            "verification": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "agent_instructions",
+            "secondary_instructions",
+            "workflow_rules",
+            "guard_rules",
+            "reviewer",
+            "verification"
+          ],
+          "additionalProperties": false
+        },
+        "navigation": {
+          "type": "object",
+          "properties": {
+            "adoption": {
+              "type": "string",
+              "minLength": 1
+            },
+            "task_tracking": {
+              "type": "string",
+              "minLength": 1
+            },
+            "architecture": {
+              "type": "string",
+              "minLength": 1
+            },
+            "runbook": {
+              "type": "string",
+              "minLength": 1
+            },
+            "domain": {
+              "type": "string",
+              "minLength": 1
+            },
+            "writing": {
+              "type": "string",
+              "minLength": 1
+            },
+            "design": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "adoption",
+            "task_tracking",
+            "architecture",
+            "runbook",
+            "domain",
+            "writing",
+            "design"
+          ],
+          "additionalProperties": false
+        },
+        "controls": {
+          "type": "object",
+          "properties": {
+            "branch_gate": {
+              "$ref": "#/$defs/control"
+            },
+            "readiness_gate": {
+              "$ref": "#/$defs/control"
+            },
+            "verification_gate": {
+              "$ref": "#/$defs/control"
+            },
+            "independent_review": {
+              "$ref": "#/$defs/control"
+            },
+            "task_tracking": {
+              "$ref": "#/$defs/control"
+            },
+            "documentation_impact": {
+              "$ref": "#/$defs/control"
+            },
+            "secret_handling": {
+              "$ref": "#/$defs/control"
+            },
+            "trigger_coverage": {
+              "$ref": "#/$defs/control"
+            },
+            "baseline_sync": {
+              "$ref": "#/$defs/control"
+            }
+          },
+          "required": [
+            "branch_gate",
+            "readiness_gate",
+            "verification_gate",
+            "independent_review",
+            "task_tracking",
+            "documentation_impact",
+            "secret_handling",
+            "trigger_coverage",
+            "baseline_sync"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schema_version",
+        "status",
+        "source",
+        "repository",
+        "environment_file",
+        "context",
+        "context_review",
+        "entrypoints",
+        "navigation",
+        "controls"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$ref": "#/$defs/manifest"
+}

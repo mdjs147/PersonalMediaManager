@@ -1,0 +1,4 @@
+Command: python3 scripts/pmm_governance.py review-context
+Observed: 2026-10-05T03:27:14.360820+00:00
+Exit: 0
+INDEPENDENT_CONTEXT_RECORD_VERIFIED; actual reviewer work must be independently traced

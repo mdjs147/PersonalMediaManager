@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "control_id": "independent_review",
+  "result": "passed",
+  "command": "python3 scripts/pmm_governance.py review-context",
+  "exit_code": 0,
+  "observed_at": "2026-10-05T03:27:14.360820+00:00",
+  "positive_check": {
+    "command": "python3 scripts/pmm_governance.py review-context",
+    "expected_result": "accepted",
+    "observed_result": "accepted",
+    "expected_exit": 0,
+    "observed_exit": 0,
+    "output": "docs/agents/readiness/evidence/outputs/independent_review-positive.txt"
+  },
+  "negative_check": {
+    "command": "python3 scripts/pmm_governance.py review-context",
+    "expected_result": "rejected",
+    "observed_result": "rejected",
+    "expected_exit": 1,
+    "observed_exit": 1,
+    "output": "docs/agents/readiness/evidence/outputs/independent_review-negative.txt"
+  },
+  "implementation_blobs": {
+    "scripts/pmm_governance.py": "03b1687a6b83e48aae0ffa45b29d887e76d0a0b0",
+    ".claude/agents/code-reviewer.md": "89c2e23b3de39ee0b9099e4ad9c15b4c29a65839",
+    "docs/agents/governance-profile.json": "a806605b2ef034b86519beda08731a3e3cc94b9b",
+    "docs/agents/readiness/validate_readiness.py": "3877f6bd7fa1cc972f1166ff4484784143c13e6c",
+    "docs/agents/readiness/readiness.schema.json": "a0b7322c774b088da823ae5673117616d4331536"
+  }
+}

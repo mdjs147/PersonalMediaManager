@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "control_id": "branch_gate",
+  "result": "passed",
+  "command": "python3 /workspace/shared/pmm-ba001-control-harness.py --control branch_gate",
+  "exit_code": 0,
+  "observed_at": "2026-10-05T03:17:08.937017Z",
+  "positive_check": {
+    "command": "export SHELL=\"$(readlink /proc/$$/exe)\"; python3 scripts/pmm_governance.py first-write --actor pmm-adoption-author --purpose adoption",
+    "expected_result": "accepted",
+    "observed_result": "accepted",
+    "expected_exit": 0,
+    "observed_exit": 0,
+    "output": "docs/agents/readiness/evidence/outputs/branch_gate-positive.txt"
+  },
+  "negative_check": {
+    "command": "export SHELL=\"$(readlink /proc/$$/exe)\"; python3 scripts/pmm_governance.py first-write --actor pmm-adoption-author --purpose adoption",
+    "expected_result": "rejected",
+    "observed_result": "rejected",
+    "expected_exit": 1,
+    "observed_exit": 1,
+    "output": "docs/agents/readiness/evidence/outputs/branch_gate-negative.txt"
+  },
+  "implementation_blobs": {
+    "scripts/pmm_governance.py": "03b1687a6b83e48aae0ffa45b29d887e76d0a0b0",
+    ".claude/rules/git-workflow.md": "a27cfcef78808b90f3e0ae2331e81891ae9a49e3",
+    "docs/agents/governance-profile.json": "a806605b2ef034b86519beda08731a3e3cc94b9b"
+  }
+}

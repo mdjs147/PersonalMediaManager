@@ -1,0 +1,70 @@
+Output normalization: disposable absolute clone/temporary-fixture paths only; raw originals retained outside delivery.
+Observed at: 2026-10-05T03:20:27.153478Z
+Finished at: 2026-10-05T03:20:27.222888Z
+Working directory: <disposable-pmm-clone>
+Command: export SHELL="$(readlink /proc/$$/exe)"; python3 scripts/pmm_governance.py inspect
+Observed exit: 0
+Scope: independent actual PMM entrypoint exercise; governance only, not product acceptance
+Setup/injection: Same approved source SHA, alter one declared environment dimension; inspect is observation only and must report changed environment fingerprint
+
+{
+  "root_commits": [
+    "fa73bfedb46113aed47a039535d3eb12e4f93031"
+  ],
+  "local_id": null,
+  "remotes": {
+    "origin": {
+      "fetch": [
+        "https://github.com/mdjs147/PersonalMediaManager.git"
+      ],
+      "push": [
+        "https://github.com/mdjs147/PersonalMediaManager.git"
+      ]
+    }
+  },
+  "default_branch": "refs/remotes/origin/main",
+  "base_ref": "refs/remotes/origin/dot/pmm-rebuild-20261005-gates",
+  "source": {
+    "repository": "https://github.com/mdjs147/ai-dev-baseline",
+    "commit": "23a774836c3edda9a5d16f06b7f4e60e9d6950f8"
+  },
+  "environment": {
+    "schema_version": 1,
+    "dimensions": {
+      "language_runtime": "Current: Python 3.12.x governance tooling; Git >=2.40,<3 and Bash 5.x, exact observed versions recorded by probes. Future .NET 10/C#14 is a retained requirement, no current product target.",
+      "web_host": "No current host. Future single Kestrel/Razor MVC/HTTP/MCP remains a requirement.",
+      "frontend": "No current frontend. Future packaged Bootstrap5/jQuery/Axios remains a requirement.",
+      "database": "No current database. Future SQLite3 remains a requirement.",
+      "data_access": "No current data access. Future EFCore10 Code First remains a requirement.",
+      "background_jobs": "No current worker. Future durable HostedServices remains a requirement.",
+      "cache_messaging": "No current or planned external cache/message middleware.",
+      "testing": "Current Python unittest plus actual Git/readiness invocation acceptance; future xUnit/API/Playwright/product tests are not implemented.",
+      "hosting_ci": "Public GitHub repository and read-only GitHub Actions governance verification; strict published Markdown cards; no main integration.",
+      "deployment_network": "No product deployment or real service credentials. Public Git reads and read-only CI; private source update discovery may be unavailable.",
+      "ai_platform_shell": "Actual agent execution on Linux x86_64 Bash; actual model unavailable and recorded null. Other product platforms/shells require separate evidence.; independent disposable drift probe"
+    },
+    "source_paths": [
+      "docs/agents/governance-profile.json",
+      "docs/requirements/retained-decisions.md",
+      ".github/workflows/verify-governance.yml",
+      "docs/agents/source-assets.json"
+    ],
+    "execution_platforms": [
+      {
+        "system": "Linux",
+        "machine": "x86_64",
+        "shell": "bash"
+      }
+    ]
+  },
+  "environment_blob": "f4eaf05b78b973f5e20fc4bb14cad1a263e242c8",
+  "environment_sources": {
+    "docs/agents/governance-profile.json": "a806605b2ef034b86519beda08731a3e3cc94b9b",
+    "docs/requirements/retained-decisions.md": "9f8813e3bce3ca596da3b79c4216ca73701fb147",
+    ".github/workflows/verify-governance.yml": "cc2a6185469523dc71e9152ed91ea2896c14815c",
+    "docs/agents/source-assets.json": "d0eaaee01acf3ab226fe4e7147639a335635d13b"
+  },
+  "config_inventory": {
+    ".github/workflows/verify-governance.yml": "cc2a6185469523dc71e9152ed91ea2896c14815c"
+  }
+}

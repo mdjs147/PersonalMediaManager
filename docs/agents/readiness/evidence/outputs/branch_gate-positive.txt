@@ -1,0 +1,18 @@
+Output normalization: disposable absolute clone/temporary-fixture paths only; raw originals retained outside delivery.
+Observed at: 2026-10-05T03:17:08.937017Z
+Finished at: 2026-10-05T03:17:19.398245Z
+Working directory: <disposable-pmm-clone>
+Command: export SHELL="$(readlink /proc/$$/exe)"; python3 scripts/pmm_governance.py first-write --actor pmm-adoption-author --purpose adoption
+Observed exit: 0
+Scope: independent actual PMM entrypoint exercise; governance only, not product acceptance
+Setup/injection: Clean, owned full-history clone on published task branch; actual live origin read
+
+LIVE_REMOTE_OBSERVED {"HEAD": "c09befa02cc27a0dc358322779798bb5e6d295e4", "refs/heads/dot/pmm-rebuild-20261005-gates": "eb739ca7d99d519f47462c23616774c8588631b3", "refs/heads/main": "c09befa02cc27a0dc358322779798bb5e6d295e4"}
+PUBLISHED_CARD_VERIFIED eb739ca7d99d519f47462c23616774c8588631b3
+SCOPE_VERIFIED 37 changed/input paths
+RUNTIME_OBSERVED {"bash": "5.2.37(1)-release", "git": "2.52.0", "python": "3.12.14"}
+UPSTREAM_UPDATE_DISCOVERY_DEGRADED: private source unavailable; local gates still required
+BASELINE_ASSETS_VERIFIED 23a774836c3edda9a5d16f06b7f4e60e9d6950f8
+DOCUMENTATION_NAVIGATION_VERIFIED
+ADOPTION_REPAIR_ONLY: observed pending context; no business readiness claim
+PMM_GATE_VERIFIED first-write

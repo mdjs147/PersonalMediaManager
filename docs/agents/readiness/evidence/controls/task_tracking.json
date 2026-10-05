@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "control_id": "task_tracking",
+  "result": "passed",
+  "command": "python3 /workspace/shared/pmm-ba001-control-harness.py --control task_tracking",
+  "exit_code": 0,
+  "observed_at": "2026-10-05T03:17:19.696542Z",
+  "positive_check": {
+    "command": "export SHELL=\"$(readlink /proc/$$/exe)\"; python3 scripts/pmm_governance.py cards",
+    "expected_result": "accepted",
+    "observed_result": "accepted",
+    "expected_exit": 0,
+    "observed_exit": 0,
+    "output": "docs/agents/readiness/evidence/outputs/task_tracking-positive.txt"
+  },
+  "negative_check": {
+    "command": "export SHELL=\"$(readlink /proc/$$/exe)\"; python3 scripts/pmm_governance.py cards",
+    "expected_result": "rejected",
+    "observed_result": "rejected",
+    "expected_exit": 1,
+    "observed_exit": 1,
+    "output": "docs/agents/readiness/evidence/outputs/task_tracking-negative.txt"
+  },
+  "implementation_blobs": {
+    "scripts/pmm_governance.py": "03b1687a6b83e48aae0ffa45b29d887e76d0a0b0",
+    "docs/workflow/BA-001.md": "bb8163bceb6d20fc851dd216f438eb7e9da60e83",
+    "docs/workflow/BA-001-public-adaptation.md": "378e329d1e9e39844efb5da532b9797d9289adbb",
+    "docs/agents/issue-tracker.md": "581792ed40217829b532d5c523487fae34110825"
+  }
+}

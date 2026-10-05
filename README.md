@@ -1,14 +1,16 @@
-# PersonalMediaManager restart
+# PersonalMediaManager governance-only restart
 
-This stage contains a new governance-only restart plan. Product implementation starts at zero. The superseded WF-001 plan and every previous local implementation are historical, not accepted input code or test evidence.
+This stage implements and exercises public PMM baseline-adoption controls. Product implementation remains absent and blocked. Historical rebuild code, tests, local gates and pass counts are not imported.
 
-- Current scope: [BA-001](docs/workflow/BA-001.md)
-- Public adaptation plan: [baseline mapping](docs/workflow/BA-001-public-adaptation.md)
-- Retain confirmed requirements and design decisions only
-- Do not import old application code, tests, local gates, old pass counts, or private source prose
-- Integrate accepted tasks only into dot/pmm-rebuild-20261005-gates
-- main, release, deployment, real accounts and production media remain outside this stage authorization
+- Frozen scope: [BA-001 revision 2](docs/workflow/BA-001.md)
+- Source mapping: [GEN/TECH/USER applicability](docs/workflow/BA-001-public-adaptation.md)
+- Active entry: [AGENTS.md](AGENTS.md)
+- Adoption contract and limits: [adoption record](docs/agents/baseline-adoption.md)
+- Actual control evidence: [evidence index](docs/agents/readiness/evidence/README.md)
+- Candidate preparation: [status](docs/workflow/BA-001-status.md)
 
-当前只重新接入并验证基线治理；产品实现为零。既有需求设计作为输入保留，历史开发和测试不计入新验收。
+Governance readiness is distinct from product acceptance. First-write/recovery, actual Git destination/role/card checks, source integrity, independent review records and exact-candidate delivery are fail-closed for the tested cases. Hooks can be bypassed; remote protection is not claimed. Private upstream update discovery may be unavailable, without bypassing local validation.
 
-The current adoption plan follows baseline main 23a7748 and its stable GEN/TECH/USER ADR categories. Prior adoption work remains pending until revalidated under this revision.
+Only reviewed changes may be integrated/pushed to dot/pmm-rebuild-20261005-gates. main, release, deployment, real accounts and production media remain outside this authorization. Future product work needs new published cards and reviewed phase/environment applicability.
+
+当前只有治理工具和真实正反例证据，业务实现为零。旧重建进度不转入；基线GEN/TECH/USER分类已同步适用边界，既有项目ADR保留。

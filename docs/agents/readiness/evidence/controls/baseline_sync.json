@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "control_id": "baseline_sync",
+  "result": "passed",
+  "command": "python3 /workspace/shared/pmm-ba001-control-harness.py --control baseline_sync",
+  "exit_code": 0,
+  "observed_at": "2026-10-05T03:17:30.039549Z",
+  "positive_check": {
+    "command": "export SHELL=\"$(readlink /proc/$$/exe)\"; python3 scripts/pmm_governance.py baseline --online",
+    "expected_result": "accepted",
+    "observed_result": "accepted",
+    "expected_exit": 0,
+    "observed_exit": 0,
+    "output": "docs/agents/readiness/evidence/outputs/baseline_sync-positive.txt"
+  },
+  "negative_check": {
+    "command": "export SHELL=\"$(readlink /proc/$$/exe)\"; python3 scripts/pmm_governance.py baseline",
+    "expected_result": "rejected",
+    "observed_result": "rejected",
+    "expected_exit": 1,
+    "observed_exit": 1,
+    "output": "docs/agents/readiness/evidence/outputs/baseline_sync-negative.txt"
+  },
+  "implementation_blobs": {
+    "scripts/pmm_governance.py": "03b1687a6b83e48aae0ffa45b29d887e76d0a0b0",
+    "docs/agents/source-assets.json": "d0eaaee01acf3ab226fe4e7147639a335635d13b",
+    "docs/agents/baseline-adoption.md": "5eca67b3995c710030afdc0943d14655a3b5d271",
+    "docs/agents/readiness/validate_readiness.py": "3877f6bd7fa1cc972f1166ff4484784143c13e6c",
+    "docs/agents/readiness/readiness.schema.json": "a0b7322c774b088da823ae5673117616d4331536",
+    "docs/agents/readiness/test_readiness.py": "8d8a5e12fd07b7eb9f53bace9ecd710881cb5cd0",
+    "docs/agents/readiness/baseline-readiness.template.json": "44569a7c54c58feb61fd75c9d04157a1cc6af1ea",
+    "docs/agents/readiness/environment-profile.template.json": "54769fcbbd54bbc630b51adfacb5a5a09accf88b"
+  }
+}

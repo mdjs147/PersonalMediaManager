@@ -1,0 +1,10 @@
+Output normalization: disposable absolute clone/temporary-fixture paths only; raw originals retained outside delivery.
+Observed at: 2026-10-05T03:18:29.273925Z
+Finished at: 2026-10-05T03:18:29.319780Z
+Working directory: <disposable-pmm-clone>
+Command: export SHELL="$(readlink /proc/$$/exe)"; PMM_ACTOR=wrong-actor git commit --allow-empty -m "Independent rejected registered-hook probe"
+Observed exit: 1
+Scope: independent actual PMM entrypoint exercise; governance only, not product acceptance
+Setup/injection: Same Git-registered pre-commit invocation but wrong actor; failure must leave HEAD unchanged
+
+PMM_GATE_REJECTED: Caller is not the authorized implementation actor

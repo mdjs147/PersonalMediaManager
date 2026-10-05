@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+while read -r local_ref local_sha remote_ref remote_sha; do
+  python3 scripts/pmm_governance.py git-target --actor "${PMM_ACTOR:?Set actual actor}" --role "${PMM_GIT_ROLE:?Set actual role}" --action push --target "$remote_ref" --candidate "$local_sha" --old-sha "$remote_sha" --remote-name "${1-}" --remote-location "${2-}" --local-ref "$local_ref"
+  python3 scripts/pmm_governance.py deliver --candidate "$local_sha" --base "${PMM_TASK_BASE:?Set exact base}" --evidence "${PMM_DELIVERY_EVIDENCE:?Provide candidate-bound sidecar}"
+done

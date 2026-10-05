@@ -1,0 +1,12 @@
+Actual command: python3 scripts/pmm_governance.py recover --actor pmm-adoption-author --purpose adoption
+Observed: 2026-10-05T03:29:52.964150+00:00
+Exit: 0
+LIVE_REMOTE_OBSERVED {"HEAD": "c09befa02cc27a0dc358322779798bb5e6d295e4", "refs/heads/dot/pmm-rebuild-20261005-gates": "eb739ca7d99d519f47462c23616774c8588631b3", "refs/heads/main": "c09befa02cc27a0dc358322779798bb5e6d295e4"}
+PUBLISHED_CARD_VERIFIED eb739ca7d99d519f47462c23616774c8588631b3
+SCOPE_VERIFIED 78 changed/input paths
+RUNTIME_OBSERVED {"bash": "5.2.37(1)-release", "git": "2.52.0", "python": "3.12.14"}
+UPSTREAM_UPDATE_DISCOVERY_DEGRADED: private source unavailable; local gates still required
+BASELINE_ASSETS_VERIFIED 23a774836c3edda9a5d16f06b7f4e60e9d6950f8
+DOCUMENTATION_NAVIGATION_VERIFIED
+CONTEXT_READY_VERIFIED; product writes remain blocked
+PMM_GATE_VERIFIED recover

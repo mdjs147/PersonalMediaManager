@@ -1,0 +1,11 @@
+Output normalization: disposable absolute clone/temporary-fixture paths only; raw originals retained outside delivery.
+Observed at: 2026-10-05T03:17:30.039549Z
+Finished at: 2026-10-05T03:17:35.019719Z
+Working directory: <disposable-pmm-clone>
+Command: export SHELL="$(readlink /proc/$$/exe)"; python3 scripts/pmm_governance.py baseline --online
+Observed exit: 0
+Scope: independent actual PMM entrypoint exercise; governance only, not product acceptance
+Setup/injection: Full five-file pinned source map and exact preserved blobs; online update discovery attempted
+
+UPSTREAM_UPDATE_DISCOVERY_DEGRADED: private source unavailable; local gates still required
+BASELINE_ASSETS_VERIFIED 23a774836c3edda9a5d16f06b7f4e60e9d6950f8

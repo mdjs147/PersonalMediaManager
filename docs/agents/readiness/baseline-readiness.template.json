@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "status": "pending",
+  "source": {
+    "repository": "https://github.com/mdjs147/ai-dev-baseline",
+    "commit": "0000000000000000000000000000000000000000"
+  },
+  "repository": {
+    "mode": "remote",
+    "reason": "pending repository inspection",
+    "primary_remote": "origin",
+    "default_branch": "refs/remotes/origin/main",
+    "base_ref": "refs/remotes/origin/main",
+    "local_id": null
+  },
+  "environment_file": "docs/agents/readiness/environment-profile.json",
+  "context": {},
+  "context_review": {
+    "status": "pending",
+    "reviewer": {
+      "actor_id": "pending",
+      "execution_id": "pending",
+      "model": null
+    },
+    "reviewed_at": "pending",
+    "report": "docs/agents/readiness/evidence/context-review.json",
+    "adopter": {
+      "actor_id": "pending",
+      "execution_id": "pending",
+      "model": null
+    }
+  },
+  "entrypoints": {
+    "agent_instructions": "AGENTS.md",
+    "secondary_instructions": "CLAUDE.md",
+    "workflow_rules": ".claude/rules/git-workflow.md",
+    "guard_rules": ".claude/rules/guard-discipline.md",
+    "reviewer": ".claude/agents/code-reviewer.md",
+    "verification": "docs/agents/readiness/validate_readiness.py"
+  },
+  "navigation": {
+    "adoption": "docs/agents/baseline-adoption.md",
+    "task_tracking": "docs/agents/issue-tracker.md",
+    "architecture": "docs/adr/README.md",
+    "runbook": "docs/runbook/README.md",
+    "domain": "docs/agents/domain.md",
+    "writing": "docs/agents/bilingual-writing/CORE.zh-CN.md",
+    "design": "docs/agents/interactive-design.md"
+  },
+  "controls": {
+    "branch_gate": {
+      "status": "pending",
+      "objective": "Before writes, verify task branch, base, ownership and worktree safety.",
+      "implementation": [],
+      "verification": [],
+      "reason": "",
+      "replacement": ""
+    },
+    "readiness_gate": {
+      "status": "pending",
+      "objective": "Revalidate adoption and observed context before every write session and delivery.",
+      "implementation": [],
+      "verification": [],
+      "reason": "",
+      "replacement": ""
+    },
+    "verification_gate": {
+      "status": "pending",
+      "objective": "Run applicable checks and preserve failure-sensitive evidence.",
+      "implementation": [],
+      "verification": [],
+      "reason": "",
+      "replacement": ""
+    },
+    "independent_review": {
+      "status": "pending",
+      "objective": "Independently review applicable governance and behavioral changes.",
+      "implementation": [],
+      "verification": [],
+      "reason": "",
+      "replacement": ""
+    },
+    "task_tracking": {
+      "status": "pending",
+      "objective": "Keep explicit task scope, acceptance conditions and completion evidence.",
+      "implementation": [],
+      "verification": [],
+      "reason": "",
+      "replacement": ""
+    },
+    "documentation_impact": {
+      "status": "pending",
+      "objective": "Maintain authoritative documentation according to changed behavior and control impact.",
+      "implementation": [],
+      "verification": [],
+      "reason": "",
+      "replacement": ""
+    },
+    "secret_handling": {
+      "status": "pending",
+      "objective": "Keep credentials and private data out of source and evidence.",
+      "implementation": [],
+      "verification": [],
+      "reason": "",
+      "replacement": ""
+    },
+    "trigger_coverage": {
+      "status": "pending",
+      "objective": "Declare actual local/CI trigger wiring and demonstrate positive and negative outcomes.",
+      "implementation": [],
+      "verification": [],
+      "reason": "",
+      "replacement": ""
+    },
+    "baseline_sync": {
+      "status": "pending",
+      "objective": "Check source updates without bypassing same-version context drift review.",
+      "implementation": [],
+      "verification": [],
+      "reason": "",
+      "replacement": ""
+    }
+  }
+}

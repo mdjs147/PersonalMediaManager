@@ -1,0 +1,4 @@
+Actual command: python3 scripts/pmm_governance.py context
+Observed: 2026-10-05T03:30:04.988035+00:00
+Exit: 0
+CONTEXT_READY_VERIFIED; product writes remain blocked
