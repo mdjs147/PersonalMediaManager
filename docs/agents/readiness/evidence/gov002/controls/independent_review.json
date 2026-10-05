@@ -1,0 +1,28 @@
+{
+  "command": "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3 /workspace/shared/pmm-successor-evidence-20261005/control-harness/build_control_report.py --positive /workspace/shared/pmm-successor-evidence-20261005/control-runs/20261005T051654-independent_review-positive-13220fb2/capture.json --negative /workspace/shared/pmm-successor-evidence-20261005/control-runs/20261005T051654-independent_review-negative-f32b46a5/capture.json --output /workspace/shared/pmm-successor-evidence-20261005/control-stage-ready-51ae1b4/bundles/independent_review",
+  "control_id": "independent_review",
+  "exit_code": 0,
+  "implementation_blobs": {
+    ".claude/agents/code-reviewer.md": "1f05ceade89c1236c9661bfe7a623f00920bcb02",
+    "scripts/pmm_workflow.py": "28fbc2a2e0e96cb535296d2ee9d7b4e025f58325"
+  },
+  "negative_check": {
+    "command": "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3 -B /workspace/shared/pmm-successor-evidence-20261005/control-harness/control_probe.py --source-root /workspace/shared/pmm-successor-20261005 --control independent_review --case negative --readiness-phase ready --artifacts-dir /workspace/shared/pmm-successor-evidence-20261005/control-runs/20261005T051654-independent_review-negative-f32b46a5/artifacts",
+    "expected_exit": 1,
+    "expected_result": "rejected",
+    "observed_exit": 1,
+    "observed_result": "rejected",
+    "output": "docs/agents/readiness/evidence/gov002/outputs/20261005T051654-independent_review-negative-f32b46a5.txt"
+  },
+  "observed_at": "2026-10-05T05:17:22.929662+00:00",
+  "positive_check": {
+    "command": "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3 -B /workspace/shared/pmm-successor-evidence-20261005/control-harness/control_probe.py --source-root /workspace/shared/pmm-successor-20261005 --control independent_review --case positive --readiness-phase ready --artifacts-dir /workspace/shared/pmm-successor-evidence-20261005/control-runs/20261005T051654-independent_review-positive-13220fb2/artifacts",
+    "expected_exit": 0,
+    "expected_result": "accepted",
+    "observed_exit": 0,
+    "observed_result": "accepted",
+    "output": "docs/agents/readiness/evidence/gov002/outputs/20261005T051654-independent_review-positive-13220fb2.txt"
+  },
+  "result": "passed",
+  "schema_version": 1
+}

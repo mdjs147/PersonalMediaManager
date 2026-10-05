@@ -11,6 +11,9 @@ def main(argv=None):
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--adoption-bootstrap',action='store_true');a=p.parse_args(argv)
     root=g.v.root_path(g.ROOT)
     try:
+        if (root / 'docs/agents/workflow-state.json').exists():
+            import pmm_workflow
+            return pmm_workflow.verify(root,bootstrap=a.adoption_bootstrap)
         g.runtime(root);g.baseline(root);g.public_tree(root);g.documentation(root)
         if a.adoption_bootstrap:
             g.branch_owner(root,g.AUTHOR);g.cards(root);g.scoped(root)

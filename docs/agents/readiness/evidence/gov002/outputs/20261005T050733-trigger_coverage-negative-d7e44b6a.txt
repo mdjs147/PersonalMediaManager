@@ -1,0 +1,14 @@
+COMMAND: /opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3 -B /workspace/shared/pmm-successor-evidence-20261005/control-harness/control_probe.py --source-root /workspace/shared/pmm-successor-20261005 --control trigger_coverage --case negative --readiness-phase pending-repair --artifacts-dir /workspace/shared/pmm-successor-evidence-20261005/control-runs/20261005T050733-trigger_coverage-negative-d7e44b6a/artifacts
+STARTED: 2026-10-05T05:07:33.531576+00:00
+FINISHED: 2026-10-05T05:07:34.388087+00:00
+ACTUAL PROCESS EXIT: 1
+
+STDOUT:
+PMM_PROBE_FIXTURE {"classification": "isolated synthetic Git fixture; no production or public-remote acceptance", "helper": "/workspace/shared/pmm-successor-20261005/tests/governance/test_successor.py", "path": "/workspace/shared/pmm-successor-evidence-20261005/control-runs/20261005T050733-trigger_coverage-negative-d7e44b6a/artifacts/pmm-successor-synthetic-ba4cpm90", "synthetic_approvals": "Fixture schema inputs only; no real reviewer is represented"}
+PMM_PROBE_CONTEXT {"case": "negative", "classification": "isolated synthetic Git fixture with local bare remote; no public-remote acceptance", "control": "trigger_coverage", "gate_root": "/workspace/shared/pmm-successor-evidence-20261005/control-runs/20261005T050733-trigger_coverage-negative-d7e44b6a/artifacts/pmm-successor-synthetic-ba4cpm90/author-one", "production_ready_claim": false, "published": false, "readiness_phase": "pending-repair", "source_root": "/workspace/shared/pmm-successor-20261005"}
+PMM_PROBE_GATE_START {"argv": ["git", "commit", "--allow-empty", "-m", "Synthetic external registered-hook probe"], "cwd": "/workspace/shared/pmm-successor-evidence-20261005/control-runs/20261005T050733-trigger_coverage-negative-d7e44b6a/artifacts/pmm-successor-synthetic-ba4cpm90/author-one", "gate": "git commit with registered .githooks/pre-commit"}
+PMM_PROBE_GATE_END {"gate": "git commit with registered .githooks/pre-commit", "observed_exit": 1, "observed_result": "rejected"}
+
+STDERR:
+PMM_SUCCESSOR_REJECTED: Unauthorized actor/execution
+LIVE_REMOTE_OBSERVED {"HEAD": "c09befa02cc27a0dc358322779798bb5e6d295e4", "refs/heads/dot/pmm-rebuild-20261005-gates": "8437301c86c44e74beed3ac7220426741e67094b", "refs/heads/main": "c09befa02cc27a0dc358322779798bb5e6d295e4"}

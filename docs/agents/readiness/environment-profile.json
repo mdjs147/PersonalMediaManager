@@ -17,7 +17,9 @@
     "docs/agents/governance-profile.json",
     "docs/requirements/retained-decisions.md",
     ".github/workflows/verify-governance.yml",
-    "docs/agents/source-assets.json"
+    "docs/agents/source-assets.json",
+    "docs/agents/workflow-state.json",
+    "scripts/pmm_workflow.py"
   ],
   "execution_platforms": [
     {

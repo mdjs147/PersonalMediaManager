@@ -1,17 +1,18 @@
-# PersonalMediaManager governance-only restart
+# PersonalMediaManager governed successor workflow
 
-The product implementation is empty. This phase only implements published BA-001 baseline adoption. Old rebuild code, tests, gates and pass counts are not inputs. Private baseline personal prose is not public project policy.
+Product development restarts from confirmed design inputs. Old product implementation, tests and acceptance counts are excluded. The current task is resolved from the immutable published plan referenced by [workflow state](docs/agents/workflow-state.json); the BA001 profile is a preserved adoption snapshot, not the active task authority.
 
 ## Mandatory current workflow
 
-1. Before the first write, run: python3 scripts/pmm_governance.py first-write --actor pmm-adoption-author --purpose adoption
-2. On resume or repository/environment change, run: python3 scripts/pmm_governance.py recover --actor pmm-adoption-author --purpose adoption
-3. Only the frozen published BA-001 governance scope may be repaired while adoption is pending. There is no unrestricted bypass. Business purpose always rejects in this phase, including when adoption is ready
-4. The author owns the dedicated task branch. Independent review needs distinct actual actor and execution identities; unknown model is null. Actor records do not authenticate identities
-5. Final verification runs python3 scripts/verify_governance.py. Delivery additionally requires the exact candidate, explicit published stage-derived base, and genuine sidecar test/review evidence
-6. Integrate and push only the approved stage after review and acceptance. Never force refs, write main, publish a release, deploy, connect real accounts or modify security settings under this card
+1. Set the actual PMM_ACTOR, PMM_EXECUTION and published PMM_PURPOSE. Local pmm.actorId and pmm.executionId must match this owned worktree
+2. Before a first write run `python3 scripts/pmm_governance.py first-write`; on resume/environment/repository change run `python3 scripts/pmm_governance.py recover`
+3. Publish a new planned card first using the trusted controller exported from the accepted old stage. `plan` validates an exact additive document candidate with independent review, current old SHA and explicit target. It performs no mutation. Do not run candidate code to grant candidate scope
+4. A published card stays planned until separate reviewed activation. `activate` permits only state/context/evidence changes, verifies predecessor acceptance and existing published plan, and rejects mixed implementation. Publish and read back activation before the next ordinary first-write
+5. An actual author/execution must be assigned. Reviewed activation may list distinct authorized executions for a legitimate handoff; labels do not authenticate identities. Reviewer must be distinct from every involved author/execution
+6. Run `python3 scripts/verify_governance.py`. Pending context allows only the published governance repair scope. Foundation additionally requires actual .NET10, fresh build/tests and inert/isolated-host checks. Business operations stay blocked
+7. Freeze the candidate, collect genuine candidate/base/tree/diff test and independent review sidecars, run `git-target` and `deliver`, then fast-forward only the approved dot stage. Read back the exact SHA and its CI. Never write main, force a ref, release, deploy or connect real services under these cards
 
-Local hook installation is explicit: git config core.hooksPath .githooks. Hooks and instructions are bypassable; CI checks received commits and does not prove remote branch protection. Connector publication must use the same target/evidence precheck and exact readback.
+Hooks remain installed via `git config core.hooksPath .githooks`. Hook/instruction enforcement is bypassable; CI validates received commits and is not proof of remote branch protection. GitHub connector publication requires the same exact prechecks and readback; update_ref(force:false) has no CAS, so recheck immediately before and after and stop on drift.
 
 ## Required navigation
 
@@ -30,6 +31,6 @@ Local hook installation is explicit: git config core.hooksPath .githooks. Hooks 
 
 ## Baseline synchronization
 
-The reviewed source is pinned in the adoption record. Check the approved upstream branch at the first write session; inaccessible private upstream means update discovery is degraded, never that local controls are valid. Inspect/check-context still revalidate the current repository and environment at the same source SHA. No automatic source upgrade or automatic approval of new observations is allowed. Generic changes return to the source baseline through a separate authorized task.
+Pinned source and five audited tool assets stay unchanged. Discover source updates before a write session; inaccessible private upstream is a recorded discovery limitation, never a waiver of local validation. Same-source repository/environment/configuration changes still invalidate context. Generic improvements are coordinated separately with the baseline repository; no automatic pin upgrade.
 
-治理接入就绪只表示当前治理目标已验；业务写入仍被阶段规则拒绝。新增产品目标、平台、配置或范围必须重新复核，不能继承历史实现状态。
+中文：治理ready与后继生命周期通过是不同结论。当前新卡、角色、范围及阶段来自已发布不可变计划和独立激活；旧接入快照不能冒充新卡许可。GOV002只修治理，DEV001须独立复核真实.NET环境后才开始离线工程骨架，业务操作继续关闭。

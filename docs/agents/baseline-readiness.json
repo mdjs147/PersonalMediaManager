@@ -54,7 +54,9 @@
         "docs/agents/governance-profile.json",
         "docs/requirements/retained-decisions.md",
         ".github/workflows/verify-governance.yml",
-        "docs/agents/source-assets.json"
+        "docs/agents/source-assets.json",
+        "docs/agents/workflow-state.json",
+        "scripts/pmm_workflow.py"
       ],
       "execution_platforms": [
         {
@@ -64,31 +66,33 @@
         }
       ]
     },
-    "environment_blob": "efa2f1c9e7f7189d6599854f1138c9de37476e2f",
+    "environment_blob": "70c003f25d018d0806910a1576d3de9a664ee456",
     "environment_sources": {
       "docs/agents/governance-profile.json": "a806605b2ef034b86519beda08731a3e3cc94b9b",
       "docs/requirements/retained-decisions.md": "9f8813e3bce3ca596da3b79c4216ca73701fb147",
-      ".github/workflows/verify-governance.yml": "cc2a6185469523dc71e9152ed91ea2896c14815c",
-      "docs/agents/source-assets.json": "d0eaaee01acf3ab226fe4e7147639a335635d13b"
+      ".github/workflows/verify-governance.yml": "87c0c7de4816f525ffd19659be9f8a2e6ee5b43f",
+      "docs/agents/source-assets.json": "d0eaaee01acf3ab226fe4e7147639a335635d13b",
+      "docs/agents/workflow-state.json": "dee85424346b2dead0837238d36292d6b199d812",
+      "scripts/pmm_workflow.py": "28fbc2a2e0e96cb535296d2ee9d7b4e025f58325"
     },
     "config_inventory": {
-      ".github/workflows/verify-governance.yml": "cc2a6185469523dc71e9152ed91ea2896c14815c"
+      ".github/workflows/verify-governance.yml": "87c0c7de4816f525ffd19659be9f8a2e6ee5b43f"
     }
   },
   "context_review": {
     "status": "approved",
     "reviewer": {
-      "actor_id": "pmm-independent-context-reviewer",
-      "execution_id": "pmm-context-review-20261005T032423Z",
+      "actor_id": "pmm-successor-plan-reviewer",
+      "execution_id": "pmm-successor-review-20261005T042251Z",
       "model": null
     },
     "adopter": {
-      "actor_id": "pmm-adoption-author",
-      "execution_id": "pmm-adoption-20261005",
+      "actor_id": "pmm-successor-author",
+      "execution_id": "pmm-gov002-20261005T041801Z",
       "model": null
     },
-    "reviewed_at": "2026-10-05T03:24:23.123023Z",
-    "report": "docs/agents/readiness/evidence/context-review.json"
+    "reviewed_at": "2026-10-05T05:22:41.992285+00:00",
+    "report": "docs/agents/readiness/evidence/gov002/context-review.json"
   },
   "entrypoints": {
     "agent_instructions": "AGENTS.md",
@@ -112,137 +116,130 @@
       "status": "adapted",
       "objective": "Before writes, verify task branch, base, ownership and worktree safety.",
       "implementation": [
-        "scripts/pmm_governance.py",
+        "scripts/pmm_workflow.py",
         ".claude/rules/git-workflow.md",
-        "docs/agents/governance-profile.json"
+        "docs/agents/workflow-state.json"
       ],
       "verification": [
-        "docs/agents/readiness/evidence/controls/branch_gate.json"
+        "docs/agents/readiness/evidence/gov002/controls/branch_gate.json"
       ],
-      "reason": "Public governance-only adaptation preserving the generic objective.",
-      "replacement": "Actual PMM entry points and independently executed positive/negative evidence listed in this control report."
+      "reason": "Fresh GOV002 successor control evidence replaces no historical BA001 evidence.",
+      "replacement": "Published task resolution, explicit activation, actual lifecycle and exact-candidate acceptance; all required objectives preserved."
     },
     "readiness_gate": {
       "status": "adapted",
       "objective": "Revalidate adoption and observed context before every write session and delivery.",
       "implementation": [
-        "scripts/pmm_governance.py",
-        "docs/agents/readiness/validate_readiness.py",
-        "docs/agents/readiness/readiness.schema.json"
+        "scripts/pmm_workflow.py",
+        "docs/agents/readiness/validate_readiness.py"
       ],
       "verification": [
-        "docs/agents/readiness/evidence/controls/readiness_gate.json"
+        "docs/agents/readiness/evidence/gov002/controls/readiness_gate.json"
       ],
-      "reason": "Public governance-only adaptation preserving the generic objective.",
-      "replacement": "Actual PMM entry points and independently executed positive/negative evidence listed in this control report."
+      "reason": "Fresh GOV002 successor control evidence replaces no historical BA001 evidence.",
+      "replacement": "Published task resolution, explicit activation, actual lifecycle and exact-candidate acceptance; all required objectives preserved."
     },
     "verification_gate": {
       "status": "adapted",
       "objective": "Run applicable checks and preserve failure-sensitive evidence.",
       "implementation": [
         "scripts/verify_governance.py",
-        "tests/governance/test_governance.py",
-        "docs/agents/readiness/test_readiness.py"
+        "scripts/pmm_workflow.py",
+        "tests/governance/test_successor.py"
       ],
       "verification": [
-        "docs/agents/readiness/evidence/controls/verification_gate.json"
+        "docs/agents/readiness/evidence/gov002/controls/verification_gate.json"
       ],
-      "reason": "Public governance-only adaptation preserving the generic objective.",
-      "replacement": "Actual PMM entry points and independently executed positive/negative evidence listed in this control report."
+      "reason": "Fresh GOV002 successor control evidence replaces no historical BA001 evidence.",
+      "replacement": "Published task resolution, explicit activation, actual lifecycle and exact-candidate acceptance; all required objectives preserved."
     },
     "independent_review": {
       "status": "adapted",
       "objective": "Independently review applicable governance and behavioral changes.",
       "implementation": [
-        "scripts/pmm_governance.py",
-        ".claude/agents/code-reviewer.md",
-        "docs/agents/governance-profile.json",
-        "docs/agents/readiness/validate_readiness.py",
-        "docs/agents/readiness/readiness.schema.json"
+        "scripts/pmm_workflow.py",
+        ".claude/agents/code-reviewer.md"
       ],
       "verification": [
-        "docs/agents/readiness/evidence/controls/independent_review.json"
+        "docs/agents/readiness/evidence/gov002/controls/independent_review.json"
       ],
-      "reason": "Actual independent context review with truthful actor/execution records; records alone are not authenticated identity.",
-      "replacement": "Independent reviewer guide plus context and exact-candidate evidence verification."
+      "reason": "Fresh GOV002 successor control evidence replaces no historical BA001 evidence.",
+      "replacement": "Published task resolution, explicit activation, actual lifecycle and exact-candidate acceptance; all required objectives preserved."
     },
     "task_tracking": {
       "status": "adapted",
       "objective": "Keep explicit task scope, acceptance conditions and completion evidence.",
       "implementation": [
-        "scripts/pmm_governance.py",
-        "docs/workflow/BA-001.md",
-        "docs/workflow/BA-001-public-adaptation.md",
-        "docs/agents/issue-tracker.md"
+        "scripts/pmm_workflow.py",
+        "docs/agents/workflow-state.json",
+        "docs/workflow/GOV002.md",
+        "docs/workflow/GOV002-plan-publication.json"
       ],
       "verification": [
-        "docs/agents/readiness/evidence/controls/task_tracking.json"
+        "docs/agents/readiness/evidence/gov002/controls/task_tracking.json"
       ],
-      "reason": "Public governance-only adaptation preserving the generic objective.",
-      "replacement": "Actual PMM entry points and independently executed positive/negative evidence listed in this control report."
+      "reason": "Fresh GOV002 successor control evidence replaces no historical BA001 evidence.",
+      "replacement": "Published task resolution, explicit activation, actual lifecycle and exact-candidate acceptance; all required objectives preserved."
     },
     "documentation_impact": {
       "status": "adapted",
       "objective": "Maintain authoritative documentation according to changed behavior and control impact.",
       "implementation": [
-        "scripts/pmm_governance.py",
+        "scripts/pmm_workflow.py",
         "AGENTS.md",
         "CLAUDE.md"
       ],
       "verification": [
-        "docs/agents/readiness/evidence/controls/documentation_impact.json"
+        "docs/agents/readiness/evidence/gov002/controls/documentation_impact.json"
       ],
-      "reason": "Public governance-only adaptation preserving the generic objective.",
-      "replacement": "Actual PMM entry points and independently executed positive/negative evidence listed in this control report."
+      "reason": "Fresh GOV002 successor control evidence replaces no historical BA001 evidence.",
+      "replacement": "Published task resolution, explicit activation, actual lifecycle and exact-candidate acceptance; all required objectives preserved."
     },
     "secret_handling": {
       "status": "adapted",
       "objective": "Keep credentials and private data out of source and evidence.",
       "implementation": [
-        "scripts/pmm_governance.py",
+        "scripts/pmm_workflow.py",
         ".claude/rules/guard-discipline.md"
       ],
       "verification": [
-        "docs/agents/readiness/evidence/controls/secret_handling.json"
+        "docs/agents/readiness/evidence/gov002/controls/secret_handling.json"
       ],
-      "reason": "Public governance-only adaptation preserving the generic objective.",
-      "replacement": "Actual PMM entry points and independently executed positive/negative evidence listed in this control report."
+      "reason": "Fresh GOV002 successor control evidence replaces no historical BA001 evidence.",
+      "replacement": "Published task resolution, explicit activation, actual lifecycle and exact-candidate acceptance; all required objectives preserved."
     },
     "trigger_coverage": {
       "status": "adapted",
       "objective": "Declare actual local/CI trigger wiring and demonstrate positive and negative outcomes.",
       "implementation": [
-        ".githooks/pre-commit",
-        ".githooks/pre-push",
+        "scripts/pmm_workflow.py",
         "scripts/pmm_governance.py",
         "scripts/verify_governance.py",
-        "tests/governance/test_governance.py",
-        ".github/workflows/verify-governance.yml"
+        ".githooks/pre-commit",
+        ".githooks/pre-push",
+        ".github/workflows/verify-governance.yml",
+        "tests/governance/test_successor.py"
       ],
       "verification": [
-        "docs/agents/readiness/evidence/controls/trigger_coverage.json"
+        "docs/agents/readiness/evidence/gov002/controls/trigger_coverage.json"
       ],
-      "reason": "Public governance-only adaptation preserving the generic objective.",
-      "replacement": "Actual PMM entry points and independently executed positive/negative evidence listed in this control report."
+      "reason": "Fresh GOV002 successor control evidence replaces no historical BA001 evidence.",
+      "replacement": "Published task resolution, explicit activation, actual lifecycle and exact-candidate acceptance; all required objectives preserved."
     },
     "baseline_sync": {
       "status": "adapted",
       "objective": "Check source updates without bypassing same-version context drift review.",
       "implementation": [
+        "scripts/pmm_workflow.py",
         "scripts/pmm_governance.py",
         "docs/agents/source-assets.json",
-        "docs/agents/baseline-adoption.md",
-        "docs/agents/readiness/validate_readiness.py",
-        "docs/agents/readiness/readiness.schema.json",
-        "docs/agents/readiness/test_readiness.py",
-        "docs/agents/readiness/baseline-readiness.template.json",
-        "docs/agents/readiness/environment-profile.template.json"
+        "docs/agents/readiness/validate_readiness.py"
       ],
       "verification": [
-        "docs/agents/readiness/evidence/controls/baseline_sync.json"
+        "docs/agents/readiness/evidence/gov002/controls/baseline_sync.json"
       ],
-      "reason": "Public governance-only adaptation preserving the generic objective.",
-      "replacement": "Actual PMM entry points and independently executed positive/negative evidence listed in this control report."
+      "reason": "Fresh GOV002 successor control evidence replaces no historical BA001 evidence.",
+      "replacement": "Published task resolution, explicit activation, actual lifecycle and exact-candidate acceptance; all required objectives preserved."
     }
   }
 }

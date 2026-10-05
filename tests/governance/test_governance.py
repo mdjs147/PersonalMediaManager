@@ -22,17 +22,26 @@ class GovernanceTests(unittest.TestCase):
         self.temp=tempfile.TemporaryDirectory(prefix='pmm-governance-fixture-');self.addCleanup(self.temp.cleanup)
         self.root=Path(self.temp.name)/'repo'
         subprocess.run(['git','clone','--quiet','--no-hardlinks',str(ROOT),str(self.root)],check=True,capture_output=True)
-        # Carry the current target files, not an old application fixture.
-        for name in g.v.git(ROOT,'ls-files','--cached','--others','--exclude-standard').splitlines():
-            target=self.root/name;target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(ROOT/name,target)
+        # Historical BA001 compatibility fixture, not current successor acceptance.
+        self.git("checkout", "--detach", "a59311ae16b08d0268babc933abf7403a14a315f")
         for key,value in [('user.name','PMM synthetic fixture'),('user.email','fixture@example.invalid'),('pmm.actorId',g.AUTHOR)]:self.git('config',key,value)
         self.git('remote','set-url','origin',g.REPOSITORY)
         self.git('update-ref','refs/remotes/origin/main','c09befa02cc27a0dc358322779798bb5e6d295e4')
-        self.git('update-ref','refs/remotes/origin/'+g.STAGE.removeprefix('refs/heads/'),g.v.git(ROOT,'rev-parse','refs/remotes/origin/'+g.STAGE.removeprefix('refs/heads/')))
+        self.git('update-ref','refs/remotes/origin/'+g.STAGE.removeprefix('refs/heads/'),'a59311ae16b08d0268babc933abf7403a14a315f')
         self.git('symbolic-ref','refs/remotes/origin/HEAD','refs/remotes/origin/main')
         self.git('checkout','-B',g.TASK.removeprefix('refs/heads/'))
         self.git('add','.')
         self.git('commit','--allow-empty','-m','Synthetic governance target fixture')
+        # Historical hooks observe a real isolated bare remote, independent of
+        # whichever task or remote is active in the enclosing source checkout.
+        bare=Path(self.temp.name)/'historical-remote.git'
+        subprocess.run(['git','clone','--quiet','--bare',str(self.root),str(bare)],check=True,capture_output=True)
+        for ref,oid in [('refs/heads/main','c09befa02cc27a0dc358322779798bb5e6d295e4'),(g.STAGE,'a59311ae16b08d0268babc933abf7403a14a315f')]:
+            subprocess.run(['git','--git-dir',str(bare),'update-ref',ref,oid],check=True,capture_output=True)
+        subprocess.run(['git','--git-dir',str(bare),'symbolic-ref','HEAD','refs/heads/main'],check=True,capture_output=True)
+        self.transport_dir=Path(self.temp.name)/'transport';self.transport_dir.mkdir()
+        adapter="import subprocess\n_original=subprocess.run\ndef _run(args,*a,**kw):\n    if isinstance(args,list) and args[:2]==['git','ls-remote']:\n        if 'origin' in args: args=["+repr(str(bare))+" if x=='origin' else x for x in args]\n        else: return subprocess.CompletedProcess(args,1,'','Synthetic historical upstream discovery unavailable')\n    return _original(args,*a,**kw)\nsubprocess.run=_run\n"
+        (self.transport_dir/'sitecustomize.py').write_text(adapter)
     def git(self,*args):return g.v.git(self.root,*args)
     def write_json(self,path,value):(self.root/path).write_text(json.dumps(value)+'\n')
     def profile(self):return g.v.read_json(self.root/'docs/agents/governance-profile.json')
@@ -89,6 +98,7 @@ class GovernanceTests(unittest.TestCase):
         self.reject(lambda:g.git_target(self.root,g.AUTHOR,'integrator','push','refs/heads/main'),'Forbidden Git target')
     def test_stage_git_role_is_checked(self):
         self.reject(lambda:g.git_target(self.root,g.AUTHOR,'author','push',g.STAGE),'Wrong role')
+        self.git('update-ref','refs/remotes/origin/'+g.STAGE.removeprefix('refs/heads/'),'a59311ae16b08d0268babc933abf7403a14a315f')
         g.git_target(self.root,g.AUTHOR,'integrator','push',g.STAGE,self.git('rev-parse','HEAD'),self.git('rev-parse','refs/remotes/origin/'+g.STAGE.removeprefix('refs/heads/')),'origin',g.REPOSITORY,g.TASK,live=False)
     def test_first_write_and_recovery_invoke_context_gate(self):
         for phase in ['first-write','recover']:
@@ -99,7 +109,7 @@ class GovernanceTests(unittest.TestCase):
         self.reject(lambda:g.delivery(self.root,self.git('rev-parse','HEAD'),'c09befa02cc27a0dc358322779798bb5e6d295e4','absent.json'),'published BA-001')
     def test_git_registered_hook_lifecycle_and_call_removal(self):
         self.git('config','core.hooksPath','.githooks')
-        env=dict(os.environ,PMM_ACTOR='wrong-actor')
+        env=dict(os.environ,PYTHONPATH=str(self.transport_dir),PMM_ACTOR='wrong-actor')
         wrong=subprocess.run(['git','commit','--allow-empty','-m','Rejected actor probe'],cwd=self.root,env=env,capture_output=True,text=True)
         self.assertNotEqual(wrong.returncode,0);self.assertIn('authorized implementation actor',wrong.stderr)
         env['PMM_ACTOR']=g.AUTHOR
@@ -134,7 +144,7 @@ class GovernanceTests(unittest.TestCase):
         self.git('checkout',g.TASK.removeprefix('refs/heads/'))
         self.reject(lambda:g.git_target(self.root,g.AUTHOR,'integrator','push',g.STAGE,candidate,remote,'origin',g.REPOSITORY,g.TASK,live=False),'Non-fast-forward')
     def test_actual_commit_hook_rejects_wrong_actor_and_removal_is_detected(self):
-        env=dict(os.environ,PMM_ACTOR='wrong-actor')
+        env=dict(os.environ,PYTHONPATH=str(self.transport_dir),PMM_ACTOR='wrong-actor')
         actual=subprocess.run(['bash','.githooks/pre-commit'],cwd=self.root,env=env,capture_output=True,text=True)
         self.assertNotEqual(actual.returncode,0);self.assertIn('authorized implementation actor',actual.stderr)
         (self.root/'.githooks/pre-commit').write_text('#!/bin/sh\ntrue\n')
@@ -142,7 +152,7 @@ class GovernanceTests(unittest.TestCase):
         self.assertEqual(bypass.returncode,0)
         self.assertNotEqual(actual.returncode,bypass.returncode,'Negative hook assertion must detect a removed call')
     def test_actual_push_hook_rejects_main_before_evidence(self):
-        env=dict(os.environ,PMM_ACTOR=g.AUTHOR,PMM_GIT_ROLE='integrator')
+        env=dict(os.environ,PYTHONPATH=str(self.transport_dir),PMM_ACTOR=g.AUTHOR,PMM_GIT_ROLE='integrator')
         result=subprocess.run(['bash','.githooks/pre-push'],input=g.TASK+' '+g.BASE+' refs/heads/main '+g.BASE+'\n',cwd=self.root,env=env,capture_output=True,text=True)
         self.assertNotEqual(result.returncode,0);self.assertIn('Forbidden Git target',result.stderr)
     def test_verifier_invokes_actual_context_gate(self):

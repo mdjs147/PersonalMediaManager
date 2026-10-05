@@ -1,0 +1,30 @@
+{
+  "command": "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3 /workspace/shared/pmm-successor-evidence-20261005/control-harness/build_control_report.py --positive /workspace/shared/pmm-successor-evidence-20261005/control-runs/20261005T050734-baseline_sync-positive-d650625a/capture.json --negative /workspace/shared/pmm-successor-evidence-20261005/control-runs/20261005T050734-baseline_sync-negative-9051a5f8/capture.json --output /workspace/shared/pmm-successor-evidence-20261005/control-stage-51ae1b4/bundles/baseline_sync",
+  "control_id": "baseline_sync",
+  "exit_code": 0,
+  "implementation_blobs": {
+    "docs/agents/readiness/validate_readiness.py": "3877f6bd7fa1cc972f1166ff4484784143c13e6c",
+    "docs/agents/source-assets.json": "d0eaaee01acf3ab226fe4e7147639a335635d13b",
+    "scripts/pmm_governance.py": "319917b13c31cc687ca85673dcc7de57e13a274b",
+    "scripts/pmm_workflow.py": "28fbc2a2e0e96cb535296d2ee9d7b4e025f58325"
+  },
+  "negative_check": {
+    "command": "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3 -B /workspace/shared/pmm-successor-evidence-20261005/control-harness/control_probe.py --source-root /workspace/shared/pmm-successor-20261005 --control baseline_sync --case negative --readiness-phase pending-repair --artifacts-dir /workspace/shared/pmm-successor-evidence-20261005/control-runs/20261005T050734-baseline_sync-negative-9051a5f8/artifacts",
+    "expected_exit": 1,
+    "expected_result": "rejected",
+    "observed_exit": 1,
+    "observed_result": "rejected",
+    "output": "docs/agents/readiness/evidence/gov002/outputs/20261005T050734-baseline_sync-negative-9051a5f8.txt"
+  },
+  "observed_at": "2026-10-05T05:08:15.977978+00:00",
+  "positive_check": {
+    "command": "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3 -B /workspace/shared/pmm-successor-evidence-20261005/control-harness/control_probe.py --source-root /workspace/shared/pmm-successor-20261005 --control baseline_sync --case positive --readiness-phase pending-repair --artifacts-dir /workspace/shared/pmm-successor-evidence-20261005/control-runs/20261005T050734-baseline_sync-positive-d650625a/artifacts",
+    "expected_exit": 0,
+    "expected_result": "accepted",
+    "observed_exit": 0,
+    "observed_result": "accepted",
+    "output": "docs/agents/readiness/evidence/gov002/outputs/20261005T050734-baseline_sync-positive-d650625a.txt"
+  },
+  "result": "passed",
+  "schema_version": 1
+}

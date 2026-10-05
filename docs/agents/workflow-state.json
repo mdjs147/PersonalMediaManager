@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "anchor": "a59311ae16b08d0268babc933abf7403a14a315f",
+  "active_task": "GOV002",
+  "plan_commit": "8437301c86c44e74beed3ac7220426741e67094b",
+  "plan_path": "docs/workflow/GOV002-plan-publication.json",
+  "activation": {
+    "task_id": "GOV002",
+    "plan_commit": "8437301c86c44e74beed3ac7220426741e67094b",
+    "phase": "governance-maintenance",
+    "purpose": "governance",
+    "author": {
+      "actor_id": "pmm-successor-author",
+      "execution_id": "pmm-gov002-20261005T041801Z",
+      "model": null
+    },
+    "authorized_executions": [
+      {
+        "actor_id": "pmm-successor-author",
+        "execution_id": "pmm-gov002-20261005T041801Z",
+        "model": null
+      }
+    ],
+    "predecessors": {
+      "BA-001": {
+        "commit": "a59311ae16b08d0268babc933abf7403a14a315f"
+      }
+    },
+    "base_commit": "8437301c86c44e74beed3ac7220426741e67094b"
+  },
+  "activation_review": "docs/agents/readiness/evidence/gov002-activation-review.json"
+}

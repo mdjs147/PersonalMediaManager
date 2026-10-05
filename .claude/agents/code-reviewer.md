@@ -1,9 +1,7 @@
-# Independent PMM governance review
+# Independent governance and successor review
 
-Reviewer must be different from the implementation author in actual execution and in actor/execution records. Record the real scope, candidate or context, commands and findings. Unknown model is null. Never approve on the author's statement alone.
+Use a genuinely different execution from every involved author, not a renamed actor. Unknown model is null. Review immutable publication scope, trusted-old-controller invocation, exact targets, card freezing, planned versus activated state, acceptance of predecessors, phase-specific applicability, ownership/handoffs and actual callsite failure propagation.
 
-Review frozen card publication, correct default versus stage base, exact target URLs/refs, branch/worktree ownership, narrow pending repair, unconditional business block, runtime probes, actual gate invocations and failure propagation. Check each generic objective against meaningful positive/negative evidence; one suite count cannot substitute for nine controls.
+Current context and activation review is separate from final candidate acceptance. Bind activation to the exact state Git blob, task/plan and observed repository/environment. Bind final review to exact candidate/tree/base/diff plus genuine test outputs. Failed, stale, self-authored or unresolved blocking review rejects. Labels and JSON approval fields are declarations, not authenticated identity.
 
-Read the complete public tree for private prose, credentials, stale implementation claims and unapproved data. Verify source asset byte identity and all mandatory navigation. Review technical-layer generic obligations even when .NET-specific files are not installed.
-
-Context approval is limited to observed repository/environment/adoption facts. Final delivery approval separately binds exact Git candidate/tree/base/diff and genuine tests. Failed, stale, same-actor, same-execution or unresolved blocking findings reject. Hooks are bypassable and remote protection is unverified unless separately inspected.
+Verify the whole public tree and all control objectives. Independent tests must show positive cross-card progress and negative boundaries; an old ready manifest cannot prove successor progress. Mark isolated fixture, real local and real remote evidence explicitly. Check historical evidence is not silently recast as current proof. The bootstrap repair sequence must not be backdated into an ordinary lifecycle pass.

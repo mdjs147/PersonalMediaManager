@@ -1,0 +1,28 @@
+{
+  "command": "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3 /workspace/shared/pmm-successor-evidence-20261005/control-harness/build_control_report.py --positive /workspace/shared/pmm-successor-evidence-20261005/control-runs/20261005T050731-readiness_gate-positive-b58398fd/capture.json --negative /workspace/shared/pmm-successor-evidence-20261005/control-runs/20261005T050731-readiness_gate-negative-6936c8fd/capture.json --output /workspace/shared/pmm-successor-evidence-20261005/control-stage-51ae1b4/bundles/readiness_gate --allow-pending-readiness-bootstrap",
+  "control_id": "readiness_gate",
+  "exit_code": 0,
+  "implementation_blobs": {
+    "docs/agents/readiness/validate_readiness.py": "3877f6bd7fa1cc972f1166ff4484784143c13e6c",
+    "scripts/pmm_workflow.py": "28fbc2a2e0e96cb535296d2ee9d7b4e025f58325"
+  },
+  "negative_check": {
+    "command": "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3 -B /workspace/shared/pmm-successor-evidence-20261005/control-harness/control_probe.py --source-root /workspace/shared/pmm-successor-20261005 --control readiness_gate --case negative --readiness-phase pending-repair --artifacts-dir /workspace/shared/pmm-successor-evidence-20261005/control-runs/20261005T050731-readiness_gate-negative-6936c8fd/artifacts",
+    "expected_exit": 1,
+    "expected_result": "rejected",
+    "observed_exit": 1,
+    "observed_result": "rejected",
+    "output": "docs/agents/readiness/evidence/gov002/outputs/20261005T050731-readiness_gate-negative-6936c8fd.txt"
+  },
+  "observed_at": "2026-10-05T05:08:16.497926+00:00",
+  "positive_check": {
+    "command": "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3 -B /workspace/shared/pmm-successor-evidence-20261005/control-harness/control_probe.py --source-root /workspace/shared/pmm-successor-20261005 --control readiness_gate --case positive --readiness-phase pending-repair --artifacts-dir /workspace/shared/pmm-successor-evidence-20261005/control-runs/20261005T050731-readiness_gate-positive-b58398fd/artifacts",
+    "expected_exit": 0,
+    "expected_result": "accepted",
+    "observed_exit": 0,
+    "observed_result": "accepted",
+    "output": "docs/agents/readiness/evidence/gov002/outputs/20261005T050731-readiness_gate-positive-b58398fd.txt"
+  },
+  "result": "passed",
+  "schema_version": 1
+}

@@ -47,3 +47,7 @@ Status remains pending until required context/control evidence is real and indep
 ## Classified ADR namespace synchronization
 
 The revision-2 plan was published and read back before dependent updates. Its source is final baseline main23a7748. The five imported readiness assets are unchanged byte-for-byte. GEN12/TECH33/USER0 remain source inventory; public replacements are mapped by category. Existing project ADR-0001 stays at its original path and content. New project decisions use full PRJ IDs with a reviewed registry; no current project decision is renumbered. Baseline user decisions are empty and no private preference or permission rule is imported.
+
+## GOV002 successor repair
+
+The BA001 source/profile/card/evidence at a59311a is retained history. Active task authority now comes from immutable published plans and reviewed workflow-state, with new GOV002 control/context reports. The five source tool blobs are unchanged. The one-time five-file publication was reviewed separately before implementation; its original BA001 CI result is recorded honestly. A passing historical adoption does not activate DEV001, prove the new cycle, or validate the .NET product stack. Ordinary successor publication and activation use the trusted previous-stage controller and independent exact-candidate review.

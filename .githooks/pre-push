@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 while read -r local_ref local_sha remote_ref remote_sha; do
-  python3 scripts/pmm_governance.py git-target --actor "${PMM_ACTOR:?Set actual actor}" --role "${PMM_GIT_ROLE:?Set actual role}" --action push --target "$remote_ref" --candidate "$local_sha" --old-sha "$remote_sha" --remote-name "${1-}" --remote-location "${2-}" --local-ref "$local_ref"
-  python3 scripts/pmm_governance.py deliver --candidate "$local_sha" --base "${PMM_TASK_BASE:?Set exact base}" --evidence "${PMM_DELIVERY_EVIDENCE:?Provide candidate-bound sidecar}"
+  case "${PMM_OPERATION:-implementation}" in
+    implementation)
+      python3 scripts/pmm_governance.py git-target --actor "${PMM_ACTOR:?Set actual actor}" --execution "${PMM_EXECUTION:?Set actual execution}" --role "${PMM_GIT_ROLE:?Set actual role}" --action push --target "$remote_ref" --candidate "$local_sha" --old-sha "$remote_sha" --remote-name "${1-}" --remote-location "${2-}" --local-ref "$local_ref"
+      python3 scripts/pmm_governance.py deliver --candidate "$local_sha" --base "${PMM_TASK_BASE:?Set exact activation construction base}" --evidence "${PMM_DELIVERY_EVIDENCE:?Provide candidate-bound sidecar}"
+      ;;
+    plan|activate)
+      args=("${PMM_OPERATION}" --root "$PWD" --actor "${PMM_ACTOR:?}" --execution "${PMM_EXECUTION:?}" --candidate "$local_sha" --old-sha "$remote_sha" --review "${PMM_PUBLICATION_REVIEW:?Set exact-candidate independent review}" --target "$remote_ref" --remote-name "${1-}" --remote-location "${2-}" --local-ref "$local_ref")
+      if [[ "$PMM_OPERATION" == plan ]]; then args+=(--plan "${PMM_PLAN:?}"); fi
+      python3 "${PMM_TRUSTED_CONTROLLER:?Export controller from old stage}" "${args[@]}"
+      ;;
+    *) echo 'Unknown PMM_OPERATION' >&2; exit 1 ;;
+  esac
 done

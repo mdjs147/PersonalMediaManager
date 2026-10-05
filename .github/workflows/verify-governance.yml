@@ -17,6 +17,21 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Observe current task phase
+        id: task-phase
+        shell: bash
+        run: |
+          python3 - <<'PYCODE' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          p=Path('docs/agents/workflow-state.json')
+          print('foundation='+str(p.exists() and json.loads(p.read_text())['activation']['phase']=='development-foundation').lower())
+          PYCODE
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        if: steps.task-phase.outputs.foundation == 'true'
+        with:
+          global-json-file: 'global.json'
+          dotnet-quality: 'ga'
       - name: Establish observed remote context
         shell: bash
         run: |

@@ -1,0 +1,23 @@
+COMMAND: /opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3 -B /workspace/shared/pmm-successor-evidence-20261005/control-harness/control_probe.py --source-root /workspace/shared/pmm-successor-20261005 --control trigger_coverage --case positive --readiness-phase pending-repair --artifacts-dir /workspace/shared/pmm-successor-evidence-20261005/control-runs/20261005T050733-trigger_coverage-positive-2c046748/artifacts
+STARTED: 2026-10-05T05:07:33.083677+00:00
+FINISHED: 2026-10-05T05:07:34.234338+00:00
+ACTUAL PROCESS EXIT: 0
+
+STDOUT:
+PMM_PROBE_FIXTURE {"classification": "isolated synthetic Git fixture; no production or public-remote acceptance", "helper": "/workspace/shared/pmm-successor-20261005/tests/governance/test_successor.py", "path": "/workspace/shared/pmm-successor-evidence-20261005/control-runs/20261005T050733-trigger_coverage-positive-2c046748/artifacts/pmm-successor-synthetic-3rmi9c0o", "synthetic_approvals": "Fixture schema inputs only; no real reviewer is represented"}
+PMM_PROBE_CONTEXT {"case": "positive", "classification": "isolated synthetic Git fixture with local bare remote; no public-remote acceptance", "control": "trigger_coverage", "gate_root": "/workspace/shared/pmm-successor-evidence-20261005/control-runs/20261005T050733-trigger_coverage-positive-2c046748/artifacts/pmm-successor-synthetic-3rmi9c0o/author-one", "production_ready_claim": false, "published": false, "readiness_phase": "pending-repair", "source_root": "/workspace/shared/pmm-successor-20261005"}
+PMM_PROBE_GATE_START {"argv": ["git", "commit", "--allow-empty", "-m", "Synthetic external registered-hook probe"], "cwd": "/workspace/shared/pmm-successor-evidence-20261005/control-runs/20261005T050733-trigger_coverage-positive-2c046748/artifacts/pmm-successor-synthetic-3rmi9c0o/author-one", "gate": "git commit with registered .githooks/pre-commit"}
+[dot/task/pmm-gov002-20261005 5f98f32] Synthetic external registered-hook probe
+PMM_PROBE_GATE_END {"gate": "git commit with registered .githooks/pre-commit", "observed_exit": 0, "observed_result": "accepted"}
+
+STDERR:
+LIVE_REMOTE_OBSERVED {"HEAD": "c09befa02cc27a0dc358322779798bb5e6d295e4", "refs/heads/dot/pmm-rebuild-20261005-gates": "8437301c86c44e74beed3ac7220426741e67094b", "refs/heads/main": "c09befa02cc27a0dc358322779798bb5e6d295e4"}
+ACTOR_WORKTREE_VERIFIED {"actor_id": "pmm-successor-author", "branch": "refs/heads/dot/task/pmm-gov002-20261005", "execution_id": "pmm-gov002-20261005T041801Z", "task": "GOV002", "worktree": "/workspace/shared/pmm-successor-evidence-20261005/control-runs/20261005T050733-trigger_coverage-positive-2c046748/artifacts/pmm-successor-synthetic-3rmi9c0o/author-one"}
+SCOPE_VERIFIED 28 GOV002
+RUNTIME_OBSERVED {"bash": "5.2.37(1)-release", "git": "2.52.0", "python": "3.12.14"}
+UPSTREAM_UPDATE_DISCOVERY_DEGRADED: private source unavailable; local gates still required
+BASELINE_ASSETS_VERIFIED 23a774836c3edda9a5d16f06b7f4e60e9d6950f8
+DOCUMENTATION_NAVIGATION_VERIFIED
+PUBLIC_TREE_SCREENED 111; independent semantic review still required
+SUCCESSOR_CONTEXT_VERIFIED GOV002
+PMM_SUCCESSOR_GATE_VERIFIED commit GOV002

@@ -1,0 +1,29 @@
+{
+  "command": "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3 /workspace/shared/pmm-successor-evidence-20261005/control-harness/build_control_report.py --positive /workspace/shared/pmm-successor-evidence-20261005/control-runs/20261005T050732-documentation_impact-positive-845bb136/capture.json --negative /workspace/shared/pmm-successor-evidence-20261005/control-runs/20261005T050732-documentation_impact-negative-16d0cd22/capture.json --output /workspace/shared/pmm-successor-evidence-20261005/control-stage-51ae1b4/bundles/documentation_impact",
+  "control_id": "documentation_impact",
+  "exit_code": 0,
+  "implementation_blobs": {
+    "AGENTS.md": "dc16393bf91d5a6a2cb2004ee69a83696a41275a",
+    "CLAUDE.md": "0bf717f271a4bfac5cf3a84d9dd74401c6c1ec5f",
+    "scripts/pmm_workflow.py": "28fbc2a2e0e96cb535296d2ee9d7b4e025f58325"
+  },
+  "negative_check": {
+    "command": "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3 -B /workspace/shared/pmm-successor-evidence-20261005/control-harness/control_probe.py --source-root /workspace/shared/pmm-successor-20261005 --control documentation_impact --case negative --readiness-phase pending-repair --artifacts-dir /workspace/shared/pmm-successor-evidence-20261005/control-runs/20261005T050732-documentation_impact-negative-16d0cd22/artifacts",
+    "expected_exit": 1,
+    "expected_result": "rejected",
+    "observed_exit": 1,
+    "observed_result": "rejected",
+    "output": "docs/agents/readiness/evidence/gov002/outputs/20261005T050732-documentation_impact-negative-16d0cd22.txt"
+  },
+  "observed_at": "2026-10-05T05:08:16.230491+00:00",
+  "positive_check": {
+    "command": "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3 -B /workspace/shared/pmm-successor-evidence-20261005/control-harness/control_probe.py --source-root /workspace/shared/pmm-successor-20261005 --control documentation_impact --case positive --readiness-phase pending-repair --artifacts-dir /workspace/shared/pmm-successor-evidence-20261005/control-runs/20261005T050732-documentation_impact-positive-845bb136/artifacts",
+    "expected_exit": 0,
+    "expected_result": "accepted",
+    "observed_exit": 0,
+    "observed_result": "accepted",
+    "output": "docs/agents/readiness/evidence/gov002/outputs/20261005T050732-documentation_impact-positive-845bb136.txt"
+  },
+  "result": "passed",
+  "schema_version": 1
+}

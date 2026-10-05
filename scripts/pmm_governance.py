@@ -246,6 +246,9 @@ def delivery(root, candidate, base, evidence_path):
     return result
 
 def main(argv=None):
+    if (ROOT / "docs/agents/workflow-state.json").exists():
+        import pmm_workflow
+        return pmm_workflow.main(argv)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=['first-write','recover','commit','runtime','cards','scope','baseline','documentation','public-tree','review-context','inspect','context','git-target','deliver'])
     parser.add_argument('--root', default=str(ROOT)); parser.add_argument('--actor', default=os.environ.get('PMM_ACTOR'))

@@ -1,0 +1,12 @@
+COMMAND: /opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3 -B /workspace/shared/pmm-successor-evidence-20261005/control-harness/control_probe.py --source-root /workspace/shared/pmm-successor-20261005 --control task_tracking --case positive --readiness-phase pending-repair --artifacts-dir /workspace/shared/pmm-successor-evidence-20261005/control-runs/20261005T050731-task_tracking-positive-02db3651/artifacts
+STARTED: 2026-10-05T05:07:31.868100+00:00
+FINISHED: 2026-10-05T05:07:32.149171+00:00
+ACTUAL PROCESS EXIT: 0
+
+STDOUT:
+PMM_PROBE_CONTEXT {"case": "positive", "classification": "actual source checkout, read-only; cached Git remote refs, no fresh public remote observation", "control": "task_tracking", "gate_root": "/workspace/shared/pmm-successor-20261005", "production_ready_claim": false, "published": false, "readiness_phase": "pending-repair", "source_root": "/workspace/shared/pmm-successor-20261005"}
+PMM_PROBE_GATE_START {"gate": "pmm_workflow.load_task + scope from immutable published plan"}
+SCOPE_VERIFIED 22 GOV002
+PMM_PROBE_GATE_END {"gate": "pmm_workflow.load_task + scope from immutable published plan", "observed_exit": 0, "observed_result": "accepted"}
+
+STDERR:

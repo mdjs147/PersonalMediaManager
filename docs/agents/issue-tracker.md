@@ -1,5 +1,5 @@
-# Task scope source
+# Task tracking
 
-Repository Markdown cards are the task authority for this stage. BA-001 and its public adaptation map were published before implementation. Their exact blobs and publication commit are frozen in the reviewed profile. Runtime status is separate in docs/workflow/BA-001-status.md.
+Frozen plans retain publication status planned. Current activation and actual acceptance are separate records, so historical cards are never silently rewritten into approvals. GOV002 repairs the general successor cycle; DEV001 plans a fresh .NET offline engineering foundation after renewed applicability and independent activation. The 219 retained capability entries remain planned/not-run and old implementation progress is discarded.
 
-A card names scope, owner, dependency evidence, acceptance and stop conditions. Track accepted slices separately from full-card completion; tests, agent completion and Git push alone do not prove acceptance. Future product tasks start planned from zero. Historical WF-001 is stopped without completion credit.
+A task definition owns its exact paths/prefixes, branch, phase/purpose, assigned execution and dependencies. New or expanded scope is published and independently reviewed before implementation. No current task may alter its own frozen definition. Review and delivery evidence names exact candidates and actual outcomes, including failures, pending checks and fixture-only results.

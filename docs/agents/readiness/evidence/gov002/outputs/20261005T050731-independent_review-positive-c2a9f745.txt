@@ -1,0 +1,13 @@
+COMMAND: /opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3 -B /workspace/shared/pmm-successor-evidence-20261005/control-harness/control_probe.py --source-root /workspace/shared/pmm-successor-20261005 --control independent_review --case positive --readiness-phase pending-repair --artifacts-dir /workspace/shared/pmm-successor-evidence-20261005/control-runs/20261005T050731-independent_review-positive-c2a9f745/artifacts
+STARTED: 2026-10-05T05:07:31.466726+00:00
+FINISHED: 2026-10-05T05:07:31.682687+00:00
+ACTUAL PROCESS EXIT: 0
+
+STDOUT:
+PMM_PROBE_CONTEXT {"case": "positive", "classification": "actual source checkout, read-only; cached Git remote refs, no fresh public remote observation", "control": "independent_review", "gate_root": "/workspace/shared/pmm-successor-20261005", "production_ready_claim": false, "published": false, "readiness_phase": "pending-repair", "source_root": "/workspace/shared/pmm-successor-20261005"}
+PMM_PROBE_REVIEW_SOURCE {"context_status": "pending", "path": "docs/agents/readiness/evidence/gov002-activation-review.json", "reviewer": {"actor_id": "pmm-successor-plan-reviewer", "execution_id": "pmm-successor-review-20261005T042251Z", "model": null}, "scope": "Initial governance-maintenance activation of only the already-published GOV002 task, from this observation onward. No DEV001 activation, product/business write approval, final readiness or delivery acceptance."}
+PMM_PROBE_GATE_START {"gate": "pmm_workflow.load_task real activation review; ready context when available"}
+INDEPENDENT_ACTIVATION_REVIEW_VALIDATED; final context review still pending
+PMM_PROBE_GATE_END {"gate": "pmm_workflow.load_task real activation review; ready context when available", "observed_exit": 0, "observed_result": "accepted"}
+
+STDERR:
