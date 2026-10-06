@@ -13,7 +13,7 @@ This branch currently contains no source code, build or tests. All 219 business 
 - [Retained product decisions](docs/requirements/retained-decisions.md)
 - [Rebuild capability mapping](docs/requirements/rebuild-mapping.json)
 - [DEV001 requirements](docs/requirements/dev001/README.md), [219-item traceability](docs/requirements/dev001/traceability.json) and [technical applicability](docs/requirements/dev001/technical-applicability.md)
-- DEV002 offline contract: [中文](docs/requirements/dev002/contracts.zh-CN.md), [English](docs/requirements/dev002/contracts.en.md), [ownership plan](docs/requirements/dev002/ownership.json)
+- DEV002 offline contract: [中文](docs/requirements/dev002/contracts.zh-CN.md), [English](docs/requirements/dev002/contracts.en.md)
 - [Project decision registry](docs/adr/project/PRJ-registry.md), [PRJ-0001 offline foundation](docs/adr/project/PRJ-0001-offline-foundation.zh-CN.md), [ADR-0001 governance adoption](docs/adr/project/ADR-0001-governance-adoption.zh-CN.md)
 - [Domain boundary](docs/agents/domain.md)
 
