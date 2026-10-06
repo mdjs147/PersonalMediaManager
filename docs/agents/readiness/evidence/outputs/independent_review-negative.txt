@@ -1,5 +1,0 @@
-Negative setup: in an isolated target clone only, the context report and manifest reviewer were set equal to the actual adopter; original bytes were then restored.
-Command: python3 scripts/pmm_governance.py review-context
-Observed: 2026-10-05T03:27:14.445001+00:00
-Exit: 1
-PMM_GATE_REJECTED: Context reviewer is not independent: actor_id

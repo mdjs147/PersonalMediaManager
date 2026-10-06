@@ -1,8 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
-  <PropertyGroup>
-    <Description>Single inert loopback Razor host for the fresh offline foundation.</Description>
-  </PropertyGroup>
-  <ItemGroup>
-    <ProjectReference Include="../PersonalMediaManager.Foundation/PersonalMediaManager.Foundation.csproj" />
-  </ItemGroup>
-</Project>

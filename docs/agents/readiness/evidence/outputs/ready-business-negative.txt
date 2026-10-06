@@ -1,4 +1,0 @@
-Actual command: python3 scripts/pmm_governance.py context --purpose business
-Observed: 2026-10-05T03:30:04.718990+00:00
-Exit: 1
-PMM_GATE_REJECTED: Business writes blocked in governance-only phase even if readiness is ready

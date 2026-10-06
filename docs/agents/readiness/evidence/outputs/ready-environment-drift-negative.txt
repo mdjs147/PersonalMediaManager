@@ -1,4 +1,0 @@
-Actual command: python3 scripts/pmm_governance.py context
-Observed: 2026-10-05T03:30:04.758729+00:00
-Exit: 1
-PMM_GATE_REJECTED: Repository/environment drift: re-inspect and review, even when source SHA is unchanged

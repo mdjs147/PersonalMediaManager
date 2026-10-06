@@ -1,4 +1,0 @@
-Command: python3 scripts/pmm_governance.py context --purpose adoption
-Observed: 2026-10-05T03:27:14.832319+00:00
-Exit: 0
-CONTEXT_READY_VERIFIED; product writes remain blocked

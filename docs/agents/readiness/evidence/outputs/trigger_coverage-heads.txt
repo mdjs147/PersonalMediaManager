@@ -1,1 +1,0 @@
-Hook lifecycle started from disposable snapshot da1d2ef078922c6326944ab974df13cdb9e4801f; accepted registered hook produced 8305c954ef2cd0e6b0a2a7ef9cb7cf24e053f0a2. Wrong actor probe was rejected. Removed-call witness and reset are restricted to disposable clone. Final HEAD restored to da1d2ef078922c6326944ab974df13cdb9e4801f. No remote writes.
