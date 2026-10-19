@@ -26,7 +26,7 @@
     <PackageReference Include="Microsoft.AspNetCore.DataProtection" Version="10.0.8" />
     <PackageReference Include="Microsoft.AspNetCore.DataProtection.Extensions" Version="10.0.8" />
     <!-- 安全修复(NU1903)：DataProtection 传递引入的 System.Security.Cryptography.Xml 10.0.8 有高危漏洞，显式 pin 到已修复的 10.0.10 覆盖传递版本（下游经 ProjectReference 继承） -->
-    <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.10" />
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.13" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.16.0" />
     <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.8" />
